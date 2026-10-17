@@ -5,16 +5,20 @@ A first working compressor plug-in with selectable **feed-forward FET**,
 output transformer stage. Built with JUCE and C++17.
 
 These are behavioral models, not measured recreations of particular hardware.
-The transformer adds flux-dependent asymmetric saturation, high-frequency
-shaping, and DC rejection. It currently runs at the host sample rate, so strong
-drive can alias. It is a prototype for listening and refinement, not a release
+The transformer adds flux-dependent asymmetric saturation and a causal loaded
+transformer response: an 8 Hz high-pass models low-frequency phase lead and
+droop, while a 22 kHz second-order low-pass (Q 0.8) models high-frequency phase
+lag from leakage inductance and winding capacitance. These are provisional
+design values. The transformer runs at fixed 2× the host sample rate, with
+FIR interpolation and decimation filters. This is intended to reduce aliasing;
+strong drive can still produce residual aliases. It is a prototype for listening and refinement, not a release
 claimed to match analog hardware.
 
 ## Controls and signal path
 
 Input → stereo-linked compressor → wet/dry mix → output gain → optional
-transformer → output. Bypass returns the original input, with a short transition
-to avoid switching clicks. The mix's dry branch is the original input before
+transformer → output. Bypass returns the original input delayed by the same 64 samples as the
+processing path, with a short transition to avoid switching clicks. The mix's dry branch is the original input before
 input gain. Output gain and transformer affect both branches of the mix.
 
 - **FET:** fast peak feed-forward control. Attack time is scaled to one quarter
@@ -31,9 +35,28 @@ input gain. Output gain and transformer affect both branches of the mix.
 
 All models remain running while selected model weights crossfade. Continuous
 gain controls and toggle transitions are smoothed over approximately 20 ms.
-Mono and stereo layouts are supported, with zero lookahead/reported latency.
+Mono and stereo layouts are supported, with no lookahead and a fixed
+64-sample latency (1.33 ms at 48 kHz), reported to the host for compensation.
+The transformer, clean output, and bypass paths retain this latency even when
+the transformer is disabled. Both resampling filters have 129 taps; only the
+transformer stage runs at 2×, and its filter coefficients use that higher rate.
 Host automation and session state recall cover all 13 parameters. There is no
-external sidechain, oversampling, automatic makeup gain, or preset browser yet.
+external sidechain, oversampling selector, automatic makeup gain, or preset browser yet.
+
+## Measured characteristics
+
+See [the measurement report](Measurements/README.md) for compression curves,
+attack/recovery plots, transformer harmonics and frequency response, and the
+previous 1× high-drive aliasing measurements. Those plots are the baseline
+from before the 2× change, not a validation of the new code. Figures are available
+as PNG, SVG, and PDF. Per the user’s request, the test suites and measurement
+sweep were not rerun after the 2× implementation.
+
+The subsequent [square-wave phase verification](Measurements/phase/README.md)
+checks the current 2× transformer with 50 Hz and 2 kHz squares. At 48 kHz,
+measured phase is +8.96° at 50 Hz and −65.93° at 17.95 kHz after removing
+the fixed FIR delay. Focused checks also pass at 44.1 and 96 kHz; the full
+test suites remain unrerun.
 
 ## Build and test in this cloud workspace
 

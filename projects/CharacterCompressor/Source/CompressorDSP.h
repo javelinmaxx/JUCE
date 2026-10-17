@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include "OversampledTransformer.h"
 
 namespace character
 {
@@ -22,6 +23,7 @@ struct Parameters
 class Compressor
 {
 public:
+    static constexpr int latencySamples = OversampledTransformer::latencySamples;
     static float gain (float db) noexcept { return std::pow (10.0f, db / 20.0f); }
     static float db (float level) noexcept
     {
@@ -33,13 +35,18 @@ public:
         sampleRate = std::isfinite (newSampleRate) && newSampleRate >= 8000
                    ? newSampleRate : 44100;
         smoothing = coefficient (20);
+        for (auto& t : transformers)
+            t.prepare (sampleRate);
         reset();
     }
 
     void reset() noexcept
     {
         states = {};
-        transformers = {};
+        for (auto& t : transformers)
+            t.reset();
+        cleanDelay = bypassDelay = {};
+        delayPosition = 0;
         hpInput = hpOutput = {};
         meterReduction = 0;
         firstSet = true;
@@ -162,12 +169,19 @@ public:
                 const auto c = static_cast<size_t> (ch);
                 const auto mixed = (dry[c] + values[mix] * (driven[c] * combinedGain - dry[c]))
                                  * values[output];
-                const auto coloured = transformerSample (mixed, transformers[c]);
-                const auto wet = mixed + values[transformer] * (coloured - mixed);
+                // Keep the oversampler warm even when disabled; the clean and
+                // bypass paths retain the same fixed latency during automation.
+                const auto coloured = transformers[c].process (mixed, values[drive]);
+                const auto clean = cleanDelay[c][delayPosition];
+                const auto delayedDry = bypassDelay[c][delayPosition];
+                cleanDelay[c][delayPosition] = mixed;
+                bypassDelay[c][delayPosition] = dry[c];
+                const auto wet = clean + values[transformer] * (coloured - clean);
                 // Snap the last fraction to ensure settled bypass is sample exact.
-                channels[ch][sample] = values[bypass] > 0.99999f ? dry[c]
-                                    : wet + values[bypass] * (dry[c] - wet);
+                channels[ch][sample] = values[bypass] > 0.99999f ? delayedDry
+                                    : wet + values[bypass] * (delayedDry - wet);
             }
+            delayPosition = (delayPosition + 1) % static_cast<size_t> (latencySamples);
         }
     }
 
@@ -175,7 +189,6 @@ private:
     static constexpr float pi = 3.14159265358979323846f;
     enum Control { input, threshold, ratio, knee, output, mix, drive, transformer, bypass };
     struct Detector { float reduction = 0, energy = 0, feedback = 0, memory = 0; };
-    struct Transformer { float flux = 0, lowpass = 0, previous = 0, dc = 0; };
 
     float coefficient (float ms) const noexcept
     {
@@ -192,26 +205,6 @@ private:
         return x * x / (2 * width);
     }
 
-    float transformerSample (float x, Transformer& s) const noexcept
-    {
-        // Phenomenological iron coloration: low-frequency flux memory modulates
-        // asymmetric saturation, followed by bandwidth shaping and DC rejection.
-        // Not a measured circuit model; high-drive aliasing is a prototype limit.
-        const auto fs = static_cast<float> (sampleRate);
-        const auto fluxA = std::exp (-2 * pi * 60 / fs);
-        s.flux = x + fluxA * (s.flux - x);
-        const auto bias = 0.12f * std::tanh (s.flux * values[drive]);
-        const auto b = std::tanh (bias);
-        const auto shaped = (std::tanh (values[drive] * x + bias) - b)
-                          / (values[drive] * (1 - b * b));
-        const auto hfA = std::exp (-2 * pi * std::min (18000.0f, fs * 0.45f) / fs);
-        s.lowpass = shaped + hfA * (s.lowpass - shaped);
-        const auto dcA = std::exp (-2 * pi * 5 / fs);
-        s.dc = s.lowpass - s.previous + dcA * s.dc;
-        s.previous = s.lowpass;
-        return s.dc;
-    }
-
     double sampleRate = 44100;
     bool firstSet = true, hpEnabled = true;
     int selected = 0;
@@ -220,7 +213,9 @@ private:
     std::array<float, 9> values {}, targets {};
     std::array<float, 4> weights {}, attacks {}, releases {};
     std::array<Detector, 4> states {};
-    std::array<Transformer, 2> transformers {};
+    std::array<OversampledTransformer, 2> transformers {};
+    std::array<std::array<float, latencySamples>, 2> cleanDelay {}, bypassDelay {};
+    size_t delayPosition = 0;
     std::array<float, 2> hpInput {}, hpOutput {};
 };
 } // namespace character

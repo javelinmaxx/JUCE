@@ -66,7 +66,7 @@ void CharacterCompressorProcessor::prepareToPlay (double rate, int)
     engine.prepare (rate);
     engine.setParameters (readParameters());
     reduction.store (0); inputPeak.store (-100); outputPeak.store (-100);
-    setLatencySamples (0);
+    setLatencySamples (character::Compressor::latencySamples);
 }
 
 bool CharacterCompressorProcessor::isBusesLayoutSupported (const BusesLayout& buses) const

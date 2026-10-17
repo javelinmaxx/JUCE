@@ -24,6 +24,15 @@ void run (character::Compressor& dsp, std::vector<float>& left, std::vector<floa
     }
 }
 
+std::vector<float> delayed (const std::vector<float>& signal)
+{
+    std::vector<float> result (signal.size(), 0);
+    constexpr auto delay = character::Compressor::latencySamples;
+    if (signal.size() > delay)
+        std::copy (signal.begin(), signal.end() - delay, result.begin() + delay);
+    return result;
+}
+
 float steadyGain (character::Model model, float ratio)
 {
     character::Compressor dsp;
@@ -87,14 +96,38 @@ int main()
     dry.setParameters (p);
     auto a = source, b = source;
     run (dry, a, b);
-    check (a == source && b == source, "zero mix is original dry signal");
+    check (a == delayed (source) && b == delayed (source), "zero mix is exact latency-aligned dry signal");
 
     p.bypass = true; p.mix = 1; p.outputDb = 18; p.transformer = true;
     Compressor bypass;
     bypass.prepare (48000); bypass.setParameters (p);
     a = b = source;
     run (bypass, a, b);
-    check (a == source && b == source, "bypass is sample exact and bypasses transformer/output gain");
+    check (a == delayed (source) && b == delayed (source), "bypass is exact delayed input, independent of transformer/output gain");
+
+    // The host latency must describe the actual clean-path delay, including
+    // startup silence and operation across arbitrary block boundaries.
+    Compressor impulse;
+    impulse.prepare (48000);
+    Parameters unity;
+    unity.ratio = 1;
+    impulse.setParameters (unity);
+    a.assign (256, 0); a[0] = 1; b = a;
+    run (impulse, a, b, 17);
+    check (std::distance (a.begin(), std::max_element (a.begin(), a.end())) == 64,
+           "clean impulse arrives at the declared 64-sample latency");
+    check (a[64] == 1 && std::count (a.begin(), a.end(), 0.0f) == 255,
+           "disabled transformer introduces only an exact delay");
+
+    Compressor osA, osB;
+    osA.prepare (48000); osB.prepare (48000);
+    unity.transformer = true; unity.driveDb = 12;
+    osA.setParameters (unity); osB.setParameters (unity);
+    auto osLeft = source, osRight = source, osOtherLeft = source, osOtherRight = source;
+    run (osA, osLeft, osRight, 256);
+    run (osB, osOtherLeft, osOtherRight, 17);
+    check (osLeft == osOtherLeft && osRight == osOtherRight,
+           "2x transformer processing is invariant to block partitioning");
 
     // Automation should ramp rather than instantaneously jump to a new gain/model.
     Compressor automated;
