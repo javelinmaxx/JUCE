@@ -1,0 +1,59 @@
+#pragma once
+
+#include <algorithm>
+#include <cmath>
+
+namespace character
+{
+// Small-signal loaded-transformer approximation. The LF magnetizing branch is
+// a one-pole high-pass; leakage inductance and winding capacitance form a damped
+// two-pole low-pass. Magnitude and phase come from these same causal filters.
+// These defaults are design choices, not measurements of a particular unit.
+class TransformerResponse
+{
+public:
+    static constexpr double lowCornerHz = 8.0;
+    static constexpr double highCornerHz = 22000.0;
+    static constexpr double highQ = 0.8;
+
+    void prepare (double processingRate) noexcept
+    {
+        constexpr double pi = 3.14159265358979323846;
+        const auto rate = std::isfinite (processingRate) && processingRate >= 8000
+                        ? processingRate : 96000.0;
+
+        // Bilinear transform, prewarped at each corner. Run at the transformer
+        // oversampled rate, not at the host rate. Clamp HF at low host rates.
+        const auto lowK = std::tan (pi * lowCornerHz / rate);
+        hpB = 1.0 / (1.0 + lowK);
+        hpA = (lowK - 1.0) / (lowK + 1.0);
+
+        const auto highK = std::tan (pi * std::min (highCornerHz, rate * 0.4) / rate);
+        const auto normalise = 1.0 / (1.0 + highK / highQ + highK * highK);
+        b0 = highK * highK * normalise;
+        b1 = 2.0 * b0;
+        b2 = b0;
+        a1 = 2.0 * (highK * highK - 1.0) * normalise;
+        a2 = (1.0 - highK / highQ + highK * highK) * normalise;
+        reset();
+    }
+
+    void reset() noexcept { previousInput = previousHighpass = z1 = z2 = 0; }
+
+    float process (float sample) noexcept
+    {
+        const auto input = static_cast<double> (sample);
+        const auto highpass = hpB * (input - previousInput) - hpA * previousHighpass;
+        previousInput = input;
+        previousHighpass = highpass;
+        const auto output = b0 * highpass + z1;
+        z1 = b1 * highpass - a1 * output + z2;
+        z2 = b2 * highpass - a2 * output;
+        return static_cast<float> (output);
+    }
+
+private:
+    double hpB = 0, hpA = 0, b0 = 0, b1 = 0, b2 = 0, a1 = 0, a2 = 0;
+    double previousInput = 0, previousHighpass = 0, z1 = 0, z2 = 0;
+};
+} // namespace character

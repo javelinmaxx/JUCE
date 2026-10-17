@@ -65,7 +65,7 @@ int runTests (int argc, char** argv)
         restored.processBlock (buffer, midi);
     }
     check (restored.reduction.load() > 1, "processor applies compression");
-    check (restored.getLatencySamples() == 0, "zero reported latency");
+    check (restored.getLatencySamples() == 64, "host receives 64-sample oversampling latency");
     for (int block = 0; block < 100; ++block)
     {
         for (int ch = 0; ch < 2; ++ch)

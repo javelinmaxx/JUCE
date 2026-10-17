@@ -1,0 +1,40 @@
+{
+  "sample_rate_hz": 48000,
+  "threshold_dbfs": -18,
+  "ratio_control": 4,
+  "attack_control_ms": 10,
+  "release_control_ms": 150,
+  "knee_db": 6,
+  "detector_hpf_hz": 0,
+  "input_output_gain_db": 0,
+  "mix": 1,
+  "dsp_sha256": "908cae86e3dff453ddce5d029af63eec4503e12fa3adeaaaa2217525e6b0a569",
+  "source_commit": "ae3e02d3848ca90f5d6265e675f0606d57cbeb58",
+  "metrics": {
+    "FET (feed-forward)": {
+      "steady_step_reduction_db": 8.99994257980238,
+      "attack_to_90_percent_ms": 5.75,
+      "release_to_10_percent_ms": 241.8125
+    },
+    "VCA (feedback)": {
+      "steady_step_reduction_db": 8.99994257980238,
+      "attack_to_90_percent_ms": 5.75,
+      "release_to_10_percent_ms": 345.39583333333337
+    },
+    "Variable-mu": {
+      "steady_step_reduction_db": 6.356102556099308,
+      "attack_to_90_percent_ms": 13.041666666666666,
+      "release_to_10_percent_ms": 639.7708333333333
+    },
+    "Optical": {
+      "steady_step_reduction_db": 8.999449123265974,
+      "attack_to_90_percent_ms": 53.64583333333333,
+      "release_to_10_percent_ms": 1145.8125
+    },
+    "Transformer": {
+      "drive18_1khz_third_harmonic_dbc": -11.361777130971198,
+      "drive18_10khz_alias18khz_dbfs": -28.92569337032816,
+      "drive18_10khz_fundamental_dbfs": -16.845238215020874
+    }
+  }
+}
