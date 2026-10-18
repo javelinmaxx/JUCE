@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include "OversampledTransformer.h"
+#include "HighTilt.h"
 
 namespace character
 {
@@ -15,7 +16,7 @@ struct Parameters
     float inputDb = 0, thresholdDb = -18, ratio = 4, attackMs = 10;
     float releaseMs = 150, kneeDb = 6, outputDb = 0, mix = 1;
     float sidechainHz = 80, driveDb = 6;
-    bool transformer = false, bypass = false;
+    bool transformer = false, bypass = false, highTilt = false;
 };
 
 // No allocation, locks, host calls, or GUI dependencies in the processing path.
@@ -37,6 +38,8 @@ public:
         smoothing = coefficient (20);
         for (auto& t : transformers)
             t.prepare (sampleRate);
+        for (auto& shelf : sidechainShelves)
+            shelf.prepare (sampleRate);
         reset();
     }
 
@@ -45,6 +48,8 @@ public:
         states = {};
         for (auto& t : transformers)
             t.reset();
+        for (auto& shelf : sidechainShelves)
+            shelf.reset();
         cleanDelay = bypassDelay = {};
         delayPosition = 0;
         hpInput = hpOutput = {};
@@ -69,7 +74,8 @@ public:
         selected = std::clamp (static_cast<int> (p.model), 0, 3);
         targets = { gain (p.inputDb), p.thresholdDb, p.ratio, p.kneeDb,
                     gain (p.outputDb), p.mix, gain (p.driveDb),
-                    p.transformer ? 1.0f : 0.0f, p.bypass ? 1.0f : 0.0f };
+                    p.transformer ? 1.0f : 0.0f, p.bypass ? 1.0f : 0.0f,
+                    p.highTilt ? 1.0f : 0.0f };
         hpEnabled = p.sidechainHz > 0;
         hpCoefficient = std::exp (-2 * pi * p.sidechainHz / static_cast<float> (sampleRate));
         attacks = { coefficient (p.attackMs * 0.25f), coefficient (p.attackMs),
@@ -121,7 +127,12 @@ public:
                 const auto hp = driven[c] - hpInput[c] + hpCoefficient * hpOutput[c];
                 hpInput[c] = driven[c];
                 hpOutput[c] = hp;
-                detector = std::max (detector, std::abs (hpEnabled ? hp : driven[c]));
+                const auto sidechain = hpEnabled ? hp : driven[c];
+                // Tilt only the signed detector signal, before rectification
+                // and stereo linking. Keep filter history warm when disabled.
+                const auto tilted = sidechainShelves[c].process (sidechain);
+                const auto sensed = sidechain + values[highTilt] * (tilted - sidechain);
+                detector = std::max (detector, std::abs (sensed));
             }
 
             float combinedGain = 0, reduction = 0;
@@ -187,7 +198,7 @@ public:
 
 private:
     static constexpr float pi = 3.14159265358979323846f;
-    enum Control { input, threshold, ratio, knee, output, mix, drive, transformer, bypass };
+    enum Control { input, threshold, ratio, knee, output, mix, drive, transformer, bypass, highTilt };
     struct Detector { float reduction = 0, energy = 0, feedback = 0, memory = 0; };
 
     float coefficient (float ms) const noexcept
@@ -210,10 +221,11 @@ private:
     int selected = 0;
     float smoothing = 0, hpCoefficient = 0, slowRelease = 0, rmsCoefficient = 0;
     float meterReduction = 0;
-    std::array<float, 9> values {}, targets {};
+    std::array<float, 10> values {}, targets {};
     std::array<float, 4> weights {}, attacks {}, releases {};
     std::array<Detector, 4> states {};
     std::array<OversampledTransformer, 2> transformers {};
+    std::array<HighTilt, 2> sidechainShelves {};
     std::array<std::array<float, latencySamples>, 2> cleanDelay {}, bypassDelay {};
     size_t delayPosition = 0;
     std::array<float, 2> hpInput {}, hpOutput {};

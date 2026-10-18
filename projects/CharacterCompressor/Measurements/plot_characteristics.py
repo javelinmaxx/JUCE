@@ -120,7 +120,7 @@ metadata = {'sample_rate_hz': FS, 'threshold_dbfs': -18, 'ratio_control': 4,
     'detector_hpf_hz': 0, 'input_output_gain_db': 0, 'mix': 1,
     'oversampling_factor': 2, 'compensated_latency_samples': latency,
     'dsp_sha256': {name: hashlib.sha256((HERE.parent / 'Source' / name).read_bytes()).hexdigest()
-                   for name in ['CompressorDSP.h', 'OversampledTransformer.h', 'TransformerResponse.h']},
+                   for name in ['CompressorDSP.h', 'OversampledTransformer.h', 'TransformerResponse.h', 'HighTilt.h']},
     'source_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=HERE, text=True).strip(),
     'metrics': metrics}
 (OUT / 'metrics.json').write_text(json.dumps(metadata, indent=2) + '\n')

@@ -3,7 +3,8 @@
 [View the plot](square_wave_phase.png) · [PDF report](transformer_phase_report.pdf)
 · [Vector plot](square_wave_phase.svg) · [Numerical results](metrics.json)
 
-The current production DSP was measured with 50 Hz and 2 kHz square waves,
+The production DSP revision before the subsequent distortion-filter/high-shelf
+change was measured with 50 Hz and 2 kHz square waves,
 at −60 dBFS peak, compression ratio 1:1, transformer drive 0 dB, and 48 kHz
 host sample rate. Low-level input isolates the small-signal response from
 saturation. Both before/after traces use 2× oversampling. Only the fixed
@@ -45,3 +46,7 @@ python3 projects/CharacterCompressor/Measurements/verify_transformer_phase.py
 
 This command runs only the requested square-wave verification and regenerates
 this report. The full DSP/processor suites and aliasing sweep were not rerun.
+
+For measurements of the newer output-stage revision, see
+[distortion roll-off and High Tilt](../output_stage/README.md). Rerunning the
+phase script measures the current source and replaces the figures in this folder.
