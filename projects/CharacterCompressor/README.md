@@ -111,6 +111,31 @@ Linux artifact:
 `/workspace/juce-env/character-build/CharacterCompressor_artefacts/Debug/VST3/Character Compressor.vst3`.
 Linux VST3 binaries cannot load in Logic on macOS.
 
+## Download a Windows VST3 using GitHub Actions
+
+You can build Windows x64 binaries from a Mac using GitHub's hosted runner.
+The workflow is [Character Compressor - Windows VST3](../../.github/workflows/character-compressor-windows.yml).
+
+1. Open the repository's **Actions** tab. If GitHub has disabled workflows in
+   this fork, enable Actions first.
+2. Open **Character Compressor - Windows VST3** and select the latest successful
+   run for `feature/character-compressor` (or `master` after merging).
+3. Under **Artifacts**, download **Character-Compressor-Windows-x64-VST3**.
+4. Extract the ZIP and keep the complete `Character Compressor.vst3` folder.
+   On Windows, copy it to `C:\Program Files\Common Files\VST3\`, then rescan
+   plug-ins in the Windows DAW. This binary is for Windows x64 hosts.
+
+The workflow automatically starts when this workflow file or plug-in source/
+CMake configuration is pushed to either branch. Once the workflow exists on
+the repository's default branch, you can also use **Run workflow**, choose
+the branch, and click **Run workflow**. Before that, use a push or the latest
+run's **Re-run all jobs** button.
+
+It builds only the Release VST3 with Visual Studio 2022; it does not run the
+test suites. The MSVC runtime is linked statically. Downloads are retained for
+30 days, after which a fresh workflow run is needed. A successful cloud build
+does not replace loading/listening checks in a Windows host.
+
 ## Build VST3 and AU for the current Apple Silicon Mac
 
 Use a current compatible Xcode installation and CMake 3.22 or newer. From the
