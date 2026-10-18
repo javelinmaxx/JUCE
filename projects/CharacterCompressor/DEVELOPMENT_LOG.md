@@ -171,6 +171,21 @@
   dry path, stereo matching, latency, and native editor rendering. Full suites
   were not rerun. Logs: `/workspace/juce-env/character-sidechain-*.log`.
 
+### 2026-10-18 — Windows VST3 builds from GitHub Actions
+
+- Added `.github/workflows/character-compressor-windows.yml` so the user can
+  obtain a Windows build from their Mac. Uses the `windows-2022` hosted runner,
+  Visual Studio 2022, x64, Release configuration, and a static MSVC runtime.
+- Builds only `CharacterCompressor_VST3` with tests disabled, checks the
+  expected Windows binary exists, and uploads the entire VST3 bundle as the
+  `Character-Compressor-Windows-x64-VST3` artifact, retained for 30 days.
+- Source/configuration pushes to the compressor branch or `master` trigger a
+  build. Manual dispatch is also configured; GitHub's Run workflow button
+  becomes available once the workflow is on the default branch.
+- Added download, installation, and rerun instructions to the project README.
+  YAML/configuration checked locally; Windows build result is recorded by the
+  GitHub Actions run. No DSP/processor suites were rerun for this workflow.
+
 ## Validation status
 
 Prior 1× revision validated in the Linux cloud instance on 2026-10-17
