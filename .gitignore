@@ -70,3 +70,4 @@ extras/Projucer/JUCECompileEngine.dylib
 CMakeUserPresets.json
 .editorconfig
 
+/build-character-*/

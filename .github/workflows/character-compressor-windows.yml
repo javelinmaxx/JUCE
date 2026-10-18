@@ -8,6 +8,7 @@ on:
       - feature/character-compressor
     paths:
       - .github/workflows/character-compressor-windows.yml
+      - build-windows-vst3.ps1
       - projects/CharacterCompressor/Source/**
       - projects/CharacterCompressor/CMakeLists.txt
 
@@ -30,17 +31,8 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
-      - name: Configure
-        run: >-
-          cmake -S projects/CharacterCompressor -B build-character-win
-          -G "Visual Studio 17 2022" -A x64
-          -DCHARACTER_BUILD_TESTS=OFF
-          '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded$<$<CONFIG:Debug>:Debug>'
-
       - name: Build VST3
-        run: >-
-          cmake --build build-character-win --config Release
-          --target CharacterCompressor_VST3 --parallel 4
+        run: ./build-windows-vst3.ps1
 
       - name: Check Windows bundle
         run: |

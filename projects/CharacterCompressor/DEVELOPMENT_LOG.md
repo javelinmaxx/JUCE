@@ -186,6 +186,32 @@
   YAML/configuration checked locally; Windows build result is recorded by the
   GitHub Actions run. No DSP/processor suites were rerun for this workflow.
 
+### 2026-10-18 — Multi-Compressor repository README
+
+- Replaced the upstream framework landing page with a Multi-Compressor project
+  description and feature overview, retaining JUCE attribution/licensing links.
+- Added separate Windows VST3, macOS VST3, and macOS AU build/install sections,
+  including Windows builds through GitHub Actions for users working on a Mac.
+- Updated clone/Actions URLs to `javelinmaxx/Multi-Compressor`. Documented
+  Apple Silicon, Intel, and universal options while retaining the actual
+  `CharacterCompressor` targets and `Character Compressor` bundle names.
+- Checked the documented paths/targets against CMake and the Windows workflow.
+  Documentation-only change; no builds or test suites were rerun.
+
+### 2026-10-18 — root build scripts
+
+- Added `build-macos.sh` for VST3, AU, or both, with architecture/deployment
+  options and optional installation into the user's plug-in folders.
+- Added `build-windows-vst3.ps1` for a Release Windows x64 VST3 with static
+  runtime linkage and explicit native-command error handling.
+- Both scripts locate the source relative to the script, disable test targets,
+  verify the expected bundle exists, and print its path. Root build folders
+  are ignored by Git. The Windows Actions workflow now invokes the same script
+  and triggers when it changes.
+- Added script commands to all three README build sections. Checked Bash
+  syntax/help and workflow YAML locally; actual macOS/Windows execution requires
+  those platforms. No plug-in builds or full test suites were rerun.
+
 ## Validation status
 
 Prior 1× revision validated in the Linux cloud instance on 2026-10-17

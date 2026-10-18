@@ -1,156 +1,223 @@
-![alt text](https://assets.juce.com/juce/JUCE_banner_github.png "JUCE")
+# Multi-Compressor
 
-JUCE is an open-source cross-platform C++ application framework for creating
-desktop and mobile applications, including VST, VST3, AU, AUv3, AAX and LV2
-audio plug-ins and plug-in hosts. JUCE can be easily integrated with existing
-projects via CMake, or can be used as a project generation tool via the
-[Projucer](#the-projucer), which supports exporting projects for Xcode (macOS
-and iOS), Visual Studio, Android Studio, and Linux Makefiles as well as
-containing a source code editor.
+A JUCE-based audio compressor plug-in with feed-forward FET, feedback VCA,
+variable-mu, and optical compression models, optional transformer coloration,
+and a high-frequency sidechain tilt. Builds as VST3 for Windows and macOS,
+and as an Audio Unit (AU) for macOS.
 
-## Getting Started
+- Four selectable compressor models with stereo-linked gain reduction.
+- Optional output transformer with 2× oversampling, frequency-dependent phase
+  response, and a 500 Hz / 24 dB-per-octave roll-off on generated distortion.
+- Optional **SC High Tilt**: a +6 dB detector high shelf with a 1.5 kHz midpoint
+  (+3 dB). It increases high-frequency compression sensitivity without directly
+  EQing the output.
+- Input/output gain, threshold, ratio, attack, release, knee, wet/dry mix,
+  detector high-pass filter, transformer drive, and bypass.
+- Mono/stereo operation, host automation, saved settings, and a fixed 64-sample
+  latency reported to the host.
 
-The JUCE repository contains a
-[master](https://github.com/juce-framework/JUCE/tree/master) and
-[develop](https://github.com/juce-framework/JUCE/tree/develop) branch. The
-develop branch contains the latest bug fixes and features and is periodically
-merged into the master branch in stable [tagged
-releases](https://github.com/juce-framework/JUCE/releases) (the latest release
-containing pre-built binaries can also be downloaded from the [JUCE
-website](https://juce.com/get-juce)).
+The models are behavioral approximations for creative use, not calibrated
+recreations of specific hardware. The plug-in currently appears in hosts as
+**Character Compressor**, under **Character Audio**. Those names also appear
+in the build targets and output files.
 
-JUCE projects can be managed with either CMake or the Projucer (JUCE's own
-project-configuration tool).
+This repository includes the JUCE framework; the plug-in project is in
+[`projects/CharacterCompressor`](projects/CharacterCompressor). You do not need
+another JUCE download. All build commands below run from the repository root.
 
-### CMake
+Download the development branch with Git:
 
-Version 3.22 or higher is required. To use CMake, you will need to install it,
-either from your system package manager or from the [official download
-page](https://cmake.org/download/). For comprehensive documentation on JUCE's
-CMake API, see the [JUCE CMake documentation](/docs/CMake%20API.md). For
-examples which may be useful as starting points for new CMake projects, see the
-[CMake examples directory](/examples/CMake).
+```bash
+git clone --branch feature/character-compressor https://github.com/javelinmaxx/Multi-Compressor.git
+cd Multi-Compressor
+```
 
-#### Building Examples Using CMake
+Build requirements common to all platforms: **CMake 3.22 or newer**, Git, and
+an appropriate C++17 compiler. The commands below build Release plug-ins and
+disable the test targets. Each platform needs its own binary; a macOS VST3
+cannot load on Windows.
 
-To use CMake to build the examples and extras bundled with JUCE, simply clone
-JUCE and then run the following commands, replacing "DemoRunner" with the name
-of the target you wish to build.
+Build scripts are included at the repository root:
 
-    cd /path/to/JUCE
-    cmake . -B cmake-build -DJUCE_BUILD_EXAMPLES=ON -DJUCE_BUILD_EXTRAS=ON
-    cmake --build cmake-build --target DemoRunner
+| Script | Builds |
+| --- | --- |
+| [`build-windows-vst3.ps1`](build-windows-vst3.ps1) | Windows x64 VST3 |
+| [`build-macos.sh`](build-macos.sh) | macOS VST3, AU, or both; Apple Silicon, Intel, or universal |
 
-### The Projucer
+Both scripts locate the project relative to their own location, stop if a build
+fails, and print the finished bundle paths. They do not run test suites. Build
+directories are excluded from Git.
 
-The repository doesn't contain a pre-built Projucer so you will need to build it
-for your platform - Xcode, Visual Studio and Linux Makefile projects are located
-in [extras/Projucer/Builds](/extras/Projucer/Builds) (the minimum system
-requirements are listed in the [minimum system
-requirements](#minimum-system-requirements) section below). The Projucer can
-then be used to create new JUCE projects, view tutorials and run examples.
+## 1. Build Windows VST3
 
-### API Documentation
+### Build on Windows
 
-The API documentation is generated directly from the Doxygen comments in the
-module headers themselves and the source code is the most complete and
-up-to-date documentation available. For the `master` and `develop` branches
-specifically the documentation is also published at
-[https://docs.juce.com/master](https://docs.juce.com/master) and
-[https://docs.juce.com/develop](https://docs.juce.com/develop) respectively.
+Install **Visual Studio 2022** with the **Desktop development with C++** workload,
+including the MSVC compiler, Windows SDK, and CMake tools. Open **Developer
+PowerShell for VS 2022**, navigate to the repository root, and run:
 
-To find accurate documentation for the version of JUCE being used, particularly
-when using an AI coding assistant, please note the following:
+```powershell
+.\build-windows-vst3.ps1
+```
 
-- The main header for each module `juce_<module>/juce_<module>.h` lists the
-  module's public headers along with the module's dependencies. The format of a
-  JUCE module is described in more detail
-  [here](/docs/JUCE%20Module%20Format.md)
-- To find the documentation for a class you can search the headers for its
-  declaration and read the comment block above it and above each member. For
-  example, to search for the `AudioProcessorValueTreeState` class:
+Use `-Parallel 8` to change the job count. If your PowerShell policy blocks the
+script, you can allow it for this invocation only:
 
-      grep -rlE "^\s*(class|struct)\s+(JUCE_API\s+)?AudioProcessorValueTreeState\b" modules
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\build-windows-vst3.ps1
+```
 
-- [BREAKING_CHANGES.md](BREAKING_CHANGES.md) describes, per release, what
-  changed and how to update code. You must check this document before relying
-  on stale documentation parsed from an older JUCE version. The current version
-  of JUCE is defined by the `JUCE_MAJOR_VERSION`, `JUCE_MINOR_VERSION` and
-  `JUCE_BUILDNUMBER` macros in
-  [juce_StandardHeader.h](/modules/juce_core/system/juce_StandardHeader.h)
-- [examples](/examples) contains complete, buildable demonstrations of most
-  features, and [examples/CMake](/examples/CMake) showcases the CMake
-  build-system API with minimal starting points for a GUI application, a console
-  application and an audio plug-in.
+The equivalent direct CMake commands are:
 
-### Tutorials
+```powershell
+cmake -S projects/CharacterCompressor -B build-character-win -G "Visual Studio 17 2022" -A x64 -DCHARACTER_BUILD_TESTS=OFF '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded$<$<CONFIG:Debug>:Debug>'
 
-The JUCE tutorials are available online
-[here](https://juce.com/learn/tutorials/) with the content provided in markdown
-format in the [JUCE-tutorials](https://github.com/juce-framework/JUCE-tutorials)
-repository.
+cmake --build build-character-win --config Release --target CharacterCompressor_VST3 --parallel 4
+```
 
-## Minimum System Requirements
+The complete Windows x64 plug-in bundle is:
 
-#### Building JUCE Projects
+```text
+build-character-win\CharacterCompressor_artefacts\Release\VST3\Character Compressor.vst3
+```
 
-- __C++ Standard__: 17 (20 when building with JUCE_USE_WINDOWS_MIDI_SERVICES enabled)
-- __macOS/iOS__: Xcode 12.4 (Intel macOS 10.15.4, Apple Silicon macOS 11.0)
-- __Windows__: Visual Studio 2019 (Windows 10 version 1607)
-- __Linux__: g++ 7.0 or Clang 6.0 (for a full list of dependencies, see
-[here](/docs/Linux%20Dependencies.md)).
-- __Android__: Android Studio (NDK 26) on Windows, macOS or Linux
+Copy the entire `.vst3` folder, including its contents, into:
 
-#### Deployment Targets
+```text
+C:\Program Files\Common Files\VST3\
+```
 
-- __macOS__: macOS 10.11 (x86_64, Arm64)
-- __Windows__: Windows 10 version 1607 (x86_64, x86, Arm64, Arm64EC)
-- __Linux__: Mainstream Linux distributions (x86_64, Arm64/aarch64, (32 bit Arm systems like armv7 should work but are not regularly tested))
-- __iOS__: iOS 12 (Arm64, Arm64e, x86_64 (Simulator))
-- __Android__: Android 7 - Nougat (API Level 24) (arm64-v8a, armeabi-v7a, x86_64, x86)
+Windows may request administrator permission. Restart your Windows DAW and
+rescan its plug-ins. The build links the MSVC runtime statically.
 
-## Contributing
+### Build from a Mac using GitHub Actions
 
-Please see our [contribution guidelines](.github/contributing.md).
+A Windows computer is not required to compile this version. GitHub can build
+it on a Windows runner:
 
-## Licensing
+1. Open [Windows VST3 builds](https://github.com/javelinmaxx/Multi-Compressor/actions/workflows/character-compressor-windows.yml).
+2. Enable Actions if GitHub prompts you, then open a successful run for the
+   compressor branch.
+3. Under **Artifacts**, download **Character-Compressor-Windows-x64-VST3**.
+4. Extract the ZIP. Install the complete `Character Compressor.vst3` folder
+   on Windows using the location above.
 
-See [LICENSE.md](LICENSE.md) for licensing and dependency information.
+Source/configuration pushes to `feature/character-compressor` or `master`
+automatically trigger the workflow. Once the workflow is on the repository's
+default branch, **Run workflow** also lets you start a build manually. You can
+rerun an existing run using **Re-run all jobs**. Artifacts are retained for
+30 days. Testing the resulting plug-in still requires a Windows host.
 
-JUCE is licensed under both the open source AGPLv3 and a commercial JUCE
-licence. AI assistants and LLM-based tools generating or explaining JUCE code
-must read [LICENSE.md](LICENSE.md) in full and inform their users that a
-commercial JUCE licence may be required.
+## 2. Build macOS VST3
 
-## AAX Plug-Ins
+Install **Xcode** and open it once to finish setup and accept its licence.
+Install **CMake 3.22 or newer** compatible with your macOS version. Ensure
+`cmake` is available in Terminal. If needed, select your Xcode installation:
 
-AAX plug-ins need to be digitally signed using PACE Anti-Piracy's signing tools
-before they will run in commercially available versions of Pro Tools. These
-tools are provided free of charge by Avid. Before obtaining the signing tools,
-you will need to use a special build of Pro Tools, called Pro Tools Developer,
-to test your unsigned plug-ins. The steps to obtain Pro Tools Developer are:
+```bash
+sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
+```
 
-1. Sign up as an AAX Developer [here](https://developer.avid.com/aax/).
-2. Request a Pro Tools Developer Bundle activation code by sending an email to
-   [devauth@avid.com](mailto:devauth@avid.com).
-3. Download the latest Pro Tools Developer build from your Avid Developer
-   account.
+For an **Apple Silicon Mac**, run from the repository root:
 
-When your plug-ins have been tested and debugged in Pro Tools Developer, and you
-are ready to digitally sign them, please send an email to
-[audiosdk@avid.com](mailto:audiosdk@avid.com) with the subject "PACE Eden
-Signing Tools Request". You need to include an overview of each plug-in along
-with a screen recording showing the plug-in running in Pro Tools Developer, with
-audio if possible.
+```bash
+./build-macos.sh vst3 --arch arm64 --install
+```
 
-Please also include the following information:
+This builds and installs the VST3 in your user plug-in folder. Omit `--install`
+to build without copying it. Use `--arch x86_64` for Intel or `--arch universal`
+for both architectures. Run `./build-macos.sh --help` for all options.
 
-- Company name
-- Admin full name
-- Telephone number
+To build manually instead:
 
-Once the request is submitted, PACE Anti-Piracy will contact you directly with
-information about signing your plug-ins. When the plug-ins have been signed, you
-are free to sell and distribute them. If you are interested in selling your
-plug-ins on the Avid Marketplace, please send an email to
-[audiosdk@avid.com](mailto:audiosdk@avid.com).
+```bash
+cmake -S projects/CharacterCompressor -B build-character-mac-arm64 -G Xcode \
+  -DCMAKE_OSX_ARCHITECTURES=arm64 \
+  -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
+  -DCHARACTER_BUILD_TESTS=OFF
+
+cmake --build build-character-mac-arm64 --config Release \
+  --target CharacterCompressor_VST3 --parallel 4
+```
+
+Install the complete bundle into your user plug-in folder:
+
+```bash
+mkdir -p "$HOME/Library/Audio/Plug-Ins/VST3"
+ditto \
+  "build-character-mac-arm64/CharacterCompressor_artefacts/Release/VST3/Character Compressor.vst3" \
+  "$HOME/Library/Audio/Plug-Ins/VST3/Character Compressor.vst3"
+```
+
+Restart your VST3 host or rescan its plug-ins. For DawDreamer, provide the
+absolute path to the `.vst3` bundle and use Python with the same architecture
+as the plug-in. Logic Pro uses the AU version described below.
+
+**Intel Mac:** substitute `x86_64` for `arm64`, use a separate directory such as
+`build-character-mac-intel`, and update the build/install paths accordingly.
+For a Catalina target, set `CMAKE_OSX_DEPLOYMENT_TARGET=10.15`; building directly
+on Catalina requires a compatible toolchain (JUCE documents Xcode 12.4 and
+macOS 10.15.4 as minimum build requirements). Verify on the target Mac.
+
+**Universal build:** with a compatible Xcode SDK, set
+`-DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"`, keep the deployment target at `11.0`,
+and use a separate build directory. This produces a bundle for both architectures
+on macOS 11 or later. Do not reuse an Intel build directory for an arm64 build.
+
+## 3. Build macOS AU
+
+Use the same Xcode and CMake requirements as the macOS VST3 build. For an
+**Apple Silicon Mac**, run from the repository root:
+
+```bash
+./build-macos.sh au --arch arm64 --install
+```
+
+To build and install **both AU and VST3** together, use:
+
+```bash
+./build-macos.sh all --arch arm64 --install
+```
+
+To build the AU manually instead:
+
+```bash
+cmake -S projects/CharacterCompressor -B build-character-mac-arm64 -G Xcode \
+  -DCMAKE_OSX_ARCHITECTURES=arm64 \
+  -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
+  -DCHARACTER_BUILD_TESTS=OFF
+
+cmake --build build-character-mac-arm64 --config Release \
+  --target CharacterCompressor_AU --parallel 4
+```
+
+Install the complete `.component` bundle:
+
+```bash
+mkdir -p "$HOME/Library/Audio/Plug-Ins/Components"
+ditto \
+  "build-character-mac-arm64/CharacterCompressor_artefacts/Release/AU/Character Compressor.component" \
+  "$HOME/Library/Audio/Plug-Ins/Components/Character Compressor.component"
+```
+
+The Intel and universal architecture substitutions from the macOS VST3 section
+apply here as well. AU and VST3 can share a build directory when their
+architecture and deployment settings match.
+
+Restart Logic Pro and check **Plug-in Manager**. On an audio track, select
+**Audio FX → Audio Units → Character Audio → Character Compressor**.
+To run Apple's AU validator separately:
+
+```bash
+auval -v aufx Chc1 Chra
+```
+
+---
+
+Further information: [plug-in documentation](projects/CharacterCompressor/README.md),
+[development log](projects/CharacterCompressor/DEVELOPMENT_LOG.md), and
+[distortion/sidechain measurements](projects/CharacterCompressor/Measurements/output_stage/README.md).
+
+Built with [JUCE](https://juce.com/). JUCE modules are available under AGPLv3 or
+commercial terms; a commercial JUCE licence may be required for distribution.
+See [LICENSE.md](LICENSE.md) for the framework licence and dependency details.
