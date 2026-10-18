@@ -1,0 +1,3 @@
+/Users/andy/git repos/JUCE/build-character-mac/vst3_helpers/CharacterCompressor/CMakeFiles/vst3_helper.dir
+/Users/andy/git repos/JUCE/build-character-mac/vst3_helpers/CharacterCompressor/CMakeFiles/ALL_BUILD.dir
+/Users/andy/git repos/JUCE/build-character-mac/vst3_helpers/CharacterCompressor/CMakeFiles/ZERO_CHECK.dir

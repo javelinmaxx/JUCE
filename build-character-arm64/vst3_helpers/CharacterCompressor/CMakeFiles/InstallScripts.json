@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/Users/andy/git repos/JUCE/build-character-arm64/vst3_helpers/CharacterCompressor/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/Users/andy/git repos/JUCE/build-character-mac/vst3_helpers/CharacterCompressor/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

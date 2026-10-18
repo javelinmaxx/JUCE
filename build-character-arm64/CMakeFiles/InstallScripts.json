@@ -1,0 +1,11 @@
+{
+	"InstallScripts" : 
+	[
+		"/Users/andy/git repos/JUCE/build-character-arm64/cmake_install.cmake",
+		"/Users/andy/git repos/JUCE/build-character-arm64/JUCE/cmake_install.cmake",
+		"/Users/andy/git repos/JUCE/build-character-arm64/JUCE/modules/cmake_install.cmake",
+		"/Users/andy/git repos/JUCE/build-character-arm64/JUCE/extras/Build/cmake_install.cmake",
+		"/Users/andy/git repos/JUCE/build-character-arm64/JUCE/extras/Build/juceaide/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
