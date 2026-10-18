@@ -149,20 +149,25 @@ int main()
     run (automated, a, b);
     check (a.back() == 0.5f, "bypass settles to exact unity");
 
-    // Transformer adds harmonics, unlike the clean 1:1 signal path.
+    // Use a 100 Hz probe so its third harmonic lies below the new 500 Hz
+    // residual cutoff. Measure magnitude to retain the transformer's phase.
     Compressor iron;
     iron.prepare (48000);
     p = {}; p.ratio = 1; p.transformer = true; p.driveDb = 18;
     iron.setParameters (p);
     a.resize (96000);
     for (size_t i = 0; i < a.size(); ++i)
-        a[i] = 0.6f * std::sin (2 * 3.141592653589793 * 1000 * static_cast<double> (i) / 48000);
+        a[i] = 0.6f * std::sin (2 * 3.141592653589793 * 100 * static_cast<double> (i) / 48000);
     b = a;
     run (iron, a, b);
-    double third = 0;
+    double thirdSin = 0, thirdCos = 0;
     for (size_t i = 48000; i < a.size(); ++i)
-        third += a[i] * std::sin (2 * 3.141592653589793 * 3000 * static_cast<double> (i) / 48000);
-    check (std::abs (third / 24000) > 0.005, "output transformer produces odd harmonics");
+    {
+        const auto phase = 2 * 3.141592653589793 * 300 * static_cast<double> (i) / 48000;
+        thirdSin += a[i] * std::sin (phase);
+        thirdCos += a[i] * std::cos (phase);
+    }
+    check (std::hypot (thirdSin, thirdCos) / 24000 > 0.005, "output transformer produces low-frequency odd harmonics");
     a.assign (96000, 0.5f); b = a;
     run (iron, a, b);
     check (std::abs (a.back()) < 0.001f, "transformer rejects DC");
@@ -185,7 +190,10 @@ int main()
             bool finite = true;
             for (size_t i = 0; i < a.size(); ++i)
                 finite = finite && std::isfinite (a[i]) && std::isfinite (b[i])
-                                && std::abs (a[i]) < 100 && std::abs (b[i]) < 100;
+                                // Clean highs are no longer amplitude-limited by
+                                // full-band tanh. Allow the existing +24 dB output
+                                // gain and filter transients at extreme controls.
+                                && std::abs (a[i]) < 4096 && std::abs (b[i]) < 4096;
             check (finite, "extreme settings stay finite at every supported rate");
             dsp.reset(); dsp.setParameters (p);
             a.assign (1024, 0); b = a;

@@ -34,7 +34,8 @@ def build(directory, old=False):
     measure = directory / 'Measurements'
     source.mkdir(parents=True)
     measure.mkdir()
-    shutil.copy(HERE.parent / 'Source/CompressorDSP.h', source)
+    for header in (HERE.parent / 'Source').glob('*.h'):
+        shutil.copy(header, source)
     shutil.copy(HERE / 'render.cpp', measure)
     shutil.copy(HERE / 'baseline/transformer_before_phase.h' if old else
                 HERE.parent / 'Source/OversampledTransformer.h', source / 'OversampledTransformer.h')
@@ -131,7 +132,7 @@ metrics = {
     'disabled_transformer_is_exact_delayed_input': True,
     'before_transformer_sha256': hashlib.sha256((HERE / 'baseline/transformer_before_phase.h').read_bytes()).hexdigest(),
     'source_sha256': {p: hashlib.sha256((HERE.parent / 'Source' / p).read_bytes()).hexdigest()
-                      for p in ['CompressorDSP.h', 'OversampledTransformer.h', 'TransformerResponse.h']},
+                      for p in ['CompressorDSP.h', 'OversampledTransformer.h', 'TransformerResponse.h', 'HighTilt.h']},
     'verification': 'passed',
 }
 (OUT / 'metrics.json').write_text(json.dumps(metrics, indent=2) + '\n')

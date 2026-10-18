@@ -15,6 +15,7 @@ class OversampledTransformer
 public:
     static constexpr int factor = 2;
     static constexpr int latencySamples = 64;
+    static constexpr double distortionCornerHz = 500.0;
 
     void prepare (double sampleRate) noexcept
     {
@@ -36,6 +37,12 @@ public:
 
         const auto rate = sampleRate * factor;
         fluxCoefficient = static_cast<float> (std::exp (-2 * pi * 60 / rate));
+        // Fourth-order Butterworth at 500 Hz, applied only to the nonlinear
+        // residual. Generated harmonics above this corner roll off at 24 dB/oct.
+        const auto k = std::tan (pi * distortionCornerHz / rate);
+        constexpr std::array<double, 2> q { 0.541196100146197, 1.306562964876377 };
+        for (size_t i = 0; i < distortionFilters.size(); ++i)
+            distortionFilters[i].prepare (k, q[i]);
         response.prepare (rate);
         reset();
     }
@@ -46,6 +53,8 @@ public:
         outputHistory = {};
         inputPosition = outputPosition = 0;
         flux = 0;
+        for (auto& filter : distortionFilters)
+            filter.reset();
         response.reset();
     }
 
@@ -74,14 +83,38 @@ public:
 private:
     float saturate (float x, float drive) noexcept
     {
-        // Core coloration followed by the loaded transformer's causal response,
-        // all at 2x rate. The response supplies LF droop and HF phase/edge shaping.
+        // Isolate generated distortion from the unity small-signal path. Only
+        // this residual is low-passed; clean highs retain the transformer response.
         flux = x + fluxCoefficient * (flux - x);
         const auto bias = 0.12f * std::tanh (flux * drive);
         const auto b = std::tanh (bias);
         const auto shaped = (std::tanh (drive * x + bias) - b) / (drive * (1 - b * b));
-        return response.process (shaped);
+        auto residual = shaped - x;
+        for (auto& filter : distortionFilters)
+            residual = filter.process (residual);
+        return response.process (x + residual);
     }
+
+    struct Lowpass
+    {
+        void prepare (double k, double q) noexcept
+        {
+            const auto norm = 1.0 / (1.0 + k / q + k * k);
+            b0 = k * k * norm;
+            a1 = 2.0 * (k * k - 1.0) * norm;
+            a2 = (1.0 - k / q + k * k) * norm;
+            reset();
+        }
+        void reset() noexcept { z1 = z2 = 0; }
+        float process (float input) noexcept
+        {
+            const auto output = b0 * input + z1;
+            z1 = 2.0 * b0 * input - a1 * output + z2;
+            z2 = b0 * input - a2 * output;
+            return static_cast<float> (output);
+        }
+        double b0 = 0, a1 = 0, a2 = 0, z1 = 0, z2 = 0;
+    };
 
     static constexpr size_t taps = 129;
     static constexpr size_t inputLength = (taps + 1) / factor;
@@ -91,6 +124,7 @@ private:
     std::array<float, taps * 2> outputHistory {};
     size_t inputPosition = 0, outputPosition = 0;
     float fluxCoefficient = 0, flux = 0;
+    std::array<Lowpass, 2> distortionFilters;
     TransformerResponse response;
 };
 } // namespace character

@@ -7,8 +7,10 @@ not physical hardware or Logic/AU operation. The current code now uses fixed 2×
 transformer oversampling and 64 samples of host latency. Per the user’s request,
 the full test suites and characteristic sweep have not been rerun after that
 change; no measured alias-reduction figure is claimed yet. A separate
-[square-wave phase report](phase/README.md) verifies the current 2× transformer
-response; its measurements do not replace this historical baseline.
+[square-wave phase report](phase/README.md) records the earlier 2× transformer
+response. The latest [output-stage report](output_stage/README.md) verifies the
+500 Hz generated-distortion roll-off and optional high shelf. These focused
+measurements do not replace this historical baseline.
 
 - [Compression curves](plots/01_compression_curves.png): DC transfer and 1 kHz sine gain reduction.
 - [Attack and recovery](plots/02_attack_release.png): a controlled upward/downward level step.

@@ -5,8 +5,14 @@
 - One audio effect with selectable feed-forward FET, feedback VCA, variable-mu,
   and optical compressor styles.
 - Optional transformer emulation at the output stage.
-- Target: Intel Mac, macOS Catalina 10.15, Logic Pro X 10.5.7.
-- Required host format: 64-bit Intel Audio Units (AU).
+- Initial target: Intel Mac, macOS Catalina 10.15, Logic Pro X 10.5.7.
+- Current user test machine: Apple Silicon arm64, reported macOS 26.6.2,
+  Python 3.9.6 / DawDreamer 0.8.0. User confirmed VST3 and AU work on 2026-10-18.
+- Required host formats: macOS VST3 and Audio Units (AU), architecture matching
+  the host. Previous Intel-only build guidance was updated in chat for arm64.
+- Transformer-generated distortion must roll off above 500 Hz; preserve clean
+  high frequencies. Optional +6 dB sidechain high shelf with 1.5 kHz midpoint;
+  no direct output EQ.
 - The Linux cloud workspace supports implementation, DSP tests, and VST3 builds.
   AU compilation, `auval`, and Logic compatibility testing require macOS/Xcode.
 
@@ -18,13 +24,15 @@
   after the 2× transformer update (original implementation: zero latency).
 - Host automation/state recall through AudioProcessorValueTreeState.
 - Controls: model, input, threshold, ratio, attack, release, knee, output, mix,
-  detector high-pass, transformer drive/enable, and bypass.
+  detector high-pass, transformer drive/enable, bypass, and High Tilt.
 - FET: fast peak feed-forward detection; VCA: peak feedback detection with ratio
   compensation and discrete-loop stability limits.
 - Variable-mu: RMS feedback, progressively increasing ratio, level-dependent recovery.
 - Optical: RMS feed-forward detection with fast and slow recovery components.
-- Transformer: flux-dependent asymmetric soft saturation, bandwidth shaping,
-  and DC rejection after the mix/output controls.
+- Transformer: flux-dependent soft saturation, 500 Hz fourth-order low-pass
+  on the nonlinear residual, bandwidth/phase shaping, and DC rejection after
+  the mix/output controls. High Tilt acts in the detector branch after the HPF,
+  before rectification and stereo linking, for all four compressor models.
 - These are original behavioral approximations, not calibrated circuit models
   or exact reproductions of named hardware. Fixed 2× transformer oversampling is
   implemented; residual aliasing, reference measurement, and listening remain.
@@ -109,6 +117,60 @@
   `/workspace/juce-env/character-phase-build.log`. Only the requested focused
   square-wave checks ran; full DSP/processor suites were not rerun.
 
+### 2026-10-18 — frequency-dependent distortion and optional High Tilt
+
+- User confirmed the preceding macOS VST3 and AU builds work. Recorded their
+  current arm64 Mac environment; this report does not validate the new revision.
+- Measured the previous transformer at −12 dBFS peak / 6 dB drive: THD stayed
+  near 2% from 250 Hz through 5 kHz, so the requested roll-off was absent.
+- User clarified that generated harmonics should be filtered above 500 Hz.
+  Added a fourth-order Butterworth low-pass to the nonlinear residual at 2×,
+  preserving the clean path and the existing transformer phase response.
+  Drive range/default remain 0–18 dB / 6 dB. The −3 dB corner is 500 Hz and
+  attenuation rises at 24 dB/octave; it is not a hard spectral cutoff.
+- Measured fifth-harmonic attenuation of −3.0103 dB at 500 Hz, −24.1087 dB
+  at 1 kHz, and −48.2116 dB at 2 kHz. At the baseline input/drive settings,
+  revised THD is 2.1422% at 100 Hz, 0.02209% at 500 Hz, and 0.001420% at 1 kHz.
+- Initially added High Tilt in the output path (corrected to the sidechain
+  below after user clarification): +6 dB high shelf, S = 1,
+  1.5 kHz midpoint (+3 dB), default off, approximately 20 ms switching fade.
+  Measured +3.0000 dB at 1.5 kHz and +5.9982 dB at 10 kHz.
+- Appended `highTilt` as the 14th host parameter with AU version hint 2,
+  preserving old parameter IDs/order. Saved state includes the toggle; older
+  sessions explicitly reset it to off. Updated the native editor and tooltip.
+- Focused measurements passed at 44.1, 48, and 96 kHz. Disabled output stages
+  and global bypass remain exact delayed input. Latency remains 64 samples.
+  Linux VST3 build and 15 focused processor checks passed, including host
+  parameter/state migration, automation, stereo matching, and editor rendering.
+- Added plots, CSVs, PDF, source hashes, and reproduction instructions in
+  [Measurements/output_stage](Measurements/output_stage/README.md). PDF parsing
+  and page rendering succeeded. Preserved the previous transformer header.
+- Full DSP/processor suites were not rerun, following the user's earlier
+  instruction. Updated their parameter count and harmonic-probe expectations
+  for future runs. Focused logs are `/workspace/juce-env/character-output-*.log`.
+  New macOS binaries and listening validation remain to be done on the Mac.
+
+### 2026-10-18 — corrected High Tilt routing to the sidechain
+
+- User clarified that High Tilt belongs in the compressor sidechain and must
+  not directly EQ the output. Moved the shelf after the detector HPF, before
+  rectification/stereo linking, feeding all four existing gain-control models.
+  Removed the shelf from the audio output path. Its +6 dB gain, 1.5 kHz midpoint,
+  smoothing, parameter ID, and saved-state compatibility are retained.
+- Renamed the UI toggle to `SC HIGH TILT +6 dB` and the host parameter display
+  name to `Sidechain high tilt`; updated the tooltip, signal-path documentation,
+  measurement script, and regenerated report to reflect the corrected routing.
+- Focused measurements confirm sample-identical output with tilt on/off at
+  ratio 1:1, both with and without the transformer. At input −12 dBFS peak,
+  threshold −24 dBFS, ratio 4:1, and knee 0 dB, 10 kHz gain reduction increases
+  by 4.448 dB (FET), 4.373 dB (VCA), 3.993 dB (variable-mu), and 4.499 dB
+  (optical). The change at 100 Hz stays below 0.003 dB. The enabled detector
+  HPF also works with High Tilt. The transformer roll-off is unchanged.
+- Linux VST3 build and 23 focused processor checks passed, including state,
+  host automation, ratio-1 transparency, stronger HF compression, unchanged
+  dry path, stereo matching, latency, and native editor rendering. Full suites
+  were not rerun. Logs: `/workspace/juce-env/character-sidechain-*.log`.
+
 ## Validation status
 
 Prior 1× revision validated in the Linux cloud instance on 2026-10-17
@@ -139,14 +201,17 @@ Project source, documentation, and tests are versioned together under
 `projects/CharacterCompressor`; generated binaries and machine-specific logs
 remain outside the repository.
 
-Not yet validated: macOS compilation, AU validation, Logic compatibility,
+The user reports the preceding VST3/AU revision works on their Mac; cloud
+validation of macOS compilation, formal AU validation, and Logic compatibility
+remains unavailable. Not yet validated for the latest output-stage revision:
+macOS builds, Logic compatibility,
 standalone runtime, listening quality, circuit/hardware accuracy, oversampled alias rejection,
 or real-time CPU performance on the target Intel Mac. This is a testable first
 implementation, not a production-release claim.
 
 ## Remaining product work
 
-- Build/validate AU on macOS; test scan, playback, automation, state recall, and
+- Rebuild the latest VST3/AU on macOS; test scan, playback, automation, state recall, and
   mono/stereo instances in Logic Pro X 10.5.7.
 - Listen and tune attack/release, model transitions, optical recovery, and
   transformer coloration against the desired references.

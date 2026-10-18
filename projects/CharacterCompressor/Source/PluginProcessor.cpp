@@ -3,8 +3,8 @@
 
 namespace
 {
-constexpr std::array<const char*, 13> ids { "model", "input", "threshold", "ratio", "attack",
-    "release", "knee", "output", "mix", "sidechain", "drive", "transformer", "bypass" };
+constexpr std::array<const char*, 14> ids { "model", "input", "threshold", "ratio", "attack",
+    "release", "knee", "output", "mix", "sidechain", "drive", "transformer", "bypass", "highTilt" };
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout CharacterCompressorProcessor::layout()
@@ -36,6 +36,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout CharacterCompressorProcessor
         "Output transformer", false));
     result.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "bypass", 1 },
         "Bypass", false));
+    // Append with a newer AU version hint to preserve existing automation order.
+    result.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "highTilt", 2 },
+        "Sidechain high tilt", false));
     return result;
 }
 
@@ -58,6 +61,7 @@ character::Parameters CharacterCompressorProcessor::readParameters() const noexc
     p.outputDb = value (7); p.mix = value (8) * 0.01f;
     p.sidechainHz = value (9); p.driveDb = value (10);
     p.transformer = value (11) >= 0.5f; p.bypass = value (12) >= 0.5f;
+    p.highTilt = value (13) >= 0.5f;
     return p;
 }
 
@@ -124,7 +128,19 @@ void CharacterCompressorProcessor::setStateInformation (const void* data, int si
 {
     if (auto xml = getXmlFromBinary (data, size))
         if (xml->hasTagName (parameters.state.getType()))
-            parameters.replaceState (juce::ValueTree::fromXml (*xml));
+        {
+            auto state = juce::ValueTree::fromXml (*xml);
+            // Older sessions must restore the new shelf as off, even if it was
+            // enabled before loading the session into this instance.
+            if (! state.getChildWithProperty ("id", "highTilt").isValid())
+            {
+                juce::ValueTree tilt { "PARAM" };
+                tilt.setProperty ("id", "highTilt", nullptr);
+                tilt.setProperty ("value", 0.0f, nullptr);
+                state.appendChild (tilt, nullptr);
+            }
+            parameters.replaceState (state);
+        }
 }
 
 juce::AudioProcessorEditor* CharacterCompressorProcessor::createEditor()

@@ -10,9 +10,12 @@ CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcess
     addAndMakeVisible (model);
     addAndMakeVisible (transformer);
     addAndMakeVisible (bypass);
+    addAndMakeVisible (highTilt);
     modelAttachment = std::make_unique<State::ComboBoxAttachment> (p.parameters, "model", model);
     transformerAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "transformer", transformer);
     bypassAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "bypass", bypass);
+    tiltAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "highTilt", highTilt);
+    highTilt.setTooltip ("Sidechain high shelf: +3 dB at 1.5 kHz, rising to +6 dB. Increases high-frequency compression sensitivity; no direct output EQ.");
 
     const std::array<const char*, 10> ids { "input", "threshold", "ratio", "attack", "release",
         "knee", "output", "mix", "sidechain", "drive" };
@@ -39,7 +42,7 @@ CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcess
         attachments[i] = std::make_unique<State::SliderAttachment> (p.parameters, ids[i], slider);
     }
     sliders[8].setTooltip ("High-pass filter in the detector only. 0 Hz disables it.");
-    sliders[9].setTooltip ("Drive for the optional output transformer. Not an output gain control.");
+    sliders[9].setTooltip ("Transformer saturation drive. Generated distortion rolls off above 500 Hz; clean highs pass through.");
     modelDescription.setJustificationType (juce::Justification::centred);
     addAndMakeVisible (modelDescription);
     meters.setJustificationType (juce::Justification::centred);
@@ -69,7 +72,8 @@ void CharacterCompressorEditor::resized()
 {
     bypass.setBounds (660, 20, 100, 28);
     model.setBounds (24, 64, 300, 32);
-    transformer.setBounds (460, 64, 280, 32);
+    transformer.setBounds (340, 64, 220, 32);
+    highTilt.setBounds (570, 64, 190, 32);
     modelDescription.setBounds (24, 105, 732, 28);
     for (size_t i = 0; i < sliders.size(); ++i)
     {
