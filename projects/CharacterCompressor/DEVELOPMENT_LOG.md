@@ -655,3 +655,14 @@ implementation, not a production-release claim.
   title.
 - Matched the Output heading to the other section headers and lowered its
   controls to leave clear space below the heading.
+
+### 2026-10-19 — raised the four secondary Compressor controls
+- Moved Attack, Release, Knee, and VariTransient upward by 10 px, carrying
+  their captions and value readouts with the knobs. Preserved the section size
+  and surrounding panel layout.
+
+### 2026-10-19 — main knob captions and Input label alignment
+- Lowered the THRES and RATIO captions by 10 px. Moved the INPUT caption closer
+  to its knob and aligned their vertical centers.
+- Added a focused editor geometry check for the Input label. The focused editor
+  checks passed (263 checks); the VST3 build succeeded.

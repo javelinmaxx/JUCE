@@ -589,12 +589,14 @@ void CharacterCompressorEditor::resized()
     };
     place (1, 38, 178, 128, 108);
     place (2, 168, 178, 156, 108);
+    labels[1].setBounds (38, 191, 128, 20);
+    labels[2].setBounds (168, 191, 156, 20);
     sliders[1].setBounds (38, 204, 128, 108);
     sliders[2].setBounds (168, 204, 156, 108);
-    place (3, 62, 320, 80, 60);
-    place (4, 204, 320, 80, 60);
-    place (5, 62, 400, 80, 60);
-    place (12, 204, 400, 80, 60);
+    place (3, 62, 310, 80, 60);
+    place (4, 204, 310, 80, 60);
+    place (5, 62, 390, 80, 60);
+    place (12, 204, 390, 80, 60);
     labels[1].setText ("THRES", juce::dontSendNotification);
     place (8, 30, 520, 80, 66);
     place (13, 130, 520, 80, 66);
@@ -603,7 +605,7 @@ void CharacterCompressorEditor::resized()
     place (6, 344, 648, 60, 66);
     place (7, 404, 648, 60, 66);
     place (10, 464, 648, 60, 66);
-    labels[0].setBounds (222, 161, 40, 14);
+    labels[0].setBounds (232, 153, 40, 14);
     labels[0].setFont (juce::FontOptions (9.5f).withStyle ("bold"));
     labels[0].setJustificationType (juce::Justification::centredRight);
     sliders[0].setTextBoxStyle (juce::Slider::TextBoxBelow, false, 53, 14);

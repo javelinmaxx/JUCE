@@ -139,7 +139,7 @@ int runTests (int argc, char** argv)
         juce::Slider *stereoLink = nullptr, *evenHarmonics = nullptr, *variTransient = nullptr;
         juce::Slider *detectorHpf = nullptr, *scHighTilt = nullptr, *input = nullptr;
         juce::Slider *transformerDrive = nullptr;
-        juce::Label *thresholdLabel = nullptr, *ratioLabel = nullptr;
+        juce::Label *thresholdLabel = nullptr, *ratioLabel = nullptr, *inputLabel = nullptr;
         for (auto* child : editor->getChildren())
         {
             check (editor->getLocalBounds().contains (child->getBounds()), "controls fit inside the editor panel");
@@ -164,6 +164,7 @@ int runTests (int argc, char** argv)
             {
                 if (label->getText() == "THRES") thresholdLabel = label;
                 if (label->getText() == "RATIO") ratioLabel = label;
+                if (label->getText() == "INPUT") inputLabel = label;
             }
             if (auto* button = dynamic_cast<AnimatedSwitch*> (child))
             {
@@ -216,8 +217,13 @@ int runTests (int argc, char** argv)
                && input->getHeight() < attack->getHeight(),
                "upward mode and a compact input control are in the compressor header");
         check (thresholdLabel && ratioLabel && thresholdLabel->getY() >= upward->getBottom() + 4
-               && ratioLabel->getY() == thresholdLabel->getY(),
+               && thresholdLabel->getY() == 191 && ratioLabel->getY() == thresholdLabel->getY(),
                "main knob captions clear the Compressor header button");
+        check (inputLabel && inputLabel->getY() + inputLabel->getHeight() / 2
+                    == input->getY() + (input->getHeight() - input->getTextBoxHeight()) / 2
+               && input->getX() + input->getWidth() / 2 - inputLabel->getRight() >= 0
+               && input->getX() + input->getWidth() / 2 - inputLabel->getRight() <= 20,
+               "Input caption sits close to and vertically centers on its knob");
         check (transformerDrive->getY() == evenHarmonics->getY()
                && transformerDrive->getWidth() == detectorHpf->getWidth()
                && transformerDrive->getHeight() == detectorHpf->getHeight()
