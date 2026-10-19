@@ -702,3 +702,6 @@ implementation, not a production-release claim.
 - Increased the full-layout upward shift by 20 px and reduced the editor height
   by another 20 px, keeping the bottom margin consistent.
 - Changed primary text in the FET Yin palette from warm off-white to pure white.
+- Set the slider value-display default to white as well, removing the warm tint
+  from FET Yin knob captions and readouts.
+- Set the FET Yin secondary label and knob-marking color to white too.
