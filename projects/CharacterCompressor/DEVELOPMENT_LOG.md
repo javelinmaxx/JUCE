@@ -631,3 +631,13 @@ implementation, not a production-release claim.
   value display font by 15% and moved its readout 3 px closer to the control.
 - Rebuilt the VST3 and regenerated all eight mode previews. No full test suite
   was run; focused editor checks passed (262 checks).
+
+### 2026-10-19 — Threshold/Ratio value displays and matched small dials
+- Removed the marked scales around Threshold and Ratio and restored their
+  numeric value boxes. Shifted Threshold right so its center aligns with
+  Attack and Knee.
+- Enlarged Attack, Release, Knee, and VariTransient to match the Sidechain
+  knobs' drawable dial height while keeping their value boxes clear of adjacent
+  rows.
+- Rebuilt the VST3 and regenerated all eight previews. Focused editor checks
+  passed (262 checks); no full test suite was run.

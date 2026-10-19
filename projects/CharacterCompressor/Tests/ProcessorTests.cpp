@@ -179,8 +179,12 @@ int runTests (int argc, char** argv)
                "editor includes the complete knob and switch set");
         check (threshold->getHeight() > attack->getHeight() && ratio->getHeight() > release->getHeight()
                && threshold->getHeight() == 108 && ratio->getHeight() == 108
-               && knee->getHeight() == attack->getHeight()
+               && knee->getHeight() == attack->getHeight() && attack->getHeight() == 60
                && variTransient->getHeight() == release->getHeight()
+               && attack->getHeight() - attack->getTextBoxHeight()
+                    == detectorHpf->getHeight() - detectorHpf->getTextBoxHeight()
+               && release->getHeight() - release->getTextBoxHeight()
+                    == scHighTilt->getHeight() - scHighTilt->getTextBoxHeight()
                && knee->getWidth() == attack->getWidth()
                && variTransient->getWidth() == release->getWidth(),
                "Knee and VariTransient match the Attack and Release knob sizes");
@@ -188,6 +192,8 @@ int runTests (int argc, char** argv)
                && threshold->getRight() <= ratio->getX()
                && attack->getY() == release->getY() && knee->getY() > attack->getY()
                && knee->getY() == variTransient->getY()
+               && threshold->getX() + threshold->getWidth() / 2
+                    == attack->getX() + attack->getWidth() / 2
                && attack->getX() == knee->getX() && release->getX() == variTransient->getX(),
                "Threshold/Ratio, Attack/Release, and Knee/VariTransient occupy successive rows");
         check (output->getY() == mix->getY() && mix->getY() == stereoLink->getY()

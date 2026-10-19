@@ -427,36 +427,6 @@ void CompressorLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
     g.drawLine (centre.x + std::sin (angle) * inner, centre.y - std::cos (angle) * inner,
                 centre.x + std::sin (angle) * outer, centre.y - std::cos (angle) * outer, 1.8f);
 
-    const bool isThreshold = slider.getName() == "THRESHOLD";
-    const bool isRatio = slider.getName() == "RATIO";
-    if (isThreshold || isRatio)
-    {
-        const std::array<float, 8> thresholdValues { -60, -50, -40, -30, -20, -10, 0, 0 };
-        const std::array<float, 8> ratioValues { 1, 1.4f, 2, 3, 5, 8, 12, 20 };
-        const std::array<const char*, 8> thresholdLabels { "-60", "-50", "-40", "-30", "-20", "-10", "0", "" };
-        const std::array<const char*, 8> ratioLabels { "1", "1.4", "2", "3", "5", "8", "12", "20" };
-        const auto count = isThreshold ? 7 : 8;
-        g.setFont (juce::FontOptions (12.5f).withStyle ("bold"));
-        for (size_t i = 0; i < static_cast<size_t> (count); ++i)
-        {
-            const auto proportion = slider.valueToProportionOfLength (isThreshold ? thresholdValues[i] : ratioValues[i]);
-            const auto tickAngle = start + static_cast<float> (proportion) * (end - start);
-            const auto labelRadius = radius + 10.0f;
-            const auto px = centre.x + std::sin (tickAngle) * labelRadius;
-            const auto py = centre.y - std::cos (tickAngle) * labelRadius;
-            const auto label = isThreshold ? thresholdLabels[i] : ratioLabels[i];
-            const auto labelWidth = static_cast<float> (juce::String (label).length()) * 9.0f + 4.0f;
-            auto labelBounds = juce::Rectangle<float> (px - labelWidth * 0.5f, py - 9.0f,
-                                                       labelWidth, 18.0f);
-            labelBounds.setX (juce::jlimit (static_cast<float> (x), static_cast<float> (x + width) - labelBounds.getWidth(), labelBounds.getX()));
-            labelBounds.setY (juce::jlimit (static_cast<float> (y), static_cast<float> (y + height) - labelBounds.getHeight(), labelBounds.getY()));
-            g.setColour (marking);
-            g.drawText (label, labelBounds, juce::Justification::centred, false);
-        }
-        g.setColour (marking.withAlpha (0.95f));
-        g.setFont (juce::FontOptions (10.0f).withStyle ("bold"));
-        g.drawText (isThreshold ? "dB" : ":1", x, y + height - 14, width, 12, juce::Justification::centred);
-    }
 }
 
 juce::Label* CompressorLookAndFeel::createSliderTextBox (juce::Slider& slider)
@@ -605,24 +575,26 @@ void CharacterCompressorEditor::resized()
     {
         labels[index].setBounds (x, y, width, 20);
         if (index == 1 || index == 2)
-            sliders[index].setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+            sliders[index].setTextBoxStyle (juce::Slider::TextBoxBelow, false, 100, 22);
         else if (width <= 80)
         {
             labels[index].setFont (juce::FontOptions (9.0f));
-            sliders[index].setTextBoxStyle (juce::Slider::TextBoxBelow, false, width, 20);
+            const auto compactReadout = index == 3 || index == 4 || index == 5 || index == 12;
+            sliders[index].setTextBoxStyle (juce::Slider::TextBoxBelow, false, width,
+                                            compactReadout ? 14 : 20);
         }
         else
             sliders[index].setTextBoxStyle (juce::Slider::TextBoxBelow, false, std::min (width, 100), 22);
         sliders[index].setBounds (x, y + 20, width, height);
     };
-    place (1, 22, 188, 144, 108);
+    place (1, 38, 188, 128, 108);
     place (2, 168, 188, 156, 108);
-    sliders[1].setBounds (22, 214, 144, 108);
+    sliders[1].setBounds (38, 214, 128, 108);
     sliders[2].setBounds (168, 214, 156, 108);
-    place (3, 62, 330, 80, 58);
-    place (4, 204, 330, 80, 58);
-    place (5, 62, 410, 80, 58);
-    place (12, 204, 410, 80, 58);
+    place (3, 62, 330, 80, 60);
+    place (4, 204, 330, 80, 60);
+    place (5, 62, 410, 80, 60);
+    place (12, 204, 410, 80, 60);
     labels[1].setText ("THRES", juce::dontSendNotification);
     place (8, 30, 530, 80, 66);
     place (13, 130, 530, 80, 66);
