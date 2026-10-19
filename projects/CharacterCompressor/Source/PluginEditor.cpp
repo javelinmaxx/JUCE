@@ -62,7 +62,7 @@ CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcess
     upward.snapToState();
     midSide.snapToState();
     lastTick = juce::Time::getMillisecondCounterHiRes() * 0.001;
-    setSize (580, 850);
+    setSize (580, 810);
     timerCallback();
     startTimerHz (30);
 }
@@ -356,19 +356,19 @@ void CharacterCompressorEditor::paint (juce::Graphics& g)
     g.setColour (theme.text);
     g.setFont (juce::FontOptions (29.0f));
     g.drawText ("Character Compressor", 24, 40, 430, 38, juce::Justification::centredLeft);
-    drawBrushedMetalPanel (g, { 24, 170, 330, 306 }, 10, theme.card, theme.grid);
-    drawAnalogPanel (g, { 24, 490, 330, 164 }, 10, theme.card, theme.grid);
-    drawAnalogPanel (g, { 24, 670, 330, 174 }, 10, theme.card, theme.grid);
+    drawBrushedMetalPanel (g, { 24, 170, 330, 270 }, 10, theme.card, theme.grid);
+    drawAnalogPanel (g, { 24, 454, 330, 128 }, 10, theme.card, theme.grid);
+    drawAnalogPanel (g, { 24, 600, 330, 192 }, 10, theme.card, theme.grid);
     g.setColour (theme.text);
     g.setFont (juce::FontOptions (13.0f).withStyle ("bold"));
     g.drawText ("COMPRESSOR", 38, 178, 220, 20, juce::Justification::centredLeft);
-    g.drawText ("SIDECHAIN", 38, 498, 280, 18, juce::Justification::centredLeft);
-    g.drawText ("TRANSFORMER STAGE", 38, 678, 300, 20, juce::Justification::centredLeft);
+    g.drawText ("SIDECHAIN", 38, 462, 280, 18, juce::Justification::centredLeft);
+    g.drawText ("TRANSFORMER STAGE", 38, 608, 300, 20, juce::Justification::centredLeft);
     drawAnalogPanel (g, { 376, 664, 180, 128 }, 10, theme.card, theme.grid);
     g.setColour (theme.secondary);
     g.setFont (juce::FontOptions (10.0f).withStyle ("bold"));
     g.drawText ("OUTPUT  /  MIX  /  STEREO LINK", 382, 666, 168, 16, juce::Justification::centred);
-    for (const auto y : { 482, 658 })
+    for (const auto y : { 448, 588 })
     {
         g.setColour (theme.grid);
         g.drawHorizontalLine (y, 24, 354);
@@ -474,17 +474,17 @@ void CharacterCompressorEditor::resized()
             sliders[index].setTextBoxStyle (juce::Slider::TextBoxBelow, false, std::min (width, 100), 22);
         sliders[index].setBounds (x, y + 20, width, height);
     };
-    place (1, 24, 258, 104, 96);
-    place (5, 134, 258, 104, 70);
-    place (2, 244, 258, 104, 96);
-    place (3, 24, 376, 78, 76);
-    place (12, 106, 376, 78, 70);
-    place (4, 188, 376, 78, 76);
-    place (0, 270, 376, 78, 70);
-    place (8, 24, 514, 102, 98);
-    place (13, 134, 514, 102, 98);
-    place (9, 36, 700, 96, 112);
-    place (11, 144, 700, 96, 112);
+    place (1, 24, 218, 104, 82);
+    place (5, 134, 218, 104, 60);
+    place (2, 244, 218, 104, 82);
+    place (3, 24, 327, 78, 70);
+    place (12, 106, 327, 78, 60);
+    place (4, 188, 327, 78, 70);
+    place (0, 270, 327, 78, 68);
+    place (8, 28, 480, 90, 78);
+    place (13, 126, 480, 90, 78);
+    place (9, 34, 632, 84, 104);
+    place (11, 124, 632, 84, 104);
     place (6, 376, 682, 60, 72);
     place (7, 436, 682, 60, 72);
     place (10, 496, 682, 60, 72);
@@ -495,8 +495,8 @@ void CharacterCompressorEditor::resized()
     labels[13].setText ("SC HIGH TILT", juce::dontSendNotification);
     meters.setBounds (24, 150, 532, 20);
     upward.setBounds (260, 175, 90, 24);
-    midSide.setBounds (250, 510, 92, 132);
-    transformer.setBounds (250, 696, 92, 132);
+    midSide.setBounds (246, 472, 98, 110);
+    transformer.setBounds (242, 638, 100, 130);
 }
 
 void CharacterCompressorEditor::timerCallback()

@@ -445,6 +445,16 @@ implementation, not a production-release claim.
   previews were rendered for all eight model/Upward palette combinations; the
   preview renderer verified each image's palette colors and saved all files.
 
+### 2026-10-19 — denser control layout
+- Reduced the editor to 580×810 and shortened the Compressor and Sidechain
+  sections. Reduced Sidechain and Transformer control sizes and tightened row
+  spacing throughout the surface.
+- Aligned the bottom of Transformer Stage with the Output section at 792 px.
+  Kept VariTransient the same height as Knee and retained the inline, frameless
+  Upward control and frameless toggles.
+- Rebuilt the VST3 and processor preview target. All eight palette previews
+  rendered and passed the focused UI check; no full test suite was run.
+
 ### 2026-10-19 — compact rectangular layout and inline switches
 - Resized the editor to 580×850, extended the GR display from 400 to 480 px,
   and moved its history plot, readout, and output controls to use the added
