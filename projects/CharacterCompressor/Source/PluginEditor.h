@@ -11,8 +11,9 @@ struct CompressorTheme
 class AnimatedSwitch final : public juce::ToggleButton
 {
 public:
-    explicit AnimatedSwitch (const juce::String& caption, bool horizontalLayout = false)
-        : ToggleButton (caption), horizontal (horizontalLayout) {}
+    explicit AnimatedSwitch (const juce::String& caption, bool horizontalLayout = false,
+                             bool compactStyle = false)
+        : ToggleButton (caption), horizontal (horizontalLayout), compact (compactStyle) {}
     void advance (float elapsed);
     void snapToState() { position = getToggleState() ? 1.0f : 0.0f; }
     void setTheme (const CompressorTheme& theme)
@@ -27,6 +28,7 @@ public:
 private:
     float position = 0;
     bool horizontal = false;
+    bool compact = false;
     juce::Colour accent { 0xff168aad };
     juce::Colour surface { 0xff202a34 }, foreground { 0xfff0ddbb }, secondary { 0xff92a0ad };
 };
@@ -63,7 +65,7 @@ private:
     CompressorLookAndFeel look;
     juce::ComboBox model;
     AnimatedSwitch transformer { "OUTPUT TRANSFORMER" }, bypass { "BYPASS", true };
-    AnimatedSwitch upward { "UPWARD COMPRESSION" };
+    AnimatedSwitch upward { "UPWARD COMPRESSION", false, true };
     AnimatedSwitch midSide { "MID / SIDE MODE" };
     std::array<juce::Slider, 14> sliders;
     std::array<juce::Label, 14> labels;
@@ -73,7 +75,7 @@ private:
     std::array<std::unique_ptr<State::SliderAttachment>, 14> attachments;
     std::unique_ptr<State::ButtonAttachment> transformerAttachment, bypassAttachment, upwardAttachment, midSideAttachment;
     GainReductionHistory history;
-    juce::Rectangle<int> meterBounds { 376, 176, 180, 400 };
+    juce::Rectangle<int> meterBounds { 376, 176, 180, 480 };
     double lastTick = 0;
     float displayedReduction = 0;
     bool lastUpwardMode = false;

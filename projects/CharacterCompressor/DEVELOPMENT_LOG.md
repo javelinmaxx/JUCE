@@ -445,6 +445,17 @@ implementation, not a production-release claim.
   previews were rendered for all eight model/Upward palette combinations; the
   preview renderer verified each image's palette colors and saved all files.
 
+### 2026-10-19 — compact rectangular layout and inline switches
+- Resized the editor to 580×850, extended the GR display from 400 to 480 px,
+  and moved its history plot, readout, and output controls to use the added
+  height. Reduced Transformer Stage to a compact 174 px section.
+- Matched VariTransient's control height to Knee and added fine horizontal
+  brushed-metal striations to the main Compressor panel.
+- Removed enclosing switch frames. Upward is now a small inline status button
+  beside the Compressor heading; other toggles retain only their switch tracks.
+- The VST3 and preview targets built. All eight mode previews regenerated and
+  passed the palette-aware UI preview check. No full test suite was run.
+
 ### 2026-10-19 — analog surface and illuminated meter styling
 - Applied the UI UX Pro Max skeuomorphism guidance to the existing compressor
   surface: layered panel edges, subtle grain, shaded metal knobs, calibrated

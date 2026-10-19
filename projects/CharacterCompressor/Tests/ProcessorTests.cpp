@@ -130,7 +130,7 @@ int runTests (int argc, char** argv)
     if (argc > 1 && juce::String (argv[1]) == "--editor")
     {
         std::unique_ptr<juce::AudioProcessorEditor> editor (restored.createEditor());
-        check (editor && editor->getWidth() == 580 && editor->getHeight() == 980, "portrait editor creates at expected size");
+        check (editor && editor->getWidth() == 580 && editor->getHeight() == 850, "rectangular editor creates at expected size");
         check (editor->getNumChildComponents() >= 25, "editor contains controls and meters");
         juce::Slider *threshold = nullptr, *knee = nullptr, *ratio = nullptr;
         juce::Slider *attack = nullptr, *release = nullptr, *output = nullptr, *mix = nullptr;
@@ -141,7 +141,7 @@ int runTests (int argc, char** argv)
         juce::Slider *transformerDrive = nullptr;
         for (auto* child : editor->getChildren())
         {
-            check (editor->getLocalBounds().contains (child->getBounds()), "controls fit inside portrait panel");
+            check (editor->getLocalBounds().contains (child->getBounds()), "controls fit inside the editor panel");
             if (auto* slider = dynamic_cast<juce::Slider*> (child))
             {
                 if (slider->getName() == "THRESHOLD") threshold = slider;
@@ -173,8 +173,8 @@ int runTests (int argc, char** argv)
                "editor includes the complete knob and switch set");
         check (threshold->getHeight() > attack->getHeight() && ratio->getHeight() > release->getHeight()
                && knee->getHeight() < threshold->getHeight()
-               && variTransient->getHeight() < attack->getHeight(),
-               "primary knobs are larger than timing knobs");
+               && variTransient->getHeight() == knee->getHeight(),
+               "VariTransient matches the Knee knob size");
         check (threshold->getY() == knee->getY() && knee->getY() == ratio->getY()
                && threshold->getRight() <= knee->getX() && knee->getRight() <= ratio->getX(),
                "knee is between threshold and ratio");
@@ -182,10 +182,11 @@ int runTests (int argc, char** argv)
                && attack->getRight() <= variTransient->getX() && variTransient->getRight() <= release->getX(),
                "VariTransient is between attack and release");
         check (output->getY() == mix->getY() && mix->getY() == stereoLink->getY()
-               && output->getY() > 176 + 400,
+               && output->getY() > 176 + 480,
                "output, mix, and stereo link sit below the shortened GR section");
         check (transformer->getHeight() > transformer->getWidth()
-               && upward->getHeight() > upward->getWidth()
+               && upward->getWidth() > upward->getHeight()
+               && upward->getY() < 205 && upward->getX() >= 250
                && bypass->getWidth() > bypass->getHeight()
                && bypass->getY() < 80 && bypass->getX() > 450
                && midSide->getHeight() > midSide->getWidth(),
