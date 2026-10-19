@@ -8,15 +8,18 @@
 
 namespace character
 {
+// The order here matches the attack, release, weight, and state arrays below.
 enum class Model { fet, vca, variMu, optical };
 
 struct Parameters
 {
+    // All levels/times use the host control units. mix is normalized to 0..1;
+    // sidechainHz == 0 disables the detector high-pass.
     Model model = Model::fet;
     float inputDb = 0, thresholdDb = -18, ratio = 4, attackMs = 10;
     float releaseMs = 150, kneeDb = 6, outputDb = 0, mix = 1;
     float sidechainHz = 80, driveDb = 6;
-    bool transformer = false, bypass = false, highTilt = false;
+    bool transformer = false, bypass = false, highTilt = false, upward = false;
 };
 
 // No allocation, locks, host calls, or GUI dependencies in the processing path.
@@ -25,6 +28,9 @@ class Compressor
 {
 public:
     static constexpr int latencySamples = OversampledTransformer::latencySamples;
+
+    // Convert between the linear signal/envelope domain and the dB control
+    // domain. The floor keeps silence and tiny numerical residues finite.
     static float gain (float db) noexcept { return std::pow (10.0f, db / 20.0f); }
     static float db (float level) noexcept
     {
@@ -33,6 +39,8 @@ public:
 
     void prepare (double newSampleRate) noexcept
     {
+        // Ignore invalid host rates. Prepare filters once here so the audio
+        // callback only runs fixed-coefficient, fixed-storage DSP.
         sampleRate = std::isfinite (newSampleRate) && newSampleRate >= 8000
                    ? newSampleRate : 44100;
         smoothing = coefficient (20);
@@ -45,6 +53,8 @@ public:
 
     void reset() noexcept
     {
+        // Clear detector memories, coloration filters, and latency lines when
+        // the host starts a new playback or explicitly resets the processor.
         states = {};
         for (auto& t : transformers)
             t.reset();
@@ -59,6 +69,8 @@ public:
 
     void setParameters (Parameters p) noexcept
     {
+        // Clamp host/state input before it reaches logarithms, time constants,
+        // filter coefficients, or nonlinear processing.
         const auto safe = [] (float v, float lo, float hi, float fallback)
         { return std::isfinite (v) ? std::clamp (v, lo, hi) : fallback; };
         p.inputDb = safe (p.inputDb, -24, 24, 0);
@@ -75,9 +87,15 @@ public:
         targets = { gain (p.inputDb), p.thresholdDb, p.ratio, p.kneeDb,
                     gain (p.outputDb), p.mix, gain (p.driveDb),
                     p.transformer ? 1.0f : 0.0f, p.bypass ? 1.0f : 0.0f,
-                    p.highTilt ? 1.0f : 0.0f };
+                    p.highTilt ? 1.0f : 0.0f, p.upward ? 1.0f : 0.0f };
+        // This one-pole HPF affects only the detector. High Tilt is a separate
+        // shelf applied to the signed sidechain after this HPF.
         hpEnabled = p.sidechainHz > 0;
         hpCoefficient = std::exp (-2 * pi * p.sidechainHz / static_cast<float> (sampleRate));
+
+        // Array order is FET, VCA, variable-mu, optical. Relative to the Attack
+        // control they use 0.25x, 1x, 1.5x, and 2x envelope constants. Releases
+        // use 0.7x, 1x, 1.6x, and 1x; mu and optical add program-dependent memory.
         attacks = { coefficient (p.attackMs * 0.25f), coefficient (p.attackMs),
                     coefficient (p.attackMs * 1.5f), coefficient (p.attackMs * 2) };
         releases = { coefficient (p.releaseMs * 0.7f), coefficient (p.releaseMs),
@@ -86,6 +104,8 @@ public:
         rmsCoefficient = coefficient (10);
         if (firstSet)
         {
+            // Start at the selected model/control values rather than ramping
+            // from constructor defaults on the first audio block.
             values = targets;
             weights = {};
             weights[static_cast<size_t> (selected)] = 1;
@@ -97,6 +117,8 @@ public:
 
     void process (float* const* channels, int channelCount, int frames) noexcept
     {
+        // Process in sample order so envelope and filter states remain
+        // continuous across host blocks of any size.
         channelCount = std::clamp (channelCount, 0, 2);
         if (channelCount == 0 || frames <= 0)
             return;
@@ -123,6 +145,8 @@ public:
                 const auto c = static_cast<size_t> (ch);
                 const auto raw = channels[ch][sample];
                 dry[c] = std::isfinite (raw) ? raw : 0;
+                // Input gain feeds the compressor branch. The untouched input
+                // is retained separately for the wet/dry mix and host bypass.
                 driven[c] = std::clamp (dry[c] * values[input], -64.0f, 64.0f);
                 const auto hp = driven[c] - hpInput[c] + hpCoefficient * hpOutput[c];
                 hpInput[c] = driven[c];
@@ -132,61 +156,101 @@ public:
                 // and stereo linking. Keep filter history warm when disabled.
                 const auto tilted = sidechainShelves[c].process (sidechain);
                 const auto sensed = sidechain + values[highTilt] * (tilted - sidechain);
+                // Peak-link the processed left/right detector signals. Every
+                // model then sees the same control envelope, preserving stereo.
                 detector = std::max (detector, std::abs (sensed));
             }
 
+            // Run every model continuously and fade their gain contributions
+            // using the 20 ms model weights. Switching models won't start a cold
+            // detector or cause an abrupt change in the audio path.
             float combinedGain = 0, reduction = 0;
             for (size_t m = 0; m < states.size(); ++m)
             {
                 auto& s = states[m];
                 // Feedback senses the previous compressed sidechain sample, before
                 // makeup gain and transformer. This gives a causal one-sample loop.
-                const auto sensed = (m == 1 || m == 2) ? s.feedback : detector;
+                // FET and optical use feed-forward input level. VCA and mu use
+                // their own previous gain-reduced detector value as feedback.
+                const auto feedbackMix = (m == 1 || m == 2) ? 1.0f - values[upward] : 0.0f;
+                const auto sensed = detector + feedbackMix * (s.feedback - detector);
                 s.energy = rmsCoefficient * s.energy + (1 - rmsCoefficient) * sensed * sensed;
+                // FET/VCA use peak level. Mu/optical use a 10 ms exponential
+                // mean-square detector, converted back to RMS amplitude.
                 const auto level = db ((m == 2 || m == 3) ? std::sqrt (s.energy) : sensed);
                 const auto over = level - values[threshold];
                 float effectiveRatio = values[ratio];
                 if (m == 2)
+                {
+                    // Mu ratio rises from 1:1 toward its maximum on the active
+                    // side of threshold: above for downward, below for upward.
+                    const auto activeOver = over * (1 - 2 * values[upward]);
                     effectiveRatio = 1 + (effectiveRatio - 1)
-                                       * (1 - std::exp (-std::max (over, 0.0f) / 12));
+                                       * (1 - std::exp (-std::max (activeOver, 0.0f) / 12));
+                }
+
+                // Feed-forward curves use slope 1 - 1/R. Feedback curves use
+                // R - 1 to compensate for the level reduction returning through
+                // the detector; this keeps the steady-state ratio near R:1.
                 const auto slope = (m == 1 || m == 2) ? effectiveRatio - 1
                                                                      : 1 - 1 / effectiveRatio;
-                const auto desired = std::clamp (slope * softKnee (over, values[knee]), 0.0f, 80.0f);
+                const auto downward = std::clamp (slope * softKnee (over, values[knee]), 0.0f, 80.0f);
+                // Upward compression holds the above-threshold region at unity
+                // gain and raises quieter levels toward threshold with a
+                // below-threshold slope of 1/R. Negative reduction is gain.
+                const auto upwardSlope = 1 - 1 / effectiveRatio;
+                const auto upwardGain = -upwardSlope * softKnee (-over, values[knee]);
+                const auto desired = downward * (1 - values[upward]) + upwardGain * values[upward];
                 auto attack = attacks[m];
                 // Keep the discrete feedback loop stable at high ratios / low rates.
                 if (m == 1 || m == 2)
+                    // Bound the feedback attack coefficient for stability at
+                    // high ratios, where a one-sample loop can otherwise ring.
                     attack = std::max (attack, 1 - 0.5f / values[ratio]);
                 auto release = releases[m];
                 if (m == 2)
-                    release = std::pow (release, 1 / (1 + s.reduction * 0.06f));
-                const auto a = desired > s.reduction ? attack : release;
+                    // Mu recovery gets slower as stored gain reduction deepens.
+                    release = std::pow (release, 1 / (1 + std::abs (s.reduction) * 0.06f));
+                // In upward mode the control state goes negative as gain rises,
+                // so attack/release must compare gain magnitude, not sign.
+                const auto a = std::abs (desired) > std::abs (s.reduction) ? attack : release;
                 s.reduction = desired + a * (s.reduction - desired);
                 auto gr = s.reduction;
                 if (m == 3)
                 {
-                    const auto slow = desired > s.memory ? attacks[m] : slowRelease;
+                    // Optical combines its main envelope with a slower memory:
+                    // the latter recovers at six times the Release setting.
+                    const auto slow = std::abs (desired) > std::abs (s.memory) ? attacks[m] : slowRelease;
                     s.memory = desired + slow * (s.memory - desired);
                     gr = 0.65f * gr + 0.35f * s.memory;
                 }
                 const auto g = gain (-gr);
+                // Store this model's previous compressed detector level for
+                // the next feedback-model sample. Makeup gain is not in the loop.
                 s.feedback = detector * g;
                 combinedGain += weights[m] * g;
                 reduction += weights[m] * gr;
             }
-            meterReduction = std::max (meterReduction, reduction * (1 - values[bypass]));
+            meterReduction = std::max (meterReduction, std::abs (reduction) * (1 - values[bypass]));
 
             for (int ch = 0; ch < channelCount; ++ch)
             {
                 const auto c = static_cast<size_t> (ch);
+                // Mix the compressed/input-gained path with the original input,
+                // then apply output gain. Transformer coloration follows both.
                 const auto mixed = (dry[c] + values[mix] * (driven[c] * combinedGain - dry[c]))
                                  * values[output];
                 // Keep the oversampler warm even when disabled; the clean and
                 // bypass paths retain the same fixed latency during automation.
                 const auto coloured = transformers[c].process (mixed, values[drive]);
+                // Delay the clean branch to match the oversampler's 64 samples.
+                // Bypass has its own equally delayed original-input line.
                 const auto clean = cleanDelay[c][delayPosition];
                 const auto delayedDry = bypassDelay[c][delayPosition];
                 cleanDelay[c][delayPosition] = mixed;
                 bypassDelay[c][delayPosition] = dry[c];
+                // Blend transformer coloration independently, after the mix
+                // and output gain. High Tilt changes detector sensitivity only.
                 const auto wet = clean + values[transformer] * (coloured - clean);
                 // Snap the last fraction to ensure settled bypass is sample exact.
                 channels[ch][sample] = values[bypass] > 0.99999f ? delayedDry
@@ -198,16 +262,27 @@ public:
 
 private:
     static constexpr float pi = 3.14159265358979323846f;
-    enum Control { input, threshold, ratio, knee, output, mix, drive, transformer, bypass, highTilt };
-    struct Detector { float reduction = 0, energy = 0, feedback = 0, memory = 0; };
+    // Indexes into the smoothed value/target arrays above.
+    enum Control { input, threshold, ratio, knee, output, mix, drive, transformer, bypass, highTilt, upward };
+
+    struct Detector
+    {
+        float reduction = 0; // Main envelope, in dB of gain reduction.
+        float energy = 0;    // Mean-square level used by the RMS detector models.
+        float feedback = 0;  // Previous gain-reduced sidechain amplitude.
+        float memory = 0;    // Optical model's slower recovery envelope, in dB.
+    };
 
     float coefficient (float ms) const noexcept
     {
+        // One-pole time coefficient: exp(-1 / (time in seconds * sample rate)).
         return std::exp (-1.0f / (std::max (ms, 0.02f) * 0.001f * static_cast<float> (sampleRate)));
     }
 
     static float softKnee (float over, float width) noexcept
     {
+        // Continuous quadratic knee: zero below -K/2, linear above +K/2,
+        // with a parabola joining the two regions. width is in dB.
         if (width < 0.001f)
             return std::max (over, 0.0f);
         if (over <= -width * 0.5f) return 0;
@@ -221,7 +296,7 @@ private:
     int selected = 0;
     float smoothing = 0, hpCoefficient = 0, slowRelease = 0, rmsCoefficient = 0;
     float meterReduction = 0;
-    std::array<float, 10> values {}, targets {};
+    std::array<float, 11> values {}, targets {};
     std::array<float, 4> weights {}, attacks {}, releases {};
     std::array<Detector, 4> states {};
     std::array<OversampledTransformer, 2> transformers {};

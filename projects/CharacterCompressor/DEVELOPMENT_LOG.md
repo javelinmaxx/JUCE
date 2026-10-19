@@ -29,7 +29,7 @@
   compensation and discrete-loop stability limits.
 - Variable-mu: RMS feedback, progressively increasing ratio, level-dependent recovery.
 - Optical: RMS feed-forward detection with fast and slow recovery components.
-- Transformer: flux-dependent soft saturation, 500 Hz fourth-order low-pass
+- Transformer: flux-dependent soft saturation, 500 Hz second-order low-pass
   on the nonlinear residual, bandwidth/phase shaping, and DC rejection after
   the mix/output controls. High Tilt acts in the detector branch after the HPF,
   before rectification and stereo linking, for all four compressor models.
@@ -211,6 +211,82 @@
 - Added script commands to all three README build sections. Checked Bash
   syntax/help and workflow YAML locally; actual macOS/Windows execution requires
   those platforms. No plug-in builds or full test suites were rerun.
+
+### 2026-10-18 — compressor-style introductions
+
+- Added introductions for FET feed-forward, VCA feedback, variable-mu, and
+  optical modes to the root README, including detector/recovery behavior and
+  suggested starting uses. Distinguished dynamics modeling from the separate
+  transformer coloration stage.
+- Checked the descriptions against the current DSP implementation, including
+  variable-mu's progressive ratio and optical recovery memory. Documentation
+  only; no builds or test suites were rerun.
+
+### 2026-10-19 — DSP implementation comments
+
+- Added inline explanations to the compressor's parameter setup, sidechain,
+  stereo linking, model-specific detectors/ratios/timing, knee, wet/dry path,
+  bypass delay, and meters. Added comments to the oversampled transformer,
+  residual filter, high shelf, and modeled transformer response.
+- Comments describe implemented behavior and relevant equations; DSP behavior
+  and parameter identifiers were not changed. No builds or tests were run.
+
+### 2026-10-19 — causal transformer hysteresis and revised response corners
+
+- Magnetic hysteresis is path-dependent: the core's magnetic state lags the
+  applied field, leaving remanence and distinct rising/falling branches (a B–H
+  loop). Background: Jiles and Atherton, “Theory of ferromagnetic hysteresis,”
+  *Journal of Magnetism and Magnetic Materials* 61 (1986), 48–60,
+  [doi:10.1016/0304-8853(86)90066-1](https://doi.org/10.1016/0304-8853(86)90066-1).
+- Added a per-channel causal scalar play operator at the 2× transformer rate:
+  `M[n] = clamp(M[n−1], H[n]−r, H[n]+r)`. Its state is bounded by a drive-scaled
+  coercive band and changes branch only when the current field leaves that band.
+  The remembered magnetization shifts the nonlinear field; normalization
+  preserves small-signal gain. Reset clears the memory. This compact behavioral
+  approximation is not a full Jiles–Atherton model or hardware calibration.
+- Changed the loaded-transformer response corners from 8 Hz / 22 kHz, Q 0.8 to
+  20 Hz / 19 kHz, Q 2.0. The bilinear-transform filters remain causal and run
+  at the oversampled rate. No parameter IDs or host controls changed.
+- The earlier phase and output-stage plots document the prior response settings
+  and pre-hysteresis DSP; the focused square-wave phase report has now been
+  regenerated for the current implementation.
+
+### 2026-10-19 — upward compression mode
+
+- Added an automatable `upward` toggle, off by default and appended as the 15th
+  parameter (AU version hint 3). Older saved sessions restore it as off.
+- In upward mode, the compressor gain curve is 0 dB above threshold and adds
+  gain below threshold according to the selected ratio. The knee smooths the
+  transition; Attack and Release continue to shape gain movement. Negative
+  gain-reduction state represents positive makeup gain, and the editor meter
+  switches its label to `GAIN` while the mode is selected.
+- Feedback models use the input detector while upward mode is engaged; this
+  keeps the below-threshold boost curve from being re-triggered by their own
+  output gain. No test suite was run for this change.
+
+### 2026-10-19 — upward-mode editor colors and meter scale
+
+- Normal mode now uses blue control accents and an orange gain-reduction meter.
+  Turning on Upward swaps the accents: orange controls and a blue upward-gain
+  meter. The meter shows labeled 5 dB ticks from 0 to 30 dB, and its caption
+  distinguishes gain from gain reduction.
+- The Linux Debug VST3 target compiled and linked; `git diff --check` passed.
+  Test suites were not run.
+
+### 2026-10-19 — transformer distortion-filter slope
+
+- Reduced the 500 Hz generated-distortion low-pass from two cascaded
+  second-order Butterworth sections (fourth order, 24 dB/octave) to one
+  second-order Butterworth section (12 dB/octave). The clean signal remains
+  outside this filter, and the −3 dB corner remains 500 Hz.
+- Updated the measurement script's expected response and metadata. Existing
+  output-stage plots and measurements remain historical data from the earlier
+  24 dB/octave version; they were not regenerated. No test suites were run.
+
+Current revision checks (2026-10-19): focused square-wave phase measurement
+passed at 48, 44.1, and 96 kHz; maximum design-response phase error was 0.024°
+at 48 kHz through 17.95 kHz. The Linux Debug VST3 target compiled and linked.
+Full DSP/processor test suites and distortion/aliasing sweeps were not run.
 
 ## Validation status
 

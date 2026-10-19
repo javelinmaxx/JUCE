@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include "MagneticHysteresis.h"
 #include "TransformerResponse.h"
 
 namespace character
@@ -20,7 +21,10 @@ public:
     void prepare (double sampleRate) noexcept
     {
         constexpr double pi = 3.14159265358979323846;
-        constexpr double cutoff = 0.235; // cycles / oversampled sample; host Nyquist is 0.25
+        // Design one unity-sum Blackman-windowed sinc for both halves of the
+        // 2x converter. Its 0.235-cycle cutoff leaves a transition below host
+        // Nyquist (0.25 cycles at the oversampled rate).
+        constexpr double cutoff = 0.235;
         double sum = 0;
         for (size_t i = 0; i < taps; ++i)
         {
@@ -36,13 +40,13 @@ public:
             c = static_cast<float> (c / sum);
 
         const auto rate = sampleRate * factor;
+        // Flux state runs at 2x as well; the 60 Hz pole sets its memory time.
         fluxCoefficient = static_cast<float> (std::exp (-2 * pi * 60 / rate));
-        // Fourth-order Butterworth at 500 Hz, applied only to the nonlinear
-        // residual. Generated harmonics above this corner roll off at 24 dB/oct.
+        // Second-order Butterworth at 500 Hz, applied only to the nonlinear
+        // residual. Generated harmonics roll off at 12 dB/octave above the corner.
         const auto k = std::tan (pi * distortionCornerHz / rate);
-        constexpr std::array<double, 2> q { 0.541196100146197, 1.306562964876377 };
-        for (size_t i = 0; i < distortionFilters.size(); ++i)
-            distortionFilters[i].prepare (k, q[i]);
+        constexpr double butterworthQ = 0.7071067811865476;
+        distortionFilters[0].prepare (k, butterworthQ);
         response.prepare (rate);
         reset();
     }
@@ -53,6 +57,7 @@ public:
         outputHistory = {};
         inputPosition = outputPosition = 0;
         flux = 0;
+        hysteresis.reset();
         for (auto& filter : distortionFilters)
             filter.reset();
         response.reset();
@@ -60,6 +65,9 @@ public:
 
     float process (float x, float drive) noexcept
     {
+        // Insert a zero between host samples, apply the appropriate FIR phase,
+        // pass both high-rate samples through the nonlinear stage, then retain
+        // every other output sample for decimation.
         inputPosition = inputPosition == 0 ? inputLength - 1 : inputPosition - 1;
         inputHistory[inputPosition] = inputHistory[inputPosition + inputLength] = x;
         float output = 0;
@@ -83,12 +91,24 @@ public:
 private:
     float saturate (float x, float drive) noexcept
     {
-        // Isolate generated distortion from the unity small-signal path. Only
-        // this residual is low-passed; clean highs retain the transformer response.
+        // Filter only the generated-distortion residual below. Clean highs
+        // retain the transformer response.
+        const auto field = drive * x;
+        const auto magnetization = hysteresis.process (field, drive);
+        // The field/magnetization difference changes after a reversal. Scale
+        // that branch gap to get a compact, rate-independent hysteresis loop.
+        constexpr float hysteresisCoupling = 0.35f;
+        const auto effectiveField = field + hysteresisCoupling * (field - magnetization);
+
         flux = x + fluxCoefficient * (flux - x);
+        // Flux adds a small signal-dependent bias for asymmetric coloration.
         const auto bias = 0.12f * std::tanh (flux * drive);
         const auto b = std::tanh (bias);
-        const auto shaped = (std::tanh (drive * x + bias) - b) / (drive * (1 - b * b));
+        // Bias-corrected tanh, normalized for unity minor-loop small-signal
+        // slope. Filtering only (shaped - x) preserves clean highs while
+        // generated distortion rolls off above 500 Hz.
+        const auto shaped = (std::tanh (effectiveField + bias) - b)
+                          / (drive * (1 + hysteresisCoupling) * (1 - b * b));
         auto residual = shaped - x;
         for (auto& filter : distortionFilters)
             residual = filter.process (residual);
@@ -99,6 +119,7 @@ private:
     {
         void prepare (double k, double q) noexcept
         {
+            // Bilinear-transform second-order low-pass, prewarped by k.
             const auto norm = 1.0 / (1.0 + k / q + k * k);
             b0 = k * k * norm;
             a1 = 2.0 * (k * k - 1.0) * norm;
@@ -108,6 +129,7 @@ private:
         void reset() noexcept { z1 = z2 = 0; }
         float process (float input) noexcept
         {
+            // Transposed direct-form II: two persistent states, no allocation.
             const auto output = b0 * input + z1;
             z1 = 2.0 * b0 * input - a1 * output + z2;
             z2 = b0 * input - a2 * output;
@@ -124,7 +146,8 @@ private:
     std::array<float, taps * 2> outputHistory {};
     size_t inputPosition = 0, outputPosition = 0;
     float fluxCoefficient = 0, flux = 0;
-    std::array<Lowpass, 2> distortionFilters;
+    MagneticHysteresis hysteresis;
+    std::array<Lowpass, 1> distortionFilters;
     TransformerResponse response;
 };
 } // namespace character

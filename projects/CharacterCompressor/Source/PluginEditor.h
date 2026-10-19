@@ -15,13 +15,15 @@ private:
     juce::ComboBox model;
     juce::ToggleButton transformer { "OUTPUT TRANSFORMER" }, bypass { "BYPASS" };
     juce::ToggleButton highTilt { "SC HIGH TILT +6 dB" };
+    juce::ToggleButton upward { "UPWARD" };
     std::array<juce::Slider, 10> sliders;
     std::array<juce::Label, 10> labels;
     juce::Label modelDescription, meters;
     using State = juce::AudioProcessorValueTreeState;
     std::unique_ptr<State::ComboBoxAttachment> modelAttachment;
     std::array<std::unique_ptr<State::SliderAttachment>, 10> attachments;
-    std::unique_ptr<State::ButtonAttachment> transformerAttachment, bypassAttachment, tiltAttachment;
+    std::unique_ptr<State::ButtonAttachment> transformerAttachment, bypassAttachment, tiltAttachment, upwardAttachment;
     float displayedReduction = 0;
+    bool lastUpwardMode = false;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (CharacterCompressorEditor)
 };

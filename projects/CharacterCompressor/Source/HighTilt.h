@@ -12,6 +12,8 @@ class HighTilt
 public:
     void prepare (double sampleRate) noexcept
     {
+        // RBJ high-shelf design: +6 dB plateau, 1.5 kHz transition midpoint,
+        // and shelf slope S=1. Coefficients are fixed until the next prepare.
         constexpr double pi = 3.14159265358979323846;
         const auto rate = std::isfinite (sampleRate) && sampleRate >= 8000 ? sampleRate : 44100.0;
         const auto a = std::pow (10.0, 6.0 / 40.0);
@@ -31,6 +33,7 @@ public:
 
     float process (float input) noexcept
     {
+        // Transposed direct-form II shelf response; independent state per channel.
         const auto output = b0 * input + z1;
         z1 = b1 * input - a1 * output + z2;
         z2 = b2 * input - a2 * output;

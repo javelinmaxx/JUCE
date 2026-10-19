@@ -5,9 +5,13 @@ variable-mu, and optical compression models, optional transformer coloration,
 and a high-frequency sidechain tilt. Builds as VST3 for Windows and macOS,
 and as an Audio Unit (AU) for macOS.
 
-- Four selectable compressor models with stereo-linked gain reduction.
-- Optional output transformer with 2× oversampling, frequency-dependent phase
-  response, and a 500 Hz / 24 dB-per-octave roll-off on generated distortion.
+- Four selectable compressor models with stereo-linked gain reduction, plus
+  an optional upward mode that boosts signal below threshold while leaving
+  above-threshold signal at unity compressor gain.
+- Optional output transformer with 2× oversampling, causal magnetic hysteresis,
+  frequency-dependent phase response, and a 500 Hz / 12 dB-per-octave roll-off
+  on generated distortion. The response uses a 20 Hz low corner and a 19 kHz,
+  Q=2 high pole pair.
 - Optional **SC High Tilt**: a +6 dB detector high shelf with a 1.5 kHz midpoint
   (+3 dB). It increases high-frequency compression sensitivity without directly
   EQing the output.
@@ -20,6 +24,52 @@ The models are behavioral approximations for creative use, not calibrated
 recreations of specific hardware. The plug-in currently appears in hosts as
 **Character Compressor**, under **Character Audio**. Those names also appear
 in the build targets and output files.
+
+## Compressor styles
+
+The four modes share the same controls, but use different detection, compression
+curves, and recovery behavior. Matching the knob positions will not necessarily
+produce the same gain reduction or timing. These emulations focus on dynamics;
+the optional transformer provides a separate coloration stage for any mode.
+
+### FET — fast feed-forward control
+
+FET compressors take their name from the field-effect transistor used for gain
+control in analog designs. This mode uses a peak detector that reads the input
+before gain reduction, with a fast attack and comparatively quick release.
+It is a useful starting point for catching drum transients, controlling an
+energetic vocal, or adding density with parallel compression. Use a slower
+attack setting when you want more of the initial hit to pass through.
+
+### VCA — feedback control
+
+VCA refers to a voltage-controlled amplifier. This mode models a feedback
+control loop: the detector senses the compressed level, so gain reduction
+influences the next control decision. Peak detection and a longer recovery
+than the FET mode provide another way to balance transient control and sustain.
+Try it on drum groups, bass, or a mix bus when you want the dynamics of several
+parts to move together; start with a modest ratio and light gain reduction.
+
+### Variable-mu — progressive compression
+
+Variable-mu compressors draw inspiration from tube circuits whose gain changes
+with the control signal. Here, an RMS detector follows average signal energy
+in a feedback loop, and compression becomes progressively stronger as the
+level rises above threshold. The Ratio control sets an upper limit rather than
+a fixed ratio throughout the curve. Recovery also slows with deeper gain
+reduction. Try this mode for gentle bus control, sustained instruments, or
+vocals where a gradual change in compression strength is useful.
+
+### Optical — smooth leveling with recovery memory
+
+Optical compressors are inspired by a light source and light-sensitive element
+controlling gain. This mode uses RMS detection, a slower attack, and two
+recovery components: one responds relatively quickly, while the other retains
+memory of earlier compression. It is a useful starting point for leveling
+vocals, bass, and acoustic instruments while allowing some initial articulation
+through. Closely spaced notes can keep the slower recovery component engaged.
+
+## Get the source and build scripts
 
 This repository includes the JUCE framework; the plug-in project is in
 [`projects/CharacterCompressor`](projects/CharacterCompressor). You do not need

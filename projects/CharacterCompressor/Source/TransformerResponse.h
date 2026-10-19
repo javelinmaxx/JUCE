@@ -12,9 +12,9 @@ namespace character
 class TransformerResponse
 {
 public:
-    static constexpr double lowCornerHz = 8.0;
-    static constexpr double highCornerHz = 22000.0;
-    static constexpr double highQ = 0.8;
+    static constexpr double lowCornerHz = 20.0;
+    static constexpr double highCornerHz = 19000.0;
+    static constexpr double highQ = 2.0;
 
     void prepare (double processingRate) noexcept
     {
@@ -22,8 +22,9 @@ public:
         const auto rate = std::isfinite (processingRate) && processingRate >= 8000
                         ? processingRate : 96000.0;
 
-        // Bilinear transform, prewarped at each corner. Run at the transformer
-        // oversampled rate, not at the host rate. Clamp HF at low host rates.
+        // Bilinear-transform the LF first-order high-pass and HF second-order
+        // low-pass, prewarped at their corners. This runs at the transformer's
+        // oversampled rate. Clamp the HF corner below Nyquist at low host rates.
         const auto lowK = std::tan (pi * lowCornerHz / rate);
         hpB = 1.0 / (1.0 + lowK);
         hpA = (lowK - 1.0) / (lowK + 1.0);
@@ -43,6 +44,9 @@ public:
     float process (float sample) noexcept
     {
         const auto input = static_cast<double> (sample);
+        // First remove the LF magnetizing-branch response, then apply the
+        // damped HF pole pair. These causal filters create the modeled phase
+        // shift and magnitude response together.
         const auto highpass = hpB * (input - previousInput) - hpA * previousHighpass;
         previousInput = input;
         previousHighpass = highpass;
