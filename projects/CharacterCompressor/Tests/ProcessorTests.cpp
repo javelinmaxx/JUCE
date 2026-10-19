@@ -14,6 +14,12 @@ void check (bool ok, const char* message)
     if (! ok) throw std::runtime_error (message);
 }
 bool exact (float a, float b) { return std::memcmp (&a, &b, sizeof (float)) == 0; }
+bool closeColour (juce::Colour a, juce::Colour b, int tolerance)
+{
+    return std::abs (static_cast<int> (a.getRed()) - static_cast<int> (b.getRed())) <= tolerance
+        && std::abs (static_cast<int> (a.getGreen()) - static_cast<int> (b.getGreen())) <= tolerance
+        && std::abs (static_cast<int> (a.getBlue()) - static_cast<int> (b.getBlue())) <= tolerance;
+}
 void set (CharacterCompressorProcessor& p, const char* id, float value)
 {
     auto* parameter = p.parameters.getParameter (id);
@@ -400,6 +406,11 @@ int renderThemePreviews (const char* directory)
         juce::Colour (0xfff8fff7), juce::Colour (0xffdc4a55),
         juce::Colour (0xffa9b1b9), juce::Colour (0xff48a9dc),
         juce::Colour (0xff91c98a), juce::Colour (0xfff8faf9) };
+    const std::array<juce::Colour, 8> gaugeTrack {
+        juce::Colour (0xff414b53), juce::Colour (0xff3c5262),
+        juce::Colour (0xff526b59), juce::Colour (0xff56616a),
+        juce::Colour (0xff4b5055), juce::Colour (0xff435d70),
+        juce::Colour (0xff4f7058), juce::Colour (0xff51454a) };
     struct CaptureTimer final : juce::Timer
     {
         std::function<void()> tick;
@@ -420,9 +431,13 @@ int renderThemePreviews (const char* directory)
         auto stream = file.createOutputStream();
         succeeded = succeeded && image.isValid() && stream != nullptr;
         if (succeeded)
+        {
+            const auto index = static_cast<size_t> (stage);
+            const auto grLitPixel = gaugeTrack[index].interpolatedWith (meter[index], 0.50f);
             succeeded = juce::PNGImageFormat().writeImageToStream (image, *stream)
-                     && image.getPixelAt (0, 0) == background[static_cast<size_t> (stage)]
-                     && image.getPixelAt (398, 250) == meter[static_cast<size_t> (stage)];
+                     && closeColour (image.getPixelAt (0, 0), background[index].brighter (0.035f), 18)
+                     && closeColour (image.getPixelAt (398, 250), grLitPixel, 20);
+        }
         ++stage;
         frame = 0;
         if (stage == 8)

@@ -445,6 +445,19 @@ implementation, not a production-release claim.
   previews were rendered for all eight model/Upward palette combinations; the
   preview renderer verified each image's palette colors and saved all files.
 
+### 2026-10-19 — analog surface and illuminated meter styling
+- Applied the UI UX Pro Max skeuomorphism guidance to the existing compressor
+  surface: layered panel edges, subtle grain, shaded metal knobs, calibrated
+  scale ticks, and tactile switch housings retain each simulation palette.
+- Added signal-responsive, layered color halos to the GR bar and five-second
+  history trace. Kept the trace core and numeric readout legible on dark meter
+  glass across light and dark compressor themes.
+- Re-rendered all eight model/Upward previews and updated their image checks to
+  allow for the intentional gradient and luminous blending.
+- The VST3 and processor editor targets built successfully. The eight-theme
+  preview check passed. Editor capture reported 266 processor checks passed;
+  the full DSP and Upward ctest suites were not run for this visual-only change.
+
 ### 2026-10-19 — sidechain controls and compressor UI hierarchy
 
 - Reduced Knee and VariTransient knob sizes. Moved Upward into the Compressor
