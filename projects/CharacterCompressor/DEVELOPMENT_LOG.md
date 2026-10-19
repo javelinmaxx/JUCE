@@ -1,4 +1,4 @@
-# Character Compressor — project memory and development log
+# YinYang Compressor — project memory and development log
 
 ## Confirmed product requirements
 
@@ -675,3 +675,10 @@ implementation, not a production-release claim.
   control accent as well as its GR color.
 - Rebuilt the VST3 and regenerated all eight previews. The palette-aware preview
   check passed; no full test suite was run.
+
+### 2026-10-19 — YinYang name, modes, and VCA colors
+- Renamed the plug-in product and editor to YinYang Compressor. The upward
+  compression mode is now labeled Yin; normal compression is Yang.
+- Made the normal VCA panels white with dark text and blue controls. The VCA Yin
+  palette keeps its dark panels and uses white knob faces.
+- Updated the Windows artifact names and user-facing build instructions.

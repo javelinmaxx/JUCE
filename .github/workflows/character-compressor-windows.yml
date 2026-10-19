@@ -1,4 +1,4 @@
-name: Character Compressor - Windows VST3
+name: YinYang Compressor - Windows VST3
 
 on:
   workflow_dispatch:
@@ -36,8 +36,8 @@ jobs:
 
       - name: Check Windows bundle
         run: |
-          $bundle = 'build-character-win/CharacterCompressor_artefacts/Release/VST3/Character Compressor.vst3'
-          $binary = Join-Path $bundle 'Contents/x86_64-win/Character Compressor.vst3'
+          $bundle = 'build-character-win/CharacterCompressor_artefacts/Release/VST3/YinYang Compressor.vst3'
+          $binary = Join-Path $bundle 'Contents/x86_64-win/YinYang Compressor.vst3'
           if (-not (Test-Path -LiteralPath $binary -PathType Leaf)) {
             throw "Windows VST3 binary missing: $binary"
           }
@@ -46,7 +46,7 @@ jobs:
       - name: Upload Windows VST3
         uses: actions/upload-artifact@v4
         with:
-          name: Character-Compressor-Windows-x64-VST3
+          name: YinYang-Compressor-Windows-x64-VST3
           # Upload the parent directory to preserve the whole .vst3 bundle.
           path: build-character-win/CharacterCompressor_artefacts/Release/VST3/
           if-no-files-found: error

@@ -20,7 +20,7 @@ juce_add_plugin(CharacterCompressor
     PLUGIN_MANUFACTURER_CODE Chra
     PLUGIN_CODE Chc1
     FORMATS ${plugin_formats}
-    PRODUCT_NAME "Character Compressor"
+    PRODUCT_NAME "YinYang Compressor"
     DESCRIPTION "Four-model dynamics processor"
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE

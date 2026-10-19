@@ -1,4 +1,4 @@
-# Character Compressor
+# YinYang Compressor
 
 A first working compressor plug-in with selectable **feed-forward FET**,
 **feedback VCA**, **variable-mu**, and **optical** behavior, plus an optional
@@ -91,10 +91,12 @@ keep the window at five seconds even if UI updates are delayed. Closing the
 editor clears its display history. Transformer, Upward, and Mid/Side use
 vertical animated switches; Bypass is an animated button. All retain keyboard
 access and host automation. Each model has
-its own palette: FET charcoal with gold GR, VCA blue with white GR,
+its own palette: FET charcoal with purple GR, VCA white Yang panels and white
+Yin knobs with white GR,
 Variable-mu light green with white GR, and Optical white with red GR. Upward
-swaps each model's control and GR colors, resets the trace, and labels the
-meter Upward Gain. The palette follows model automation and session recall.
+switches between Yin (upward compression) and Yang (normal compression), resets
+the trace, and labels the meter accordingly. The palette follows model automation
+and session recall.
 
 ## Measured characteristics
 
@@ -157,20 +159,20 @@ xvfb-run -a /workspace/juce-env/character-build/CharacterProcessorTests \
 ```
 
 Linux artifact:
-`/workspace/juce-env/character-build/CharacterCompressor_artefacts/Debug/VST3/Character Compressor.vst3`.
+`/workspace/juce-env/character-build/CharacterCompressor_artefacts/Debug/VST3/YinYang Compressor.vst3`.
 Linux VST3 binaries cannot load in Logic on macOS.
 
 ## Download a Windows VST3 using GitHub Actions
 
 You can build Windows x64 binaries from a Mac using GitHub's hosted runner.
-The workflow is [Character Compressor - Windows VST3](../../.github/workflows/character-compressor-windows.yml).
+The workflow is [YinYang Compressor - Windows VST3](../../.github/workflows/character-compressor-windows.yml).
 
 1. Open the repository's **Actions** tab. If GitHub has disabled workflows in
    this fork, enable Actions first.
-2. Open **Character Compressor - Windows VST3** and select the latest successful
+2. Open **YinYang Compressor - Windows VST3** and select the latest successful
    run for `feature/character-compressor` (or `master` after merging).
-3. Under **Artifacts**, download **Character-Compressor-Windows-x64-VST3**.
-4. Extract the ZIP and keep the complete `Character Compressor.vst3` folder.
+3. Under **Artifacts**, download **YinYang-Compressor-Windows-x64-VST3**.
+4. Extract the ZIP and keep the complete `YinYang Compressor.vst3` folder.
    On Windows, copy it to `C:\Program Files\Common Files\VST3\`, then rescan
    plug-ins in the Windows DAW. This binary is for Windows x64 hosts.
 
@@ -199,7 +201,7 @@ cmake --build build-character-arm64 --config Release \
 ```
 
 Bundles appear in `build-character-arm64/CharacterCompressor_artefacts/Release/`
-under `VST3/Character Compressor.vst3` and `AU/Character Compressor.component`.
+under `VST3/YinYang Compressor.vst3` and `AU/YinYang Compressor.component`.
 Replace your installed copies with these complete bundles and restart the host.
 DawDreamer requires an absolute bundle path and matching Python/plug-in architecture.
 Logic loads the AU. These commands build without running tests.
@@ -222,18 +224,18 @@ cmake --build build-character-mac --config Release \
 ```
 
 The AU is at:
-`build-character-mac/CharacterCompressor_artefacts/Release/AU/Character Compressor.component`.
+`build-character-mac/CharacterCompressor_artefacts/Release/AU/YinYang Compressor.component`.
 To install a new development build in your user plug-in folder:
 
 ```bash
 mkdir -p "$HOME/Library/Audio/Plug-Ins/Components"
-ditto "build-character-mac/CharacterCompressor_artefacts/Release/AU/Character Compressor.component" \
-    "$HOME/Library/Audio/Plug-Ins/Components/Character Compressor.component"
+ditto "build-character-mac/CharacterCompressor_artefacts/Release/AU/YinYang Compressor.component" \
+    "$HOME/Library/Audio/Plug-Ins/Components/YinYang Compressor.component"
 auval -v aufx Chc1 Chra
 ```
 
 Restart Logic and check Plug-in Manager. Add **Audio FX → Audio Units →
-Character Audio → Character Compressor** to a mono or stereo audio track.
+Character Audio → YinYang Compressor** to a mono or stereo audio track.
 Start with low monitor levels, transformer off, output at 0 dB, and adjust
 threshold while watching gain reduction. Confirm bypass, all four models,
 transformer, automation, session save/reopen, and mono/stereo playback.

@@ -169,7 +169,7 @@ int runTests (int argc, char** argv)
             if (auto* button = dynamic_cast<AnimatedSwitch*> (child))
             {
                 if (button->getButtonText() == "OUTPUT TRANSFORMER") transformer = button;
-                if (button->getButtonText() == "UPWARD COMPRESSION") upward = button;
+                if (button->getButtonText() == "YIN/YANG MODE") upward = button;
                 if (button->getButtonText() == "BYPASS") bypass = button;
                 if (button->getButtonText() == "MID / SIDE MODE") midSide = button;
             }

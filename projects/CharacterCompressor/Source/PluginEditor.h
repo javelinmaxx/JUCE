@@ -82,7 +82,7 @@ private:
     CompressorLookAndFeel look;
     juce::ComboBox model;
     AnimatedSwitch transformer { "OUTPUT TRANSFORMER" }, bypass { "BYPASS", true, false, true };
-    AnimatedSwitch upward { "UPWARD COMPRESSION", true, false, true };
+    AnimatedSwitch upward { "YIN/YANG MODE", true, false, true };
     AnimatedSwitch midSide { "MID / SIDE MODE" };
     std::array<juce::Slider, 14> sliders;
     std::array<juce::Label, 14> labels;

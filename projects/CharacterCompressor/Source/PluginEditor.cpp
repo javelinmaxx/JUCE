@@ -19,7 +19,7 @@ CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcess
     upwardAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "upward", upward);
     midSideAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "midSide", midSide);
     upward.setTooltip ("Boosts levels below threshold toward it; ratio sets the below-threshold slope.");
-    upward.setStateCaptions ("UPWARD", "COMPRESSOR");
+    upward.setStateCaptions ("YIN", "YANG");
 
     const std::array<const char*, 14> ids { "input", "threshold", "ratio", "attack", "release",
         "knee", "output", "mix", "sidechain", "drive", "stereoLink", "evenHarmonics", "variTransient", "scHighTilt" };
@@ -168,16 +168,16 @@ CompressorTheme themeFor (int model, bool upward)
                      colour (0xfff0f1ee), colour (0xffb7c0c6), colour (0xffa9b1b9),
                      colour (0xff80549b), colour (0xff35404a), colour (0xff414b53),
                      colour (0xff354048), colour (0xffb8c2ca), colour (0xff586875) };
-        case 1: // VCA: blue panel and white reduction.
+        case 1: // VCA: white normal panels and white Yin knobs.
             if (upward)
                 return { colour (0xff0e1e2a), colour (0xff192f40), colour (0xff09151f),
                          colour (0xfff7fbff), colour (0xff93aebd), colour (0xff3b82a8),
                          colour (0xff93b4c8), colour (0xff1d3443), colour (0xff304654),
-                         colour (0xff293f4e), colour (0xff8599a6), colour (0xff3b5364) };
-            return { colour (0xff142b3d), colour (0xff203e54), colour (0xff0d1d2b),
-                     colour (0xfff2f8fc), colour (0xffadc9d8), colour (0xfff7fbff),
-                     colour (0xfff7fbff), colour (0xff24475e), colour (0xff3c5262),
-                     colour (0xff314e60), colour (0xffa8c6d6), colour (0xff42627a) };
+                         colour (0xff293f4e), colour (0xfff4f8fa), colour (0xffbdcbd2) };
+            return { colour (0xffe7ecef), colour (0xfff8fafb), colour (0xff0d1d2b),
+                     colour (0xff25343c), colour (0xff586b74), colour (0xff4389b3),
+                     colour (0xfff7fbff), colour (0xffe1e8ec), colour (0xff3c5262),
+                     colour (0xffcbd5da), colour (0xff6d8999), colour (0xff36566c) };
         case 2: // Variable-mu: light green panel and white reduction.
             if (upward)
                 return { colour (0xff355a46), colour (0xff406b52), colour (0xff182e25),
@@ -245,7 +245,7 @@ void AnimatedSwitch::paintButton (juce::Graphics& g, bool highlighted, bool down
     {
         g.setColour (getToggleState() ? (highlighted ? accent.brighter (0.12f) : accent) : secondary);
         g.setFont (juce::FontOptions (10.0f).withStyle ("bold"));
-        g.drawText ("UPWARD", bounds.withWidth (bounds.getWidth() - 20), juce::Justification::centredRight);
+        g.drawText ("YIN", bounds.withWidth (bounds.getWidth() - 20), juce::Justification::centredRight);
         const auto led = juce::Rectangle<float> (bounds.getRight() - 13, bounds.getCentreY() - 5, 10, 10);
         if (getToggleState())
         {
@@ -466,7 +466,7 @@ void CharacterCompressorEditor::paint (juce::Graphics& g)
     g.drawText ("CHARACTER AUDIO  /  DYNAMICS", 24, 18, 500, 20, juce::Justification::centredLeft);
     g.setColour (theme.text);
     g.setFont (juce::FontOptions (29.0f));
-    g.drawText ("Character Compressor", 24, 40, 420, 38, juce::Justification::centredLeft);
+    g.drawText ("YinYang Compressor", 24, 40, 420, 38, juce::Justification::centredLeft);
     drawBrushedMetalPanel (g, { 24, 140, 300, 342 }, 10, theme.card, theme.grid);
     drawAnalogPanel (g, { 24, 494, 300, 116 }, 10, theme.card, theme.grid);
     drawAnalogPanel (g, { 24, 622, 300, 116 }, 10, theme.card, theme.grid);
@@ -491,7 +491,7 @@ void CharacterCompressorEditor::paintMeter (juce::Graphics& g)
     drawAnalogPanel (g, meterBounds.toFloat(), 10, theme.meterPanel, theme.grid);
     g.setColour (juce::Colour (0xffb9c8c4));
     g.setFont (juce::FontOptions (11.0f));
-    g.drawText (upward.getToggleState() ? "UPWARD GAIN" : "GAIN REDUCTION",
+    g.drawText (upward.getToggleState() ? "YIN GAIN" : "YANG GAIN REDUCTION",
                 356, 158, 156, 20, juce::Justification::centred);
     const juce::Rectangle<float> bar (360, 202, 14, 310), plot (410, 202, 98, 310);
     g.setColour (theme.gaugeTrack);
