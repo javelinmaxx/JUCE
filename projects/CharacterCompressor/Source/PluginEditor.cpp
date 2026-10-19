@@ -225,7 +225,7 @@ void AnimatedSwitch::paintButton (juce::Graphics& g, bool highlighted, bool down
         g.setColour (position > 0.05f ? accent : secondary.withAlpha (0.70f));
         g.drawRoundedRectangle (bounds, 6, 1.0f);
         g.setColour (getToggleState() ? foreground : secondary);
-        g.setFont (juce::FontOptions (10.0f).withStyle ("bold"));
+        g.setFont (juce::FontOptions (9.0f).withStyle ("bold"));
         g.drawText ("BYPASS", bounds.toNearestInt(), juce::Justification::centred);
         if (hasKeyboardFocus (true))
         {
@@ -281,38 +281,41 @@ void AnimatedSwitch::paintButton (juce::Graphics& g, bool highlighted, bool down
         return;
     }
 
-    const auto titleHeight = std::min (42, juce::roundToInt (getHeight() * 0.32f));
+    const auto title = getLocalBounds().reduced (3, 0).withHeight (std::min (32, getHeight() / 3));
     g.setColour (getToggleState() ? foreground : (highlighted ? foreground.withAlpha (0.90f) : secondary));
-    g.setFont (juce::FontOptions (11.0f));
-    g.drawFittedText (getButtonText(), getLocalBounds().reduced (5).withHeight (titleHeight),
-                      juce::Justification::centred, 3);
-    const auto trackWidth = 26.0f;
-    const auto trackHeight = std::min (56.0f, static_cast<float> (getHeight()) * 0.38f);
-    const auto trackY = static_cast<float> (titleHeight) + 5.0f;
-    const auto track = juce::Rectangle<float> (static_cast<float> (getWidth()) * 0.5f - trackWidth * 0.5f,
-        trackY, trackWidth, trackHeight);
-    const auto trackColour = secondary.darker (0.35f).interpolatedWith (accent.darker (0.20f), position);
-    g.setColour (trackColour);
-    g.fillRoundedRectangle (track, 11);
-    g.setColour (accent.withAlpha (0.46f));
-    g.drawRoundedRectangle (track, 11, 0.8f);
-    const auto thumb = juce::Rectangle<float> (track.getCentreX() - 8,
-        track.getBottom() - 19 - position * (trackHeight - 20), 16, 16);
-    auto thumbColour = getToggleState() ? accent : foreground.withAlpha (0.92f);
-    if (down) thumbColour = thumbColour.darker (0.12f);
-    g.setColour (thumbColour);
-    g.fillEllipse (thumb);
-    g.setColour (surface.darker (0.25f));
-    g.drawEllipse (thumb, 0.8f);
+    g.setFont (juce::FontOptions (9.0f));
+    g.drawFittedText (getButtonText(), title, juce::Justification::centred, 2);
+
+    // A compact, pivoting lever set into a small metal escutcheon.
+    const auto cx = static_cast<float> (getWidth()) * 0.5f;
+    const auto plateY = static_cast<float> (title.getBottom()) + 7.0f;
+    const auto plate = juce::Rectangle<float> (cx - 11.0f, plateY, 22.0f, 33.0f);
+    g.setColour (surface.darker (0.30f));
+    g.fillRoundedRectangle (plate, 6.0f);
+    g.setColour (secondary.withAlpha (0.72f));
+    g.drawRoundedRectangle (plate, 6.0f, 0.8f);
+    const auto pivot = juce::Point<float> (cx, plate.getBottom() - 5.5f);
+    const auto leverLength = 17.0f;
+    const auto lean = (position - 0.5f) * 0.62f;
+    const juce::Point<float> tip (cx + std::sin (lean) * leverLength,
+                                  pivot.y - std::cos (lean) * leverLength);
+    g.setColour (juce::Colours::black.withAlpha (0.35f));
+    g.drawLine (pivot.x + 1.0f, pivot.y + 1.0f, tip.x + 1.0f, tip.y + 1.0f, 4.0f);
+    g.setColour (getToggleState() ? accent : foreground.withAlpha (0.86f));
+    g.drawLine (pivot.x, pivot.y, tip.x, tip.y, 3.2f);
+    g.setColour (secondary.brighter (0.10f));
+    g.fillEllipse (pivot.x - 3.0f, pivot.y - 3.0f, 6.0f, 6.0f);
+    g.setColour (surface.darker (0.35f));
+    g.fillEllipse (pivot.x - 1.3f, pivot.y - 1.3f, 2.6f, 2.6f);
     g.setColour (secondary);
-    g.setFont (juce::FontOptions (10.0f));
-    const auto statusY = juce::roundToInt (track.getBottom()) + 3;
+    g.setFont (juce::FontOptions (8.0f));
+    const auto statusY = juce::roundToInt (plate.getBottom()) + 2;
     g.drawText (getToggleState() ? "ON" : "OFF", 0, statusY, getWidth(),
                 std::max (0, getHeight() - statusY), juce::Justification::centredTop);
     if (hasKeyboardFocus (true))
     {
         g.setColour (accent);
-        g.drawRoundedRectangle (track.expanded (3), 13, 1.0f);
+        g.drawRoundedRectangle (plate.expanded (3), 8, 1.0f);
     }
 }
 
@@ -345,16 +348,24 @@ void CompressorLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
     active.addCentredArc (centre.x, centre.y, radius, radius, 0, start, angle, true);
     g.setColour (slider.isEnabled() ? accent : ring);
     g.strokePath (active, juce::PathStrokeType (2.2f));
-    dial.reduce (6, 6);
-    g.setColour (knobBottom.brighter (0.12f));
+    dial.reduce (5, 5);
+    auto rim = dial.expanded (2.0f);
+    g.setColour (juce::Colours::black.withAlpha (0.24f));
+    g.fillEllipse (rim.translated (0.0f, 1.2f));
+    g.setColour (ring.darker (0.25f));
+    g.fillEllipse (rim);
+    g.setColour (ring.withAlpha (0.70f));
+    g.drawEllipse (rim, 0.8f);
+    g.setGradientFill (juce::ColourGradient (knobTop.withAlpha (0.66f), dial.getTopLeft(),
+                                            knobBottom.brighter (0.12f), dial.getBottomLeft(), false));
     g.fillEllipse (dial);
-    g.setColour (ring.withAlpha (0.82f));
-    g.drawEllipse (dial, 0.9f);
+    g.setColour (ring.withAlpha (0.45f));
+    g.drawEllipse (dial.reduced (2.0f), 0.7f);
     const auto outer = dial.getWidth() * 0.40f;
     const auto inner = outer * 0.58f;
     g.setColour (accent);
     g.drawLine (centre.x + std::sin (angle) * inner, centre.y - std::cos (angle) * inner,
-                centre.x + std::sin (angle) * outer, centre.y - std::cos (angle) * outer, 2);
+                centre.x + std::sin (angle) * outer, centre.y - std::cos (angle) * outer, 1.8f);
 }
 
 void CharacterCompressorEditor::paint (juce::Graphics& g)
@@ -484,7 +495,7 @@ void CharacterCompressorEditor::resized()
 {
     model.setBounds (24, 92, 532, 32);
     modelDescription.setBounds (24, 128, 532, 20);
-    bypass.setBounds (464, 42, 92, 36);
+    bypass.setBounds (482, 46, 74, 28);
     const auto place = [this] (size_t index, int x, int y, int width, int height)
     {
         labels[index].setBounds (x, y, width, 20);
@@ -520,9 +531,9 @@ void CharacterCompressorEditor::resized()
     labels[9].setText ("IRON DRIVE", juce::dontSendNotification);
     labels[11].setText ("EVEN HARMONICS", juce::dontSendNotification);
     labels[13].setText ("SC HIGH TILT", juce::dontSendNotification);
-    upward.setBounds (164, 155, 86, 22);
-    midSide.setBounds (246, 452, 98, 110);
-    transformer.setBounds (242, 618, 100, 130);
+    upward.setBounds (168, 156, 76, 20);
+    midSide.setBounds (258, 452, 72, 104);
+    transformer.setBounds (254, 618, 76, 110);
 }
 
 void CharacterCompressorEditor::timerCallback()

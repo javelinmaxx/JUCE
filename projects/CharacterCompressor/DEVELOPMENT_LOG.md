@@ -445,6 +445,14 @@ implementation, not a production-release claim.
   previews were rendered for all eight model/Upward palette combinations; the
   preview renderer verified each image's palette colors and saved all files.
 
+### 2026-10-19 — balanced knobs and compact flip switches
+- Restored a restrained beveled knob rim and subtle face shading while leaving
+  out glossy highlights and plastic shine.
+- Replaced the vertical switch plungers with smaller animated pivoting levers
+  on metal escutcheons. Reduced their layout footprints and the Bypass button.
+- Rebuilt the VST3 and regenerated all eight model/Upward previews with the
+  focused preview renderer; no full test suite was run.
+
 ### 2026-10-19 — compact header and studio-lit brushed aluminum
 - Removed the IN/OUT dBFS label, moved Input into the Compressor header as a
   miniature control, and changed Bypass into a labeled push button with a
