@@ -475,9 +475,9 @@ void CharacterCompressorEditor::paint (juce::Graphics& g)
     g.drawText ("SIDECHAIN", 38, 502, 250, 18, juce::Justification::centredLeft);
     g.drawText ("TRANSFORMER STAGE", 38, 630, 270, 20, juce::Justification::centredLeft);
     drawAnalogPanel (g, { 344, 622, 180, 116 }, 10, theme.card, theme.grid);
-    g.setColour (theme.secondary);
-    g.setFont (juce::FontOptions (10.0f).withStyle ("bold"));
-    g.drawText ("OUTPUT  /  MIX  /  STEREO LINK", 350, 624, 168, 16, juce::Justification::centred);
+    g.setColour (theme.text);
+    g.setFont (juce::FontOptions (13.0f).withStyle ("bold"));
+    g.drawText ("OUTPUT", 358, 630, 152, 18, juce::Justification::centredLeft);
     for (const auto y : { 488, 616 })
     {
         g.setColour (theme.grid);
@@ -569,7 +569,7 @@ void CharacterCompressorEditor::paintMeter (juce::Graphics& g)
 
 void CharacterCompressorEditor::resized()
 {
-    model.setBounds (24, 108, 500, 32);
+    model.setBounds (24, 98, 500, 32);
     bypass.setBounds (450, 46, 74, 28);
     const auto place = [this] (size_t index, int x, int y, int width, int height)
     {
@@ -600,9 +600,9 @@ void CharacterCompressorEditor::resized()
     place (13, 130, 520, 80, 66);
     place (9, 30, 648, 80, 66);
     place (11, 130, 648, 80, 66);
-    place (6, 344, 640, 60, 66);
-    place (7, 404, 640, 60, 66);
-    place (10, 464, 640, 60, 66);
+    place (6, 344, 648, 60, 66);
+    place (7, 404, 648, 60, 66);
+    place (10, 464, 648, 60, 66);
     labels[0].setBounds (222, 161, 40, 14);
     labels[0].setFont (juce::FontOptions (9.5f).withStyle ("bold"));
     labels[0].setJustificationType (juce::Justification::centredRight);

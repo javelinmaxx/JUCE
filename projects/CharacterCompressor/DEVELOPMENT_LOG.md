@@ -648,3 +648,10 @@ implementation, not a production-release claim.
   gaps and the 18 px bottom margin.
 - Shifted knob captions 3 px closer to their controls while leaving panel and
   section margins unchanged.
+
+### 2026-10-19 — model selector spacing and Output heading
+- Restored a 10 px gap between the model selector and the GR/Compressor panels,
+  while moving the selector up 10 px to tighten its spacing below the plug-in
+  title.
+- Matched the Output heading to the other section headers and lowered its
+  controls to leave clear space below the heading.
