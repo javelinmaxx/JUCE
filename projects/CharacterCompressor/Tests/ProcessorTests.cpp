@@ -139,6 +139,7 @@ int runTests (int argc, char** argv)
         juce::Slider *stereoLink = nullptr, *evenHarmonics = nullptr, *variTransient = nullptr;
         juce::Slider *detectorHpf = nullptr, *scHighTilt = nullptr, *input = nullptr;
         juce::Slider *transformerDrive = nullptr;
+        juce::Label *thresholdLabel = nullptr, *ratioLabel = nullptr;
         for (auto* child : editor->getChildren())
         {
             check (editor->getLocalBounds().contains (child->getBounds()), "controls fit inside the editor panel");
@@ -159,6 +160,11 @@ int runTests (int argc, char** argv)
                 if (slider->getName() == "DC BIAS") evenHarmonics = slider;
                 if (slider->getName() == "VARITRANSIENT") variTransient = slider;
             }
+            if (auto* label = dynamic_cast<juce::Label*> (child))
+            {
+                if (label->getText() == "THRES") thresholdLabel = label;
+                if (label->getText() == "RATIO") ratioLabel = label;
+            }
             if (auto* button = dynamic_cast<AnimatedSwitch*> (child))
             {
                 if (button->getButtonText() == "OUTPUT TRANSFORMER") transformer = button;
@@ -172,27 +178,29 @@ int runTests (int argc, char** argv)
                && input && detectorHpf && scHighTilt && transformerDrive,
                "editor includes the complete knob and switch set");
         check (threshold->getHeight() > attack->getHeight() && ratio->getHeight() > release->getHeight()
-               && knee->getHeight() < threshold->getHeight()
-               && variTransient->getHeight() == knee->getHeight(),
-               "VariTransient matches the Knee knob size");
+               && knee->getHeight() == attack->getHeight()
+               && variTransient->getHeight() == release->getHeight()
+               && knee->getWidth() == attack->getWidth()
+               && variTransient->getWidth() == release->getWidth(),
+               "Knee and VariTransient match the Attack and Release knob sizes");
         check (threshold->getY() == ratio->getY()
                && threshold->getRight() <= ratio->getX()
-               && knee->getY() > threshold->getY() && knee->getX() < attack->getX(),
-               "Threshold and Ratio have the first row, with Knee moved below");
-        check (attack->getY() == release->getY() && release->getY() == variTransient->getY()
-               && attack->getRight() <= release->getX() && release->getRight() <= variTransient->getX(),
-               "Attack and Release are paired, with VariTransient beside them");
+               && attack->getY() == release->getY() && knee->getY() > attack->getY()
+               && knee->getY() == variTransient->getY()
+               && attack->getX() == knee->getX() && release->getX() == variTransient->getX(),
+               "Threshold/Ratio, Attack/Release, and Knee/VariTransient occupy successive rows");
         check (output->getY() == mix->getY() && mix->getY() == stereoLink->getY()
                && output->getY() > 156 + 480,
                "output, mix, and stereo link sit below the shortened GR section");
         check (transformer->getHeight() > transformer->getWidth()
                && upward->getWidth() > upward->getHeight()
                && upward->getWidth() >= bypass->getWidth()
-               && upward->getY() < 180 && upward->getX() >= 140
+               && upward->getY() < 180 && upward->getX() <= 40
+               && upward->getWidth() >= 100 && upward->getRight() <= 150
                && bypass->getWidth() > bypass->getHeight()
                && bypass->getY() < 80 && bypass->getX() >= 450
                && midSide->getHeight() > midSide->getWidth(),
-               "mode and bypass use matching labeled switches beside their section titles");
+               "mode is controlled by the Compressor header and bypass remains beside the plug-in title");
         check (detectorHpf->getY() == scHighTilt->getY()
                && midSide->getY() < detectorHpf->getBottom()
                && midSide->getX() > scHighTilt->getRight(),
@@ -200,7 +208,22 @@ int runTests (int argc, char** argv)
         check (upward->getY() < threshold->getY() && input->getY() < threshold->getY()
                && input->getHeight() < attack->getHeight(),
                "upward mode and a compact input control are in the compressor header");
+        check (thresholdLabel && ratioLabel && thresholdLabel->getY() >= upward->getBottom() + 4
+               && ratioLabel->getY() == thresholdLabel->getY(),
+               "main knob captions clear the Compressor header button");
         check (transformerDrive->getY() == evenHarmonics->getY()
+               && transformerDrive->getWidth() == detectorHpf->getWidth()
+               && transformerDrive->getHeight() == detectorHpf->getHeight()
+               && evenHarmonics->getWidth() == scHighTilt->getWidth()
+               && evenHarmonics->getHeight() == scHighTilt->getHeight()
+               && std::abs (((scHighTilt->getX() + scHighTilt->getWidth() / 2)
+                           - (detectorHpf->getX() + detectorHpf->getWidth() / 2))
+                          - ((midSide->getX() + midSide->getWidth() / 2)
+                           - (scHighTilt->getX() + scHighTilt->getWidth() / 2))) <= 1
+               && std::abs (((evenHarmonics->getX() + evenHarmonics->getWidth() / 2)
+                           - (transformerDrive->getX() + transformerDrive->getWidth() / 2))
+                          - ((transformer->getX() + transformer->getWidth() / 2)
+                           - (evenHarmonics->getX() + evenHarmonics->getWidth() / 2))) <= 1
                && std::abs ((midSide->getY() + 28) - (detectorHpf->getY() + (detectorHpf->getHeight() - 20) / 2)) <= 1
                && std::abs ((transformer->getY() + 28) - (transformerDrive->getY() + (transformerDrive->getHeight() - 20) / 2)) <= 1
                && transformerDrive->getY() > midSide->getBottom(),

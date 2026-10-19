@@ -446,7 +446,9 @@ void CompressorLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
             const auto px = centre.x + std::sin (tickAngle) * labelRadius;
             const auto py = centre.y - std::cos (tickAngle) * labelRadius;
             const auto label = isThreshold ? thresholdLabels[i] : ratioLabels[i];
-            auto labelBounds = juce::Rectangle<float> (px - 20.0f, py - 10.0f, 40.0f, 20.0f);
+            const auto labelWidth = static_cast<float> (juce::String (label).length()) * 9.0f + 4.0f;
+            auto labelBounds = juce::Rectangle<float> (px - labelWidth * 0.5f, py - 9.0f,
+                                                       labelWidth, 18.0f);
             labelBounds.setX (juce::jlimit (static_cast<float> (x), static_cast<float> (x + width) - labelBounds.getWidth(), labelBounds.getX()));
             labelBounds.setY (juce::jlimit (static_cast<float> (y), static_cast<float> (y + height) - labelBounds.getHeight(), labelBounds.getY()));
             g.setColour (marking);
@@ -480,19 +482,18 @@ void CharacterCompressorEditor::paint (juce::Graphics& g)
     g.setColour (theme.text);
     g.setFont (juce::FontOptions (29.0f));
     g.drawText ("Character Compressor", 24, 40, 420, 38, juce::Justification::centredLeft);
-    drawBrushedMetalPanel (g, { 24, 150, 300, 270 }, 10, theme.card, theme.grid);
-    drawAnalogPanel (g, { 24, 434, 300, 128 }, 10, theme.card, theme.grid);
-    drawAnalogPanel (g, { 24, 580, 300, 192 }, 10, theme.card, theme.grid);
+    drawBrushedMetalPanel (g, { 24, 150, 300, 358 }, 10, theme.card, theme.grid);
+    drawAnalogPanel (g, { 24, 514, 300, 128 }, 10, theme.card, theme.grid);
+    drawAnalogPanel (g, { 24, 660, 300, 128 }, 10, theme.card, theme.grid);
     g.setColour (theme.text);
     g.setFont (juce::FontOptions (13.0f).withStyle ("bold"));
-    g.drawText ("COMPRESSOR", 38, 158, 104, 20, juce::Justification::centredLeft);
-    g.drawText ("SIDECHAIN", 38, 442, 250, 18, juce::Justification::centredLeft);
-    g.drawText ("TRANSFORMER STAGE", 38, 588, 270, 20, juce::Justification::centredLeft);
+    g.drawText ("SIDECHAIN", 38, 522, 250, 18, juce::Justification::centredLeft);
+    g.drawText ("TRANSFORMER STAGE", 38, 666, 270, 20, juce::Justification::centredLeft);
     drawAnalogPanel (g, { 344, 644, 180, 128 }, 10, theme.card, theme.grid);
     g.setColour (theme.secondary);
     g.setFont (juce::FontOptions (10.0f).withStyle ("bold"));
     g.drawText ("OUTPUT  /  MIX  /  STEREO LINK", 350, 646, 168, 16, juce::Justification::centred);
-    for (const auto y : { 428, 568 })
+    for (const auto y : { 508, 650 })
     {
         g.setColour (theme.grid);
         g.drawHorizontalLine (y, 24, 324);
@@ -600,17 +601,17 @@ void CharacterCompressorEditor::resized()
             sliders[index].setTextBoxStyle (juce::Slider::TextBoxBelow, false, std::min (width, 100), 22);
         sliders[index].setBounds (x, y + 20, width, height);
     };
-    place (1, 22, 180, 144, 128);
-    place (2, 168, 180, 156, 128);
-    place (5, 24, 330, 58, 56);
-    place (3, 86, 330, 68, 66);
-    place (4, 158, 330, 68, 66);
-    place (12, 232, 330, 80, 56);
+    place (1, 22, 188, 144, 136);
+    place (2, 168, 188, 156, 136);
+    place (3, 62, 346, 80, 58);
+    place (4, 204, 346, 80, 58);
+    place (5, 62, 426, 80, 58);
+    place (12, 204, 426, 80, 58);
     labels[1].setText ("THRES", juce::dontSendNotification);
-    place (8, 28, 460, 80, 78);
-    place (13, 116, 460, 80, 78);
-    place (9, 34, 612, 74, 104);
-    place (11, 116, 612, 74, 104);
+    place (8, 30, 540, 80, 78);
+    place (13, 130, 540, 80, 78);
+    place (9, 30, 686, 80, 78);
+    place (11, 130, 686, 80, 78);
     place (6, 344, 662, 60, 72);
     place (7, 404, 662, 60, 72);
     place (10, 464, 662, 60, 72);
@@ -624,9 +625,9 @@ void CharacterCompressorEditor::resized()
     labels[9].setText ("CORE DRIVE", juce::dontSendNotification);
     labels[11].setText ("DC BIAS", juce::dontSendNotification);
     labels[13].setText ("SC HIGH TILT", juce::dontSendNotification);
-    upward.setBounds (142, 152, 80, 28);
-    midSide.setBounds (241, 481, 58, 64);
-    transformer.setBounds (247, 646, 58, 64);
+    upward.setBounds (32, 152, 112, 28);
+    midSide.setBounds (241, 561, 58, 64);
+    transformer.setBounds (241, 707, 58, 64);
 }
 
 void CharacterCompressorEditor::timerCallback()

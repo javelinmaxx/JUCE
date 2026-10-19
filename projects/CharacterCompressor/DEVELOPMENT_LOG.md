@@ -579,3 +579,28 @@ implementation, not a production-release claim.
   the compact Input control to clear the new button.
 - Rebuilt the VST3 and preview target; all eight model/Upward previews rendered
   and passed the focused UI check. No full test suite was run.
+
+### 2026-10-19 — Compressor header mode control
+- Moved the Upward mode interaction onto the Compressor section heading and
+  removed the separate adjacent button. The header reads “COMPRESSOR” in its
+  default mode and “UPWARD” when engaged.
+- Rebuilt the VST3 and regenerated all eight mode previews; the focused preview
+  check passed. The change remains uncommitted as requested.
+
+### 2026-10-19 — main dial caption spacing and scale placement
+- Added clearance between the Compressor header button and the THRES/RATIO
+  captions, then adjusted the second control row to keep the panel within bounds.
+- Kept the scale values on the circular rotary arc and sized their text bounds
+  to the label strings, reducing the inward shifts at the dial edges.
+- Rebuilt the VST3 and regenerated all eight mode previews; focused preview
+  validation passed. Changes remain uncommitted and unpushed.
+
+### 2026-10-19 — balanced lower stages and three-row compressor controls
+- Matched Transformer Stage to Sidechain at 128 px, including matching 80×78
+  knob bounds. Evenly spaced both sections’ two knobs and toggle around shared
+  control centers.
+- Expanded the Compressor panel to 358 px and arranged its controls in three
+  rows: Threshold/Ratio, Attack/Release, then Knee/VariTransient. Knee and
+  VariTransient now match Attack and Release in size.
+- Rebuilt the VST3 and regenerated all eight mode previews; the focused UI
+  preview check passed. The changes remain uncommitted and unpushed.
