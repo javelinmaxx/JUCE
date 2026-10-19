@@ -235,7 +235,7 @@ auval -v aufx Chc1 Chra
 ```
 
 Restart Logic and check Plug-in Manager. Add **Audio FX → Audio Units →
-Character Audio → YinYang Compressor** to a mono or stereo audio track.
+J-SONIC → YinYang Compressor** to a mono or stereo audio track.
 Start with low monitor levels, transformer off, output at 0 dB, and adjust
 threshold while watching gain reduction. Confirm bypass, all four models,
 transformer, automation, session save/reopen, and mono/stereo playback.

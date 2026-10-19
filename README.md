@@ -24,8 +24,8 @@ and as an Audio Unit (AU) for macOS.
 
 The models are behavioral approximations for creative use, not calibrated
 recreations of specific hardware. The plug-in currently appears in hosts as
-**Character Compressor**, under **Character Audio**. Those names also appear
-in the build targets and output files.
+**YinYang Compressor**, under **J-SONIC**. The build target names retain the
+internal `CharacterCompressor` identifier.
 
 ## Compressor styles
 
@@ -257,7 +257,7 @@ apply here as well. AU and VST3 can share a build directory when their
 architecture and deployment settings match.
 
 Restart Logic Pro and check **Plug-in Manager**. On an audio track, select
-**Audio FX → Audio Units → Character Audio → Character Compressor**.
+**Audio FX → Audio Units → J-SONIC → YinYang Compressor**.
 To run Apple's AU validator separately:
 
 ```bash

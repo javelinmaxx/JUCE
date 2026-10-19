@@ -15,7 +15,7 @@ if(APPLE)
     list(APPEND plugin_formats AU)
 endif()
 juce_add_plugin(CharacterCompressor
-    COMPANY_NAME "Character Audio"
+    COMPANY_NAME "J-SONIC"
     BUNDLE_ID "audio.character.compressor"
     PLUGIN_MANUFACTURER_CODE Chra
     PLUGIN_CODE Chc1

@@ -463,7 +463,7 @@ void CharacterCompressorEditor::paint (juce::Graphics& g)
     g.fillAll();
     g.setColour (theme.background.getPerceivedBrightness() > 0.7f ? theme.text : theme.control);
     g.setFont (juce::FontOptions (12.0f));
-    g.drawText ("CHARACTER AUDIO  /  DYNAMICS", 24, 18, 500, 20, juce::Justification::centredLeft);
+    g.drawText ("J-SONIC  /  DYNAMICS", 24, 38, 500, 20, juce::Justification::centredLeft);
     g.setColour (theme.text);
     g.setFont (juce::FontOptions (29.0f));
     g.drawText ("YIN/YANG COMP", 24, 60, 420, 38, juce::Justification::centredLeft);
@@ -570,7 +570,7 @@ void CharacterCompressorEditor::paintMeter (juce::Graphics& g)
 void CharacterCompressorEditor::resized()
 {
     model.setBounds (24, 98, 500, 32);
-    bypass.setBounds (450, 46, 74, 28);
+    bypass.setBounds (450, 63, 74, 28);
     const auto place = [this] (size_t index, int x, int y, int width, int height)
     {
         labels[index].setBounds (x, y + 3, width, 20);

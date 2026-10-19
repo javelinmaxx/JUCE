@@ -689,3 +689,7 @@ implementation, not a production-release claim.
 ### 2026-10-19 — balanced title and section spacing
 - Moved the editor title down 20 px so its visible gap to the model selector matches
   the 10 px gap between the selector and the main sections.
+
+### 2026-10-19 — J-SONIC header and company metadata
+- Changed the company display and plug-in metadata to J-SONIC, moved the company
+  line down 20 px, and aligned Bypass vertically with the plug-in title.
