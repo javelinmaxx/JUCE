@@ -561,3 +561,11 @@ implementation, not a production-release claim.
 - Built the Linux VST3. The full three-suite CTest run passed; editor layout
   checks passed (266), focused output-stage checks passed (30), and output-stage
   measurements regenerated with verification passed.
+
+### 2026-10-19 — Threshold and Ratio dial scales
+- Enlarged the Threshold and Ratio dials, added graduated parameter values and
+  units around their faces, and removed their numeric readout boxes. Shortened
+  the Threshold caption to “THRES” and moved the Attack/Release row down to
+  preserve spacing within the Compressor panel.
+- Regenerated all eight model/Upward UI previews. The VST3 and focused preview
+  renderer built and passed; no full test suite was run.

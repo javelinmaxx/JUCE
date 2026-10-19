@@ -58,10 +58,12 @@ public:
         ring = theme.grid;
         knobTop = theme.knobTop;
         knobBottom = theme.knobBottom;
+        marking = theme.secondary;
     }
 private:
     juce::Colour accent { 0xff168aad };
     juce::Colour ring { 0xff38434e }, knobTop { 0xff46515e }, knobBottom { 0xff1b242d };
+    juce::Colour marking { 0xff92a0ad };
 };
 
 class CharacterCompressorEditor final : public juce::AudioProcessorEditor, private juce::Timer

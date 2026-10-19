@@ -45,6 +45,8 @@ CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcess
         addAndMakeVisible (slider);
         addAndMakeVisible (labels[i]);
         attachments[i] = std::make_unique<State::SliderAttachment> (p.parameters, ids[i], slider);
+        if (i == 2)
+            slider.setSkewFactorFromMidPoint (4.0);
     }
     sliders[8].setTooltip ("High-pass filter in the detector only. 0 Hz disables it.");
     sliders[9].setTooltip ("Core drive adds saturation before the transformer filters. Generated distortion rolls off above 500 Hz; clean highs pass through.");
@@ -395,6 +397,36 @@ void CompressorLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
                     centre.x + std::sin (tickAngle) * outer, centre.y - std::cos (tickAngle) * outer,
                     major ? 1.25f : 0.8f);
     }
+    const bool isThreshold = slider.getName() == "THRESHOLD";
+    const bool isRatio = slider.getName() == "RATIO";
+    if (isThreshold || isRatio)
+    {
+        const std::array<float, 8> thresholdValues { -60, -50, -40, -30, -20, -10, 0, 0 };
+        const std::array<float, 8> ratioValues { 1, 1.4f, 2, 3, 5, 8, 12, 20 };
+        const std::array<const char*, 8> thresholdLabels { "-60", "-50", "-40", "-30", "-20", "-10", "0", "" };
+        const std::array<const char*, 8> ratioLabels { "1", "1.4", "2", "3", "5", "8", "12", "20" };
+        const auto count = isThreshold ? 7 : 8;
+        g.setFont (juce::FontOptions (8.5f));
+        for (size_t i = 0; i < static_cast<size_t> (count); ++i)
+        {
+            const auto proportion = slider.valueToProportionOfLength (isThreshold ? thresholdValues[i] : ratioValues[i]);
+            const auto tickAngle = start + static_cast<float> (proportion) * (end - start);
+            const auto labelRadius = radius + 5.0f;
+            const auto px = centre.x + std::sin (tickAngle) * labelRadius;
+            const auto py = centre.y - std::cos (tickAngle) * labelRadius;
+            const auto label = isThreshold ? thresholdLabels[i] : ratioLabels[i];
+            auto labelBounds = juce::Rectangle<float> (px - 12.0f, py - 6.0f, 24.0f, 12.0f);
+            labelBounds.setX (juce::jlimit (static_cast<float> (x), static_cast<float> (x + width) - labelBounds.getWidth(), labelBounds.getX()));
+            labelBounds.setY (juce::jlimit (static_cast<float> (y), static_cast<float> (y + height) - labelBounds.getHeight(), labelBounds.getY()));
+            g.setColour (marking.withAlpha (0.95f));
+            g.drawText (label, labelBounds, juce::Justification::centred, false);
+            g.setColour (marking.withAlpha (0.8f));
+            g.fillEllipse (px - 1.4f, py - 1.4f, 2.8f, 2.8f);
+        }
+        g.setColour (marking.withAlpha (0.95f));
+        g.setFont (juce::FontOptions (8.0f).withStyle ("bold"));
+        g.drawText (isThreshold ? "dB" : ":1", x, y + height - 14, width, 12, juce::Justification::centred);
+    }
     juce::Path arc;
     arc.addCentredArc (centre.x, centre.y, radius, radius, 0, start, end, true);
     g.setColour (ring.withAlpha (0.78f));
@@ -555,7 +587,9 @@ void CharacterCompressorEditor::resized()
     const auto place = [this] (size_t index, int x, int y, int width, int height)
     {
         labels[index].setBounds (x, y, width, 20);
-        if (width <= 80)
+        if (index == 1 || index == 2)
+            sliders[index].setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+        else if (width <= 80)
         {
             labels[index].setFont (juce::FontOptions (9.0f));
             sliders[index].setTextBoxStyle (juce::Slider::TextBoxBelow, false, width, 20);
@@ -564,12 +598,13 @@ void CharacterCompressorEditor::resized()
             sliders[index].setTextBoxStyle (juce::Slider::TextBoxBelow, false, std::min (width, 100), 22);
         sliders[index].setBounds (x, y + 20, width, height);
     };
-    place (1, 24, 207, 92, 82);
-    place (2, 122, 207, 92, 82);
-    place (5, 220, 207, 92, 56);
-    place (3, 34, 316, 72, 66);
-    place (4, 124, 316, 72, 66);
-    place (12, 214, 316, 72, 56);
+    place (1, 20, 207, 104, 104);
+    place (2, 126, 207, 104, 104);
+    place (5, 236, 207, 76, 56);
+    place (3, 34, 330, 72, 66);
+    place (4, 124, 330, 72, 66);
+    place (12, 214, 330, 72, 56);
+    labels[1].setText ("THRES", juce::dontSendNotification);
     place (8, 28, 460, 80, 78);
     place (13, 116, 460, 80, 78);
     place (9, 34, 612, 74, 104);
