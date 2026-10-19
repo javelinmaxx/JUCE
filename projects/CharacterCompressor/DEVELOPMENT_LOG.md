@@ -373,3 +373,13 @@ implementation, not a production-release claim.
 - Updated transformer response documentation and the focused measurement
   results. The complete JUCE/CMake build was unavailable in this environment;
   focused C++ DSP and measurement-script verification is being run directly.
+
+### 2026-10-19 — dedicated upward-compression plot
+
+- Added a standalone measurement script and C++ bridge that render the current
+  production compressor with Upward enabled across input levels for all four
+  models. The resulting figure shows input/output transfer and gain below the
+  −18 dBFS threshold at a 4:1 ratio; CSV and JSON results accompany the PNG/SVG.
+- Verified the expected unity response above threshold and gain increase below
+  threshold. At −30 dBFS, measured boost is approximately 9 dB for FET, VCA,
+  and Optical, and 7.86 dB for Variable-mu's progressive curve.

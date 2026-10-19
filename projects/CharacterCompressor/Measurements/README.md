@@ -13,6 +13,7 @@ reports were also regenerated from the current source.
 - [Compression curves](plots/01_compression_curves.png): DC transfer and 1 kHz sine gain reduction.
 - [Attack and recovery](plots/02_attack_release.png): a controlled upward/downward level step.
 - [Transformer character](plots/03_transformer.png): waveforms, harmonics, small-signal response, and aliasing.
+- [Upward compression](plots/04_upward_compression.png): measured transfer and gain curves for all four models with upward mode enabled.
 - [Three-page PDF](plots/character_compressor_report.pdf); SVG versions are also in `plots/`.
 
 ## Conditions and interpretation
@@ -70,6 +71,7 @@ repository root:
 
 ```bash
 python3 projects/CharacterCompressor/Measurements/plot_characteristics.py
+python3 projects/CharacterCompressor/Measurements/plot_upward_compression.py
 ```
 
 The bridge is compiled with `-O3` (without fast-math) into a temporary directory.
@@ -80,6 +82,8 @@ against the current 2× output. Outputs go into `Measurements/plots/`:
 - `static_curves.csv`: transfer and sine gain-reduction data.
 - `measurements.npz`: full dynamics, waveform, harmonic, and frequency data.
 - `metrics.json`: measured timings, configuration, source commit, and DSP SHA-256.
+- `04_upward_compression.png` / `.svg`, `upward_compression.csv`, and
+  `upward_compression.json`: the dedicated upward-mode transfer report.
 
 PNG, vector SVG, and multipage PDF figures are exported. The source commit and
 DSP hashes are recorded in `plots/metrics.json` for reproducibility.
