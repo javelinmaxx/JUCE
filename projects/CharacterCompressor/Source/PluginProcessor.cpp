@@ -3,8 +3,8 @@
 
 namespace
 {
-constexpr std::array<const char*, 19> ids { "model", "input", "threshold", "ratio", "attack",
-    "release", "knee", "output", "mix", "sidechain", "drive", "transformer", "bypass", "highTilt", "upward", "stereoLink", "midSide", "evenHarmonics", "variTransient" };
+constexpr std::array<const char*, 20> ids { "model", "input", "threshold", "ratio", "attack",
+    "release", "knee", "output", "mix", "sidechain", "drive", "transformer", "bypass", "highTilt", "upward", "stereoLink", "midSide", "evenHarmonics", "variTransient", "scHighTilt" };
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout CharacterCompressorProcessor::layout()
@@ -38,7 +38,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout CharacterCompressorProcessor
         "Bypass", false));
     // Append with a newer AU version hint to preserve existing automation order.
     result.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "highTilt", 2 },
-        "Sidechain high tilt", false));
+        "Legacy sidechain high tilt", false));
     result.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "upward", 3 },
         "Upward compression", false));
     result.add (std::make_unique<juce::AudioParameterFloat> (juce::ParameterID { "stereoLink", 1 },
@@ -52,6 +52,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout CharacterCompressorProcessor
     result.add (std::make_unique<juce::AudioParameterFloat> (juce::ParameterID { "variTransient", 5 },
         "VariTransient", juce::NormalisableRange<float> (0, 400, 1), 0,
         juce::AudioParameterFloatAttributes().withLabel ("%")));
+    result.add (std::make_unique<juce::AudioParameterFloat> (juce::ParameterID { "scHighTilt", 6 },
+        "SC High Tilt", juce::NormalisableRange<float> (0, 12, 0.1f), 0,
+        juce::AudioParameterFloatAttributes().withLabel ("dB")));
     return result;
 }
 
@@ -74,7 +77,7 @@ character::Parameters CharacterCompressorProcessor::readParameters() const noexc
     p.outputDb = value (7); p.mix = value (8) * 0.01f;
     p.sidechainHz = value (9); p.driveDb = value (10);
     p.transformer = value (11) >= 0.5f; p.bypass = value (12) >= 0.5f;
-    p.highTilt = value (13) >= 0.5f;
+    p.highTiltDb = value (19);
     p.upward = value (14) >= 0.5f;
     p.stereoLink = value (15);
     p.midSide = value (16) >= 0.5f;
@@ -148,14 +151,24 @@ void CharacterCompressorProcessor::setStateInformation (const void* data, int si
         if (xml->hasTagName (parameters.state.getType()))
         {
             auto state = juce::ValueTree::fromXml (*xml);
-            // Older sessions must restore the new shelf as off, even if it was
-            // enabled before loading the session into this instance.
+            // Older sessions store this switch as a boolean. Keep that legacy
+            // state field, then migrate it to an equivalent shelf amount below.
             if (! state.getChildWithProperty ("id", "highTilt").isValid())
             {
                 juce::ValueTree tilt { "PARAM" };
                 tilt.setProperty ("id", "highTilt", nullptr);
                 tilt.setProperty ("value", 0.0f, nullptr);
                 state.appendChild (tilt, nullptr);
+            }
+            if (! state.getChildWithProperty ("id", "scHighTilt").isValid())
+            {
+                const auto legacyTilt = state.getChildWithProperty ("id", "highTilt");
+                const auto legacyEnabled = legacyTilt.isValid()
+                    && static_cast<float> (legacyTilt.getProperty ("value", 0.0f)) >= 0.5f;
+                juce::ValueTree tiltAmount { "PARAM" };
+                tiltAmount.setProperty ("id", "scHighTilt", nullptr);
+                tiltAmount.setProperty ("value", legacyEnabled ? 6.0f : 0.0f, nullptr);
+                state.appendChild (tiltAmount, nullptr);
             }
             if (! state.getChildWithProperty ("id", "upward").isValid())
             {

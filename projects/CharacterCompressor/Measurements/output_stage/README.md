@@ -61,13 +61,15 @@ floor, so the filter-ratio plot uses measurable odd harmonics.
 
 ## High Tilt
 
-The switch enables a +6 dB high shelf in the compressor's sidechain, after the
-detector HPF and before rectification/stereo linking. Its midpoint is 1.5 kHz
-(+3 dB), with RBJ shelf slope S = 1. The detector shelf runs continuously and
-crossfades with the unfiltered detector signal over approximately 20 ms. It
-defaults off; automation/state saving are supported. Old sessions without the
-new parameter restore it as off. It affects all four gain-control models and
-does not directly EQ the audio path. Reported latency remains 64 samples.
+The SC High Tilt knob sets a 0–12 dB high shelf in the compressor's sidechain,
+after the detector HPF and before rectification/stereo linking. These checks use
+the 6 dB setting, whose 1.5 kHz midpoint is +3 dB; the 12 dB maximum has a
++6 dB midpoint and +12 dB high-frequency plateau. The RBJ shelf slope is S = 1.
+The detector shelf runs continuously while its amount is smoothed over
+approximately 20 ms. The knob defaults to 0 dB; automation/state saving are
+supported. Sessions with the previous switch enabled migrate to 6 dB, while
+older sessions without it restore to 0 dB. It affects all four gain-control
+models and does not directly EQ the audio path. Reported latency remains 64 samples.
 
 Measured at −60 dBFS peak, 48 kHz:
 

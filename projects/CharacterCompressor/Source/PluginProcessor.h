@@ -38,6 +38,6 @@ private:
     void process (juce::AudioBuffer<float>&, bool hostBypassed);
     character::Compressor engine;
     // Cache parameter pointers once; no string lookup/allocation in processBlock.
-    std::array<std::atomic<float>*, 19> raw {};
+    std::array<std::atomic<float>*, 20> raw {};
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (CharacterCompressorProcessor)
 };

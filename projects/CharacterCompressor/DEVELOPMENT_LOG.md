@@ -327,7 +327,7 @@ DSP checks cover steady-state FET/VCA ratios, the variable-mu progressive curve,
 optical steady-state behavior, unity ratio, stereo linking, block-size invariance,
 dry mix, exact bypass, automation transitions, transformer harmonics/DC rejection,
 reset, invalid inputs, and finite output at extreme settings from 8–192 kHz.
-Processor checks cover all 19 parameter registrations, mono/stereo layout rules,
+Processor checks cover all 20 parameter registrations, mono/stereo layout rules,
 state recall, malformed-state rejection, actual processing, host bypass,
 64-sample latency, empty buffers, and optional editor construction/rendering.
 
@@ -444,3 +444,17 @@ implementation, not a production-release claim.
 - Editor integration passed 260 checks and the VST3 target built. Updated
   previews were rendered for all eight model/Upward palette combinations; the
   preview renderer verified each image's palette colors and saved all files.
+
+### 2026-10-19 — sidechain controls and compressor UI hierarchy
+
+- Reduced Knee and VariTransient knob sizes. Moved Upward into the Compressor
+  section with Threshold/Knee/Ratio, placed Bypass beside the plug-in title,
+  and kept VariTransient between Attack and Release.
+- Added a Sidechain section containing Detector HPF, SC High Tilt, and Mid/Side.
+  SC High Tilt is now a 0–12 dB knob, defaulting to 0 dB. The previous boolean
+  host parameter remains for old sessions; enabled states migrate to 6 dB.
+- Grouped Transformer, Iron Drive, and Even harmonics in Transformer Stage;
+  regenerated all eight previews with the final layout.
+- Built the Linux VST3. The full three-suite CTest run passed; editor layout
+  checks passed (266), focused output-stage checks passed (30), and output-stage
+  measurements regenerated with verification passed.

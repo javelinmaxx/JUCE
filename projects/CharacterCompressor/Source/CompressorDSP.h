@@ -18,9 +18,9 @@ struct Parameters
     Model model = Model::fet;
     float inputDb = 0, thresholdDb = -18, ratio = 4, attackMs = 10;
     float releaseMs = 150, kneeDb = 6, outputDb = 0, mix = 1;
-    float sidechainHz = 80, driveDb = 6, stereoLink = 100, evenHarmonics = 0;
+    float sidechainHz = 80, driveDb = 6, stereoLink = 100, evenHarmonics = 0, highTiltDb = 0;
     float variTransient = 0;
-    bool transformer = false, bypass = false, highTilt = false, upward = false, midSide = false;
+    bool transformer = false, bypass = false, upward = false, midSide = false;
 };
 
 // No allocation, locks, host calls, or GUI dependencies in the processing path.
@@ -86,12 +86,13 @@ public:
         p.driveDb = safe (p.driveDb, 0, 18, 6);
         p.stereoLink = safe (p.stereoLink, 0, 100, 100);
         p.evenHarmonics = safe (p.evenHarmonics, 0, 100, 0);
+        p.highTiltDb = safe (p.highTiltDb, 0, 12, 0);
         p.variTransient = safe (p.variTransient, 0, 400, 0);
         selected = std::clamp (static_cast<int> (p.model), 0, 3);
         targets = { gain (p.inputDb), p.thresholdDb, p.ratio, p.kneeDb,
                     gain (p.outputDb), p.mix, gain (p.driveDb),
                     p.transformer ? 1.0f : 0.0f, p.bypass ? 1.0f : 0.0f,
-                    p.highTilt ? 1.0f : 0.0f, p.upward ? 1.0f : 0.0f,
+                    p.highTiltDb, p.upward ? 1.0f : 0.0f,
                     p.stereoLink * 0.01f, p.midSide ? 1.0f : 0.0f,
                     p.evenHarmonics * 0.01f, p.variTransient * 0.0025f };
         // This one-pole HPF affects only the detector. High Tilt is a separate
@@ -129,6 +130,8 @@ public:
         if (channelCount == 0 || frames <= 0)
             return;
 
+        for (auto& shelf : sidechainShelves)
+            shelf.setGainDb (values[highTilt]);
         meterReduction = 0;
         for (int sample = 0; sample < frames; ++sample)
         {
@@ -167,8 +170,7 @@ public:
                 const auto sidechain = hpEnabled ? hp : driven[c];
                 // Tilt only the signed detector signal, before rectification
                 // and stereo linking. Keep filter history warm when disabled.
-                const auto tilted = sidechainShelves[c].process (sidechain);
-                const auto sensed = sidechain + values[highTilt] * (tilted - sidechain);
+                const auto sensed = sidechainShelves[c].process (sidechain);
                 // Peak-link the processed left/right detector signals. Every
                 // model then sees the same control envelope, preserving stereo.
                 sensedDetector[c] = std::abs (sensed);

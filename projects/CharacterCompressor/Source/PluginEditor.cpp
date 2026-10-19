@@ -11,24 +11,21 @@ CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcess
     addAndMakeVisible (model);
     addAndMakeVisible (transformer);
     addAndMakeVisible (bypass);
-    addAndMakeVisible (highTilt);
     addAndMakeVisible (upward);
     addAndMakeVisible (midSide);
     modelAttachment = std::make_unique<State::ComboBoxAttachment> (p.parameters, "model", model);
     transformerAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "transformer", transformer);
     bypassAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "bypass", bypass);
-    tiltAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "highTilt", highTilt);
     upwardAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "upward", upward);
     midSideAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "midSide", midSide);
-    highTilt.setTooltip ("Sidechain high shelf: +3 dB at 1.5 kHz, rising to +6 dB. Increases high-frequency compression sensitivity; no direct output EQ.");
     upward.setTooltip ("Boosts levels below threshold toward it; ratio sets the below-threshold slope.");
 
-    const std::array<const char*, 13> ids { "input", "threshold", "ratio", "attack", "release",
-        "knee", "output", "mix", "sidechain", "drive", "stereoLink", "evenHarmonics", "variTransient" };
-    const std::array<const char*, 13> names { "INPUT", "THRESHOLD", "RATIO", "ATTACK", "RELEASE",
-        "KNEE", "OUTPUT", "MIX", "DETECTOR HPF", "TRANSFORMER DRIVE", "STEREO LINK", "EVEN HARMONICS", "VARITRANSIENT" };
-    const std::array<const char*, 13> units { " dB", " dB", ":1", " ms", " ms",
-        " dB", " dB", " %", " Hz", " dB", " %", " %", " %" };
+    const std::array<const char*, 14> ids { "input", "threshold", "ratio", "attack", "release",
+        "knee", "output", "mix", "sidechain", "drive", "stereoLink", "evenHarmonics", "variTransient", "scHighTilt" };
+    const std::array<const char*, 14> names { "INPUT", "THRESHOLD", "RATIO", "ATTACK", "RELEASE",
+        "KNEE", "OUTPUT", "MIX", "DETECTOR HPF", "TRANSFORMER DRIVE", "STEREO LINK", "EVEN HARMONICS", "VARITRANSIENT", "SC HIGH TILT" };
+    const std::array<const char*, 14> units { " dB", " dB", ":1", " ms", " ms",
+        " dB", " dB", " %", " Hz", " dB", " %", " %", " %", " dB" };
     for (size_t i = 0; i < sliders.size(); ++i)
     {
         auto& slider = sliders[i];
@@ -54,13 +51,13 @@ CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcess
     sliders[10].setTooltip ("Blends each channel's detector with the louder detector: 0% is independent, 100% is fully linked.");
     sliders[11].setTooltip ("Simulates transformer DC magnetizing current, increasing transfer asymmetry and even-order harmonics.");
     sliders[12].setTooltip ("GR-dependent attack and release: 0% has no effect; 400% reaches 4x attack and 1/4 release. Ramps through a 3 dB soft knee from 3 to 6 dB gain reduction. Disabled in upward mode.");
+    sliders[13].setTooltip ("Sidechain high-shelf boost from 0 to 12 dB. The shelf midpoint is 1.5 kHz; it changes compression sensitivity only and does not EQ the output.");
     midSide.setTooltip ("Encode stereo to Mid and Side before compression, then decode back to Left and Right.");
     modelDescription.setJustificationType (juce::Justification::centred);
     addAndMakeVisible (modelDescription);
     meters.setJustificationType (juce::Justification::centred);
     addAndMakeVisible (meters);
     transformer.snapToState();
-    highTilt.snapToState();
     bypass.snapToState();
     upward.snapToState();
     midSide.snapToState();
@@ -139,22 +136,44 @@ void AnimatedSwitch::paintButton (juce::Graphics& g, bool highlighted, bool down
         g.setColour (accent);
         g.drawRoundedRectangle (bounds, 7, 1);
     }
+    if (horizontal)
+    {
+        g.setColour (getToggleState() ? foreground : secondary);
+        g.setFont (juce::FontOptions (11.0f).withStyle ("bold"));
+        g.drawText (getButtonText(), 7, 0, getWidth() - 48, getHeight(), juce::Justification::centred);
+        const auto track = juce::Rectangle<float> (static_cast<float> (getWidth() - 39),
+            static_cast<float> (getHeight()) * 0.5f - 9, 34, 18);
+        g.setColour (secondary.withMultipliedBrightness (0.7f).interpolatedWith (accent, position));
+        g.fillRoundedRectangle (track, 9);
+        g.setColour (down ? juce::Colours::white : accent.contrasting());
+        g.fillEllipse (track.getX() + 2 + position * 14, track.getY() + 2, 14, 14);
+        if (hasKeyboardFocus (true))
+        {
+            g.setColour (accent);
+            g.drawRoundedRectangle (bounds, 7, 1);
+        }
+        return;
+    }
+
+    const auto titleHeight = std::min (42, juce::roundToInt (getHeight() * 0.32f));
     g.setColour (getToggleState() ? foreground : secondary);
     g.setFont (juce::FontOptions (11.0f));
-    g.drawFittedText (getButtonText(), getLocalBounds().reduced (5).withHeight (42),
+    g.drawFittedText (getButtonText(), getLocalBounds().reduced (5).withHeight (titleHeight),
                       juce::Justification::centred, 3);
     const auto trackWidth = 26.0f;
     const auto trackHeight = std::min (56.0f, static_cast<float> (getHeight()) * 0.38f);
+    const auto trackY = static_cast<float> (titleHeight) + 5.0f;
     const auto track = juce::Rectangle<float> (static_cast<float> (getWidth()) * 0.5f - trackWidth * 0.5f,
-        50.0f, trackWidth, trackHeight);
+        trackY, trackWidth, trackHeight);
     g.setColour (secondary.withMultipliedBrightness (0.7f).interpolatedWith (accent, position));
     g.fillRoundedRectangle (track, 11);
     g.setColour (down ? juce::Colours::white : accent.contrasting());
     g.fillEllipse (track.getCentreX() - 8, track.getBottom() - 19 - position * (trackHeight - 20), 16, 16);
     g.setColour (secondary);
     g.setFont (juce::FontOptions (10.0f));
-    g.drawText (getToggleState() ? "ON" : "OFF", 0, juce::roundToInt (track.getBottom()) + 5,
-                getWidth(), 20, juce::Justification::centred);
+    const auto statusY = juce::roundToInt (track.getBottom()) + 3;
+    g.drawText (getToggleState() ? "ON" : "OFF", 0, statusY, getWidth(),
+                std::max (0, getHeight() - statusY), juce::Justification::centredTop);
 }
 
 void CompressorLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int width, int height,
@@ -195,19 +214,22 @@ void CharacterCompressorEditor::paint (juce::Graphics& g)
     g.drawText ("CHARACTER AUDIO  /  DYNAMICS", 24, 18, 532, 20, juce::Justification::centredLeft);
     g.setColour (theme.text);
     g.setFont (juce::FontOptions (29.0f));
-    g.drawText ("Character Compressor", 24, 40, 532, 38, juce::Justification::centredLeft);
+    g.drawText ("Character Compressor", 24, 40, 430, 38, juce::Justification::centredLeft);
     g.setColour (theme.card);
-    g.fillRoundedRectangle (24, 170, 330, 150, 10);
-    g.fillRoundedRectangle (24, 454, 330, 214, 10);
+    g.fillRoundedRectangle (24, 170, 330, 306, 10);
+    g.fillRoundedRectangle (24, 490, 330, 164, 10);
+    g.fillRoundedRectangle (24, 670, 330, 256, 10);
     g.setColour (theme.text);
     g.setFont (juce::FontOptions (13.0f).withStyle ("bold"));
-    g.drawText ("TRANSFORMER STAGE", 38, 464, 300, 20, juce::Justification::centredLeft);
+    g.drawText ("COMPRESSOR", 38, 178, 220, 20, juce::Justification::centredLeft);
+    g.drawText ("SIDECHAIN", 38, 498, 280, 18, juce::Justification::centredLeft);
+    g.drawText ("TRANSFORMER STAGE", 38, 678, 300, 20, juce::Justification::centredLeft);
     g.setColour (theme.card);
     g.fillRoundedRectangle (376, 584, 180, 128, 10);
     g.setColour (theme.secondary);
     g.setFont (juce::FontOptions (10.0f).withStyle ("bold"));
     g.drawText ("OUTPUT  /  MIX  /  STEREO LINK", 382, 586, 168, 16, juce::Justification::centred);
-    for (const auto y : { 326, 442, 674 })
+    for (const auto y : { 482, 658 })
     {
         g.setColour (theme.grid);
         g.drawHorizontalLine (y, 24, 354);
@@ -276,10 +298,11 @@ void CharacterCompressorEditor::resized()
 {
     model.setBounds (24, 92, 532, 32);
     modelDescription.setBounds (24, 128, 532, 20);
+    bypass.setBounds (464, 42, 92, 36);
     const auto place = [this] (size_t index, int x, int y, int width, int height)
     {
         labels[index].setBounds (x, y, width, 20);
-        if (width < 80)
+        if (width <= 80)
         {
             labels[index].setFont (juce::FontOptions (9.0f));
             sliders[index].setTextBoxStyle (juce::Slider::TextBoxBelow, false, width, 20);
@@ -288,16 +311,17 @@ void CharacterCompressorEditor::resized()
             sliders[index].setTextBoxStyle (juce::Slider::TextBoxBelow, false, std::min (width, 100), 22);
         sliders[index].setBounds (x, y + 20, width, height);
     };
-    place (1, 24, 178, 104, 112);
-    place (5, 134, 178, 104, 112);
-    place (2, 244, 178, 104, 112);
-    place (3, 24, 326, 104, 90);
-    place (12, 134, 326, 104, 90);
-    place (4, 244, 326, 104, 90);
-    place (9, 36, 490, 96, 130);
-    place (11, 144, 490, 96, 130);
-    place (0, 24, 682, 154, 70);
-    place (8, 190, 682, 154, 70);
+    place (1, 24, 258, 104, 96);
+    place (5, 134, 258, 104, 70);
+    place (2, 244, 258, 104, 96);
+    place (3, 24, 376, 78, 76);
+    place (12, 106, 376, 78, 52);
+    place (4, 188, 376, 78, 76);
+    place (0, 270, 376, 78, 70);
+    place (8, 24, 514, 102, 98);
+    place (13, 134, 514, 102, 98);
+    place (9, 36, 698, 96, 140);
+    place (11, 144, 698, 96, 140);
     place (6, 376, 602, 60, 72);
     place (7, 436, 602, 60, 72);
     place (10, 496, 602, 60, 72);
@@ -305,12 +329,11 @@ void CharacterCompressorEditor::resized()
     labels[10].setText ("ST LINK", juce::dontSendNotification);
     labels[9].setText ("IRON DRIVE", juce::dontSendNotification);
     labels[11].setText ("EVEN HARMONICS", juce::dontSendNotification);
+    labels[13].setText ("SC HIGH TILT", juce::dontSendNotification);
     meters.setBounds (24, 150, 532, 20);
-    transformer.setBounds (250, 486, 92, 166);
-    highTilt.setBounds (24, 780, 78, 164);
-    upward.setBounds (106, 780, 78, 164);
-    bypass.setBounds (188, 780, 78, 164);
-    midSide.setBounds (270, 780, 78, 164);
+    upward.setBounds (268, 174, 78, 80);
+    midSide.setBounds (250, 510, 92, 132);
+    transformer.setBounds (250, 694, 92, 220);
 }
 
 void CharacterCompressorEditor::timerCallback()
@@ -319,7 +342,6 @@ void CharacterCompressorEditor::timerCallback()
     const auto elapsed = static_cast<float> (std::max (0.0, now - lastTick));
     lastTick = now;
     transformer.advance (elapsed);
-    highTilt.advance (elapsed);
     upward.advance (elapsed);
     midSide.advance (elapsed);
     bypass.advance (elapsed);
@@ -374,6 +396,6 @@ void CharacterCompressorEditor::applyTheme()
         slider.repaint();
     }
     for (auto& label : labels) label.setColour (juce::Label::textColourId, theme.text);
-    for (auto* control : { &transformer, &highTilt, &upward, &bypass, &midSide })
+    for (auto* control : { &transformer, &upward, &bypass, &midSide })
         control->setTheme (theme);
 }

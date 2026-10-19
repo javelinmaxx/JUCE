@@ -26,7 +26,7 @@ int runTests (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI juce;
     CharacterCompressorProcessor p;
-    check (p.getParameters().size() == 19, "all host parameters registered");
+    check (p.getParameters().size() == 20, "all host parameters registered");
     auto buses = p.getBusesLayout();
     buses.inputBuses.set (0, juce::AudioChannelSet::mono());
     buses.outputBuses.set (0, juce::AudioChannelSet::mono());
@@ -39,7 +39,8 @@ int runTests (int argc, char** argv)
 
     set (p, "model", 2); set (p, "threshold", -27); set (p, "ratio", 7);
     set (p, "transformer", 1); set (p, "drive", 12); set (p, "mix", 65);
-    set (p, "highTilt", 1); set (p, "evenHarmonics", 37.5f); set (p, "variTransient", 200);
+    set (p, "highTilt", 1); set (p, "scHighTilt", 8);
+    set (p, "evenHarmonics", 37.5f); set (p, "variTransient", 200);
     juce::MemoryBlock saved;
     p.getStateInformation (saved);
     CharacterCompressorProcessor restored;
@@ -127,9 +128,11 @@ int runTests (int argc, char** argv)
         check (editor->getNumChildComponents() >= 25, "editor contains controls and meters");
         juce::Slider *threshold = nullptr, *knee = nullptr, *ratio = nullptr;
         juce::Slider *attack = nullptr, *release = nullptr, *output = nullptr, *mix = nullptr;
-        AnimatedSwitch *transformer = nullptr, *highTilt = nullptr, *upward = nullptr;
+        AnimatedSwitch *transformer = nullptr, *upward = nullptr;
         AnimatedSwitch *bypass = nullptr, *midSide = nullptr;
         juce::Slider *stereoLink = nullptr, *evenHarmonics = nullptr, *variTransient = nullptr;
+        juce::Slider *detectorHpf = nullptr, *scHighTilt = nullptr, *input = nullptr;
+        juce::Slider *transformerDrive = nullptr;
         for (auto* child : editor->getChildren())
         {
             check (editor->getLocalBounds().contains (child->getBounds()), "controls fit inside portrait panel");
@@ -142,6 +145,10 @@ int runTests (int argc, char** argv)
                 if (slider->getName() == "RELEASE") release = slider;
                 if (slider->getName() == "OUTPUT") output = slider;
                 if (slider->getName() == "MIX") mix = slider;
+                if (slider->getName() == "INPUT") input = slider;
+                if (slider->getName() == "DETECTOR HPF") detectorHpf = slider;
+                if (slider->getName() == "SC HIGH TILT") scHighTilt = slider;
+                if (slider->getName() == "TRANSFORMER DRIVE") transformerDrive = slider;
                 if (slider->getName() == "STEREO LINK") stereoLink = slider;
                 if (slider->getName() == "EVEN HARMONICS") evenHarmonics = slider;
                 if (slider->getName() == "VARITRANSIENT") variTransient = slider;
@@ -149,16 +156,18 @@ int runTests (int argc, char** argv)
             if (auto* button = dynamic_cast<AnimatedSwitch*> (child))
             {
                 if (button->getButtonText() == "OUTPUT TRANSFORMER") transformer = button;
-                if (button->getButtonText() == "SC HIGH TILT +6 dB") highTilt = button;
                 if (button->getButtonText() == "UPWARD COMPRESSION") upward = button;
                 if (button->getButtonText() == "BYPASS") bypass = button;
                 if (button->getButtonText() == "MID / SIDE MODE") midSide = button;
             }
         }
         check (threshold && knee && ratio && attack && release && output && mix && transformer
-               && highTilt && upward && bypass && midSide && stereoLink && evenHarmonics && variTransient,
+               && upward && bypass && midSide && stereoLink && evenHarmonics && variTransient
+               && input && detectorHpf && scHighTilt && transformerDrive,
                "editor includes the complete knob and switch set");
-        check (threshold->getHeight() > attack->getHeight() && ratio->getHeight() > release->getHeight(),
+        check (threshold->getHeight() > attack->getHeight() && ratio->getHeight() > release->getHeight()
+               && knee->getHeight() < threshold->getHeight()
+               && variTransient->getHeight() < attack->getHeight(),
                "primary knobs are larger than timing knobs");
         check (threshold->getY() == knee->getY() && knee->getY() == ratio->getY()
                && threshold->getRight() <= knee->getX() && knee->getRight() <= ratio->getX(),
@@ -170,11 +179,21 @@ int runTests (int argc, char** argv)
                && output->getY() > 176 + 400,
                "output, mix, and stereo link sit below the shortened GR section");
         check (transformer->getHeight() > transformer->getWidth()
-               && highTilt->getHeight() > highTilt->getWidth()
                && upward->getHeight() > upward->getWidth()
-               && bypass->getHeight() > bypass->getWidth()
+               && bypass->getWidth() > bypass->getHeight()
+               && bypass->getY() < 80 && bypass->getX() > 450
                && midSide->getHeight() > midSide->getWidth(),
-               "all animated switches use a vertical layout");
+               "section toggles are vertical and bypass sits beside the title");
+        check (detectorHpf->getY() == scHighTilt->getY()
+               && midSide->getY() < detectorHpf->getBottom()
+               && midSide->getX() > scHighTilt->getRight(),
+               "sidechain section groups the detector HPF, tilt amount, and mid/side mode");
+        check (upward->getY() < threshold->getY() && input->getY() == attack->getY(),
+               "upward mode is in the compressor section with input control");
+        check (transformerDrive->getY() == evenHarmonics->getY()
+               && transformer->getY() < transformerDrive->getY()
+               && transformerDrive->getY() > midSide->getBottom(),
+               "transformer enable, Iron Drive, and Even harmonics share their section");
         GainReductionHistory history;
         for (int i = 0; i <= 360; ++i) history.push (i / 30.0, static_cast<float> (i % 31));
         int visible = 0;
@@ -250,7 +269,7 @@ int runOutputStageTests (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI juce;
     CharacterCompressorProcessor p;
-    check (p.getParameters().size() == 19, "stereo, mid/side, and transformer parameters registered");
+    check (p.getParameters().size() == 20, "all compressor parameters registered");
     auto* tilt = p.parameters.getParameter ("highTilt");
     check (tilt && tilt == p.getParameters()[13]
            && p.parameters.getParameter ("upward") == p.getParameters()[14],
@@ -264,6 +283,12 @@ int runOutputStageTests (int argc, char** argv)
     check (p.parameters.getParameter ("variTransient") == p.getParameters()[18]
            && exact (p.parameters.getRawParameterValue ("variTransient")->load(), 0.0f),
            "VariTransient is appended and defaults to no envelope change");
+    const auto* tiltAmount = dynamic_cast<juce::RangedAudioParameter*> (
+        p.parameters.getParameter ("scHighTilt"));
+    check (tiltAmount && p.parameters.getParameter ("scHighTilt") == p.getParameters()[19]
+           && exact (p.parameters.getRawParameterValue ("scHighTilt")->load(), 0.0f)
+           && std::abs (tiltAmount->getNormalisableRange().end - 12.0f) < 0.001f,
+           "SC High Tilt is appended and spans 0 to 12 dB");
     check (exact (tilt->getValue(), 0.0f), "high tilt defaults off");
     set (p, "ratio", 1); set (p, "highTilt", 1);
     juce::MemoryBlock saved;
@@ -274,9 +299,18 @@ int runOutputStageTests (int argc, char** argv)
            "high tilt restored from saved state");
 
     auto oldState = p.parameters.copyState();
+    oldState.removeChild (oldState.getChildWithProperty ("id", "scHighTilt"), nullptr);
+    juce::MemoryBlock legacyEnabled;
+    juce::AudioProcessor::copyXmlToBinary (*oldState.createXml(), legacyEnabled);
+    restored.setStateInformation (legacyEnabled.getData(), static_cast<int> (legacyEnabled.getSize()));
+    check (exact (restored.parameters.getRawParameterValue ("scHighTilt")->load(), 6.0f),
+           "legacy enabled sidechain shelf migrates to its previous 6 dB setting");
+
+    oldState = p.parameters.copyState();
     oldState.removeChild (oldState.getChildWithProperty ("id", "highTilt"), nullptr);
     oldState.removeChild (oldState.getChildWithProperty ("id", "evenHarmonics"), nullptr);
     oldState.removeChild (oldState.getChildWithProperty ("id", "variTransient"), nullptr);
+    oldState.removeChild (oldState.getChildWithProperty ("id", "scHighTilt"), nullptr);
     juce::MemoryBlock legacy;
     juce::AudioProcessor::copyXmlToBinary (*oldState.createXml(), legacy);
     restored.setStateInformation (legacy.getData(), static_cast<int> (legacy.getSize()));
@@ -288,6 +322,8 @@ int runOutputStageTests (int argc, char** argv)
            "legacy state defaults transformer DC current to off");
     check (exact (restored.parameters.getRawParameterValue ("variTransient")->load(), 0.0f),
            "legacy state defaults VariTransient to no envelope change");
+    check (exact (restored.parameters.getRawParameterValue ("scHighTilt")->load(), 0.0f),
+           "legacy disabled tilt migrates to 0 dB");
 
     // A real processBlock render verifies that host automation reaches the DSP.
     restored.prepareToPlay (48000, 256);
@@ -295,7 +331,7 @@ int runOutputStageTests (int argc, char** argv)
     juce::MidiBuffer midi;
     const auto render = [&] (bool enabled)
     {
-        set (restored, "highTilt", enabled ? 1.0f : 0.0f);
+        set (restored, "scHighTilt", enabled ? 12.0f : 0.0f);
         double energy = 0;
         for (int block = 0; block < 120; ++block)
         {

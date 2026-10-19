@@ -56,12 +56,12 @@ four models through this branch; it does not EQ the audio output.
   default. Increasing it biases the core response and adds asymmetric
   distortion and even-order harmonics. It is independently automatable and
   saved with the session.
-- **SC High Tilt:** sidechain high shelf, off by default. The 1.5 kHz
-  midpoint has +3 dB gain, rising smoothly to +6 dB at high frequencies (shelf
-  slope S = 1). It follows the detector HPF and increases high-frequency
-  compression sensitivity. It changes the output only through gain reduction,
-  with no direct effect at ratio 1:1. Switching crossfades the detector signal
-  over approximately 20 ms. Older sessions restore High Tilt as off.
+- **SC High Tilt:** sidechain high-shelf amount from 0 to 12 dB, off by default.
+  The shelf midpoint is 1.5 kHz; at 12 dB, the midpoint is +6 dB and the high
+  frequencies reach +12 dB. It follows the detector HPF and changes compression
+  sensitivity only, with no direct output EQ. Older sessions with the previous
+  switch enabled migrate to 6 dB, preserving its former +3 dB midpoint / +6 dB
+  high-frequency shelf. The old host parameter remains for session compatibility.
 
 All models remain running while selected model weights crossfade. Continuous
 gain controls and toggle transitions are smoothed over approximately 20 ms.
@@ -70,23 +70,27 @@ Mono and stereo layouts are supported, with no lookahead and a fixed
 The transformer, clean output, and bypass paths retain this latency even when
 the transformer is disabled. Both resampling filters have 257 taps; only the
 transformer stage runs at 4×, and its filter coefficients use that higher rate.
-Host automation and session state recall cover all 19 parameters. Existing
+Host automation and session state recall cover all 20 parameters. Existing
 parameter IDs/order are retained; High Tilt, Upward, Stereo Link, Mid/Side,
-Even harmonics, and VariTransient are appended. AU version hints 2, 3, 4, and 5
-mark the compatible additions. There is no external sidechain, oversampling selector,
+Even harmonics, VariTransient, and SC High Tilt are appended. AU version hints
+2, 3, 4, 5, and 6 mark the compatible additions. There is no external
+sidechain, oversampling selector,
 automatic makeup gain, or preset browser yet.
 
 The 580 × 980 portrait editor places Threshold, Knee, and Ratio in that order,
-with VariTransient between Attack and Release. The shortened right-hand GR
+with Upward in the Compressor section and VariTransient between Attack and
+Release. Knee and VariTransient use smaller knobs. The shortened right-hand GR
 display pairs a vertical 0–30 dB meter with a scrolling five-second history;
-Output, Mix, and Stereo Link sit directly below it. Input and Detector HPF are
-in the lower left. Transformer enable, Iron Drive, and Even harmonics share a
-Transformer Stage section. All five animated switches use vertical toggles.
-The history line runs oldest at left to current at right.
+Output, Mix, and Stereo Link sit directly below it. Bypass is a button beside
+the plug-in name. Sidechain combines Detector HPF, SC High Tilt, and Mid/Side.
+Transformer enable, Iron Drive, and Even harmonics share a Transformer Stage
+section. The other section toggles are vertical. The history line runs oldest
+at left to current at right.
 The display samples gain reduction at 30 Hz while the editor is open; timestamps
 keep the window at five seconds even if UI updates are delayed. Closing the
-editor clears its display history. Transformer, High Tilt, Upward, and bypass
-use animated switches with keyboard access and host automation. Each model has
+editor clears its display history. Transformer, Upward, and Mid/Side use
+vertical animated switches; Bypass is an animated button. All retain keyboard
+access and host automation. Each model has
 its own palette: FET charcoal with gold GR, VCA blue with white GR,
 Variable-mu light green with white GR, and Optical white with red GR. Upward
 swaps each model's control and GR colors, resets the trace, and labels the
