@@ -13,20 +13,22 @@ CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcess
     addAndMakeVisible (bypass);
     addAndMakeVisible (highTilt);
     addAndMakeVisible (upward);
+    addAndMakeVisible (midSide);
     modelAttachment = std::make_unique<State::ComboBoxAttachment> (p.parameters, "model", model);
     transformerAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "transformer", transformer);
     bypassAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "bypass", bypass);
     tiltAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "highTilt", highTilt);
     upwardAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "upward", upward);
+    midSideAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "midSide", midSide);
     highTilt.setTooltip ("Sidechain high shelf: +3 dB at 1.5 kHz, rising to +6 dB. Increases high-frequency compression sensitivity; no direct output EQ.");
     upward.setTooltip ("Boosts levels below threshold toward it; ratio sets the below-threshold slope.");
 
-    const std::array<const char*, 10> ids { "input", "threshold", "ratio", "attack", "release",
-        "knee", "output", "mix", "sidechain", "drive" };
-    const std::array<const char*, 10> names { "INPUT", "THRESHOLD", "RATIO", "ATTACK", "RELEASE",
-        "KNEE", "OUTPUT", "MIX", "DETECTOR HPF", "TRANSFORMER DRIVE" };
-    const std::array<const char*, 10> units { " dB", " dB", ":1", " ms", " ms",
-        " dB", " dB", " %", " Hz", " dB" };
+    const std::array<const char*, 11> ids { "input", "threshold", "ratio", "attack", "release",
+        "knee", "output", "mix", "sidechain", "drive", "stereoLink" };
+    const std::array<const char*, 11> names { "INPUT", "THRESHOLD", "RATIO", "ATTACK", "RELEASE",
+        "KNEE", "OUTPUT", "MIX", "DETECTOR HPF", "TRANSFORMER DRIVE", "STEREO LINK" };
+    const std::array<const char*, 11> units { " dB", " dB", ":1", " ms", " ms",
+        " dB", " dB", " %", " Hz", " dB", " %" };
     for (size_t i = 0; i < sliders.size(); ++i)
     {
         auto& slider = sliders[i];
@@ -49,6 +51,8 @@ CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcess
     }
     sliders[8].setTooltip ("High-pass filter in the detector only. 0 Hz disables it.");
     sliders[9].setTooltip ("Transformer saturation drive. Generated distortion rolls off above 500 Hz; clean highs pass through.");
+    sliders[10].setTooltip ("Blends each channel's detector with the louder detector: 0% is independent, 100% is fully linked.");
+    midSide.setTooltip ("Encode stereo to Mid and Side before compression, then decode back to Left and Right.");
     modelDescription.setJustificationType (juce::Justification::centred);
     addAndMakeVisible (modelDescription);
     meters.setJustificationType (juce::Justification::centred);
@@ -57,8 +61,9 @@ CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcess
     highTilt.snapToState();
     bypass.snapToState();
     upward.snapToState();
+    midSide.snapToState();
     lastTick = juce::Time::getMillisecondCounterHiRes() * 0.001;
-    setSize (580, 940);
+    setSize (580, 980);
     timerCallback();
     startTimerHz (30);
 }
@@ -272,6 +277,7 @@ void CharacterCompressorEditor::resized()
     place (5, 24, 634, 110, 88);
     place (8, 134, 634, 110, 88);
     place (9, 244, 634, 110, 88);
+    place (10, 354, 634, 110, 88);
     // The long drive label needs a compact caption at the secondary control size.
     labels[9].setText ("IRON DRIVE", juce::dontSendNotification);
     meters.setBounds (24, 742, 532, 20);
@@ -279,6 +285,7 @@ void CharacterCompressorEditor::resized()
     highTilt.setBounds (24, 806, 532, 36);
     upward.setBounds (24, 846, 532, 36);
     bypass.setBounds (24, 886, 532, 36);
+    midSide.setBounds (24, 926, 532, 36);
 }
 
 void CharacterCompressorEditor::timerCallback()
@@ -289,6 +296,7 @@ void CharacterCompressorEditor::timerCallback()
     transformer.advance (elapsed);
     highTilt.advance (elapsed);
     upward.advance (elapsed);
+    midSide.advance (elapsed);
     bypass.advance (elapsed);
     const auto upwardMode = upward.getToggleState();
     const auto modelIndex = std::clamp (model.getSelectedItemIndex(), 0, 3);
@@ -341,6 +349,6 @@ void CharacterCompressorEditor::applyTheme()
         slider.repaint();
     }
     for (auto& label : labels) label.setColour (juce::Label::textColourId, theme.text);
-    for (auto* control : { &transformer, &highTilt, &upward, &bypass })
+    for (auto* control : { &transformer, &highTilt, &upward, &bypass, &midSide })
         control->setTheme (theme);
 }

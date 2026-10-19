@@ -18,8 +18,8 @@ struct Parameters
     Model model = Model::fet;
     float inputDb = 0, thresholdDb = -18, ratio = 4, attackMs = 10;
     float releaseMs = 150, kneeDb = 6, outputDb = 0, mix = 1;
-    float sidechainHz = 80, driveDb = 6;
-    bool transformer = false, bypass = false, highTilt = false, upward = false;
+    float sidechainHz = 80, driveDb = 6, stereoLink = 100;
+    bool transformer = false, bypass = false, highTilt = false, upward = false, midSide = false;
 };
 
 // No allocation, locks, host calls, or GUI dependencies in the processing path.
@@ -83,11 +83,13 @@ public:
         p.mix = safe (p.mix, 0, 1, 1);
         p.sidechainHz = safe (p.sidechainHz, 0, 300, 80);
         p.driveDb = safe (p.driveDb, 0, 18, 6);
+        p.stereoLink = safe (p.stereoLink, 0, 100, 100);
         selected = std::clamp (static_cast<int> (p.model), 0, 3);
         targets = { gain (p.inputDb), p.thresholdDb, p.ratio, p.kneeDb,
                     gain (p.outputDb), p.mix, gain (p.driveDb),
                     p.transformer ? 1.0f : 0.0f, p.bypass ? 1.0f : 0.0f,
-                    p.highTilt ? 1.0f : 0.0f, p.upward ? 1.0f : 0.0f };
+                    p.highTilt ? 1.0f : 0.0f, p.upward ? 1.0f : 0.0f,
+                    p.stereoLink * 0.01f, p.midSide ? 1.0f : 0.0f };
         // This one-pole HPF affects only the detector. High Tilt is a separate
         // shelf applied to the signed sidechain after this HPF.
         hpEnabled = p.sidechainHz > 0;
@@ -138,13 +140,20 @@ public:
                 weights[m] = (1 - smoothing) * (static_cast<int> (m) == selected ? 1.0f : 0.0f)
                            + smoothing * weights[m];
 
-            std::array<float, 2> dry {}, driven {};
-            float detector = 0;
+            std::array<float, 2> dry {}, driven {}, sensedDetector {};
+            std::array<float, 2> detector {};
+            const auto encode = values[midSide] * 0.7071067811865475f;
             for (int ch = 0; ch < channelCount; ++ch)
             {
                 const auto c = static_cast<size_t> (ch);
-                const auto raw = channels[ch][sample];
-                dry[c] = std::isfinite (raw) ? raw : 0;
+                auto raw = std::isfinite (channels[ch][sample]) ? channels[ch][sample] : 0.0f;
+                if (channelCount == 2 && values[midSide] > 0)
+                {
+                    const auto other = std::isfinite (channels[1 - ch][sample]) ? channels[1 - ch][sample] : 0.0f;
+                    raw = raw * (1.0f - values[midSide])
+                        + (ch == 0 ? raw + other : raw - other) * encode;
+                }
+                dry[c] = raw;
                 // Input gain feeds the compressor branch. The untouched input
                 // is retained separately for the wet/dry mix and host bypass.
                 driven[c] = std::clamp (dry[c] * values[input], -64.0f, 64.0f);
@@ -158,22 +167,29 @@ public:
                 const auto sensed = sidechain + values[highTilt] * (tilted - sidechain);
                 // Peak-link the processed left/right detector signals. Every
                 // model then sees the same control envelope, preserving stereo.
-                detector = std::max (detector, std::abs (sensed));
+                sensedDetector[c] = std::abs (sensed);
             }
+            const auto linkedPeak = channelCount == 2 ? std::max (sensedDetector[0], sensedDetector[1])
+                                                      : sensedDetector[0];
+            for (int ch = 0; ch < channelCount; ++ch)
+                detector[static_cast<size_t> (ch)] = sensedDetector[static_cast<size_t> (ch)]
+                    + values[stereoLink] * (linkedPeak - sensedDetector[static_cast<size_t> (ch)]);
 
             // Run every model continuously and fade their gain contributions
             // using the 20 ms model weights. Switching models won't start a cold
             // detector or cause an abrupt change in the audio path.
-            float combinedGain = 0, reduction = 0;
-            for (size_t m = 0; m < states.size(); ++m)
+            std::array<float, 2> combinedGain {}, reduction {};
+            for (int ch = 0; ch < channelCount; ++ch)
+            for (size_t m = 0; m < states[0].size(); ++m)
             {
-                auto& s = states[m];
+                const auto c = static_cast<size_t> (ch);
+                auto& s = states[c][m];
                 // Feedback senses the previous compressed sidechain sample, before
                 // makeup gain and transformer. This gives a causal one-sample loop.
                 // FET and optical use feed-forward input level. VCA and mu use
                 // their own previous gain-reduced detector value as feedback.
                 const auto feedbackMix = (m == 1 || m == 2) ? 1.0f - values[upward] : 0.0f;
-                const auto sensed = detector + feedbackMix * (s.feedback - detector);
+                const auto sensed = detector[c] + feedbackMix * (s.feedback - detector[c]);
                 s.energy = rmsCoefficient * s.energy + (1 - rmsCoefficient) * sensed * sensed;
                 // FET/VCA use peak level. Mu/optical use a 10 ms exponential
                 // mean-square detector, converted back to RMS amplitude.
@@ -227,18 +243,19 @@ public:
                 const auto g = gain (-gr);
                 // Store this model's previous compressed detector level for
                 // the next feedback-model sample. Makeup gain is not in the loop.
-                s.feedback = detector * g;
-                combinedGain += weights[m] * g;
-                reduction += weights[m] * gr;
+                s.feedback = detector[c] * g;
+                combinedGain[c] += weights[m] * g;
+                reduction[c] += weights[m] * gr;
             }
-            meterReduction = std::max (meterReduction, std::abs (reduction) * (1 - values[bypass]));
+            for (int ch = 0; ch < channelCount; ++ch)
+                meterReduction = std::max (meterReduction, std::abs (reduction[static_cast<size_t> (ch)]) * (1 - values[bypass]));
 
             for (int ch = 0; ch < channelCount; ++ch)
             {
                 const auto c = static_cast<size_t> (ch);
                 // Mix the compressed/input-gained path with the original input,
                 // then apply output gain. Transformer coloration follows both.
-                const auto mixed = (dry[c] + values[mix] * (driven[c] * combinedGain - dry[c]))
+                const auto mixed = (dry[c] + values[mix] * (driven[c] * combinedGain[c] - dry[c]))
                                  * values[output];
                 // Keep the oversampler warm even when disabled; the clean and
                 // bypass paths retain the same fixed latency during automation.
@@ -256,6 +273,14 @@ public:
                 channels[ch][sample] = values[bypass] > 0.99999f ? delayedDry
                                     : wet + values[bypass] * (delayedDry - wet);
             }
+            if (channelCount == 2 && values[midSide] > 0)
+            {
+                const auto left = channels[0][sample], right = channels[1][sample];
+                const auto decodedLeft = (left + right) * 0.7071067811865475f;
+                const auto decodedRight = (left - right) * 0.7071067811865475f;
+                channels[0][sample] = left * (1.0f - values[midSide]) + decodedLeft * values[midSide];
+                channels[1][sample] = right * (1.0f - values[midSide]) + decodedRight * values[midSide];
+            }
             delayPosition = (delayPosition + 1) % static_cast<size_t> (latencySamples);
         }
     }
@@ -263,7 +288,7 @@ public:
 private:
     static constexpr float pi = 3.14159265358979323846f;
     // Indexes into the smoothed value/target arrays above.
-    enum Control { input, threshold, ratio, knee, output, mix, drive, transformer, bypass, highTilt, upward };
+    enum Control { input, threshold, ratio, knee, output, mix, drive, transformer, bypass, highTilt, upward, stereoLink, midSide };
 
     struct Detector
     {
@@ -296,9 +321,9 @@ private:
     int selected = 0;
     float smoothing = 0, hpCoefficient = 0, slowRelease = 0, rmsCoefficient = 0;
     float meterReduction = 0;
-    std::array<float, 11> values {}, targets {};
+    std::array<float, 13> values {}, targets {};
     std::array<float, 4> weights {}, attacks {}, releases {};
-    std::array<Detector, 4> states {};
+    std::array<std::array<Detector, 4>, 2> states {};
     std::array<OversampledTransformer, 2> transformers {};
     std::array<HighTilt, 2> sidechainShelves {};
     std::array<std::array<float, latencySamples>, 2> cleanDelay {}, bypassDelay {};

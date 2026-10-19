@@ -26,7 +26,7 @@ int runTests (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI juce;
     CharacterCompressorProcessor p;
-    check (p.getParameters().size() == 15, "all host parameters registered");
+    check (p.getParameters().size() == 17, "all host parameters registered");
     auto buses = p.getBusesLayout();
     buses.inputBuses.set (0, juce::AudioChannelSet::mono());
     buses.outputBuses.set (0, juce::AudioChannelSet::mono());
@@ -80,13 +80,54 @@ int runTests (int argc, char** argv)
     restored.processBlock (empty, midi);
     check (restored.getBypassParameter() != nullptr, "host has a designated bypass parameter");
 
+    // Exercise the automatable Upward parameter through the real processor.
+    set (restored, "model", 0);
+    set (restored, "input", 0); set (restored, "threshold", -18); set (restored, "ratio", 4);
+    set (restored, "attack", 10); set (restored, "release", 150); set (restored, "knee", 0);
+    set (restored, "output", 0); set (restored, "mix", 100); set (restored, "sidechain", 0);
+    set (restored, "drive", 0); set (restored, "transformer", 0); set (restored, "highTilt", 0);
+    set (restored, "bypass", 0); set (restored, "upward", 1);
+    restored.prepareToPlay (48000, 256);
+    const auto quietInput = std::pow (10.0f, -30.0f / 20.0f);
+    double quietOutputEnergy = 0;
+    for (int block = 0; block < 240; ++block)
+    {
+        for (int ch = 0; ch < 2; ++ch)
+            juce::FloatVectorOperations::fill (buffer.getWritePointer (ch), quietInput, buffer.getNumSamples());
+        restored.processBlock (buffer, midi);
+        if (block >= 180)
+            for (int i = 0; i < buffer.getNumSamples(); ++i)
+                quietOutputEnergy += buffer.getSample (0, i) * buffer.getSample (0, i);
+    }
+    const auto quietOutputDb = 10 * std::log10 (quietOutputEnergy
+        / (60.0 * buffer.getNumSamples()));
+    check (quietOutputDb > -22 && quietOutputDb < -20,
+           "host processor boosts below-threshold audio toward threshold in Upward mode");
+    check (restored.reduction.load() > 8,
+           "host processor reports upward gain on the GR meter");
+
+    const auto loudInput = std::pow (10.0f, -6.0f / 20.0f);
+    for (int block = 0; block < 240; ++block)
+    {
+        for (int ch = 0; ch < 2; ++ch)
+            juce::FloatVectorOperations::fill (buffer.getWritePointer (ch), loudInput, buffer.getNumSamples());
+        restored.processBlock (buffer, midi);
+    }
+    if (std::abs (buffer.getSample (0, 255) - loudInput) >= 0.001f || restored.reduction.load() >= 0.01f)
+        std::cerr << "Upward above-threshold output " << buffer.getSample (0, 255)
+                  << " vs input " << loudInput << ", gain meter " << restored.reduction.load() << " dB\n";
+    check (std::abs (buffer.getSample (0, 255) - loudInput) < 0.001f
+           && restored.reduction.load() < 0.01f,
+           "host processor leaves above-threshold audio unchanged in Upward mode");
+
     if (argc > 1 && juce::String (argv[1]) == "--editor")
     {
         std::unique_ptr<juce::AudioProcessorEditor> editor (restored.createEditor());
-        check (editor && editor->getWidth() == 580 && editor->getHeight() == 940, "portrait editor creates at expected size");
+        check (editor && editor->getWidth() == 580 && editor->getHeight() == 980, "portrait editor creates at expected size");
         check (editor->getNumChildComponents() >= 25, "editor contains controls and meters");
         juce::Slider *threshold = nullptr, *ratio = nullptr, *attack = nullptr, *release = nullptr;
-        AnimatedSwitch *transformer = nullptr, *upward = nullptr;
+        AnimatedSwitch *transformer = nullptr, *upward = nullptr, *midSide = nullptr;
+        juce::Slider* stereoLink = nullptr;
         for (auto* child : editor->getChildren())
         {
             check (editor->getLocalBounds().contains (child->getBounds()), "controls fit inside portrait panel");
@@ -96,14 +137,17 @@ int runTests (int argc, char** argv)
                 if (slider->getName() == "RATIO") ratio = slider;
                 if (slider->getName() == "ATTACK") attack = slider;
                 if (slider->getName() == "RELEASE") release = slider;
+                if (slider->getName() == "STEREO LINK") stereoLink = slider;
             }
             if (auto* button = dynamic_cast<AnimatedSwitch*> (child))
             {
                 if (button->getButtonText() == "OUTPUT TRANSFORMER") transformer = button;
                 if (button->getButtonText() == "UPWARD COMPRESSION") upward = button;
+                if (button->getButtonText() == "MID / SIDE MODE") midSide = button;
             }
         }
-        check (threshold && ratio && attack && release && transformer && upward, "portrait controls exist");
+        check (threshold && ratio && attack && release && transformer && upward && midSide && stereoLink,
+               "portrait controls include mid/side and stereo link");
         check (threshold->getHeight() > attack->getHeight() && ratio->getHeight() > release->getHeight(),
                "primary knobs are larger than timing knobs");
         check (attack->getY() == release->getY() && attack->getRight() <= release->getX(),
@@ -175,11 +219,14 @@ int runOutputStageTests (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI juce;
     CharacterCompressorProcessor p;
-    check (p.getParameters().size() == 15, "new high-tilt parameter registered");
+    check (p.getParameters().size() == 17, "stereo and mid/side parameters registered");
     auto* tilt = p.parameters.getParameter ("highTilt");
     check (tilt && tilt == p.getParameters()[13]
            && p.parameters.getParameter ("upward") == p.getParameters()[14],
            "high tilt and upward retain their appended parameter indices");
+    check (p.parameters.getParameter ("stereoLink") == p.getParameters()[15]
+           && p.parameters.getParameter ("midSide") == p.getParameters()[16],
+           "stereo link and mid/side append without moving existing automation");
     check (exact (tilt->getValue(), 0.0f), "high tilt defaults off");
     set (p, "ratio", 1); set (p, "highTilt", 1);
     juce::MemoryBlock saved;

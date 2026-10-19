@@ -63,13 +63,14 @@ private:
     AnimatedSwitch transformer { "OUTPUT TRANSFORMER" }, bypass { "BYPASS" };
     AnimatedSwitch highTilt { "SC HIGH TILT +6 dB" };
     AnimatedSwitch upward { "UPWARD COMPRESSION" };
-    std::array<juce::Slider, 10> sliders;
-    std::array<juce::Label, 10> labels;
+    AnimatedSwitch midSide { "MID / SIDE MODE" };
+    std::array<juce::Slider, 11> sliders;
+    std::array<juce::Label, 11> labels;
     juce::Label modelDescription, meters;
     using State = juce::AudioProcessorValueTreeState;
     std::unique_ptr<State::ComboBoxAttachment> modelAttachment;
-    std::array<std::unique_ptr<State::SliderAttachment>, 10> attachments;
-    std::unique_ptr<State::ButtonAttachment> transformerAttachment, bypassAttachment, tiltAttachment, upwardAttachment;
+    std::array<std::unique_ptr<State::SliderAttachment>, 11> attachments;
+    std::unique_ptr<State::ButtonAttachment> transformerAttachment, bypassAttachment, tiltAttachment, upwardAttachment, midSideAttachment;
     GainReductionHistory history;
     juce::Rectangle<int> meterBounds { 376, 176, 180, 564 };
     double lastTick = 0;
