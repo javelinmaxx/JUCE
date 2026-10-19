@@ -445,6 +445,13 @@ implementation, not a production-release claim.
   previews were rendered for all eight model/Upward palette combinations; the
   preview renderer verified each image's palette colors and saved all files.
 
+### 2026-10-19 — paired compressor controls and centered toggles
+- Reordered compressor controls into Threshold/Ratio and Attack/Release pairs,
+  with Knee and VariTransient at the ends of their respective rows.
+- Centered each switch pivot on its section's knob row and tightened the
+  switch hit areas to keep the controls inside their panels. Rebuilt the VST3
+  and regenerated all eight previews; no full test suite was run.
+
 ### 2026-10-19 — head-on nut and narrower control layout
 - Changed the retaining nut to a regular, head-on hexagon and relabeled the
   Mid/Side switch positions M/S and L/R. Hid the redundant function headers on

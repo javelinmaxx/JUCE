@@ -175,12 +175,12 @@ int runTests (int argc, char** argv)
                && knee->getHeight() < threshold->getHeight()
                && variTransient->getHeight() == knee->getHeight(),
                "VariTransient matches the Knee knob size");
-        check (threshold->getY() == knee->getY() && knee->getY() == ratio->getY()
-               && threshold->getRight() <= knee->getX() && knee->getRight() <= ratio->getX(),
-               "knee is between threshold and ratio");
-        check (attack->getY() == variTransient->getY() && variTransient->getY() == release->getY()
-               && attack->getRight() <= variTransient->getX() && variTransient->getRight() <= release->getX(),
-               "VariTransient is between attack and release");
+        check (threshold->getY() == ratio->getY() && ratio->getY() == knee->getY()
+               && threshold->getRight() <= ratio->getX() && ratio->getRight() <= knee->getX(),
+               "Threshold and Ratio are paired, with Knee beside them");
+        check (attack->getY() == release->getY() && release->getY() == variTransient->getY()
+               && attack->getRight() <= release->getX() && release->getRight() <= variTransient->getX(),
+               "Attack and Release are paired, with VariTransient beside them");
         check (output->getY() == mix->getY() && mix->getY() == stereoLink->getY()
                && output->getY() > 156 + 480,
                "output, mix, and stereo link sit below the shortened GR section");
@@ -199,9 +199,10 @@ int runTests (int argc, char** argv)
                && input->getHeight() < attack->getHeight(),
                "upward mode and a compact input control are in the compressor header");
         check (transformerDrive->getY() == evenHarmonics->getY()
-               && transformer->getY() < transformerDrive->getY()
+               && std::abs ((midSide->getY() + 28) - (detectorHpf->getY() + (detectorHpf->getHeight() - 20) / 2)) <= 1
+               && std::abs ((transformer->getY() + 28) - (transformerDrive->getY() + (transformerDrive->getHeight() - 20) / 2)) <= 1
                && transformerDrive->getY() > midSide->getBottom(),
-               "transformer enable, Core Drive, and DC Bias share their section");
+               "toggle pivots align with the centers of knobs in their sections");
         GainReductionHistory history;
         for (int i = 0; i <= 360; ++i) history.push (i / 30.0, static_cast<float> (i % 31));
         int visible = 0;

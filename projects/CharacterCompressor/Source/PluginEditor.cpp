@@ -565,11 +565,11 @@ void CharacterCompressorEditor::resized()
         sliders[index].setBounds (x, y + 20, width, height);
     };
     place (1, 24, 207, 92, 82);
-    place (5, 122, 207, 92, 56);
-    place (2, 220, 207, 92, 82);
+    place (2, 122, 207, 92, 82);
+    place (5, 220, 207, 92, 56);
     place (3, 34, 316, 72, 66);
-    place (12, 124, 316, 72, 56);
-    place (4, 214, 316, 72, 66);
+    place (4, 124, 316, 72, 66);
+    place (12, 214, 316, 72, 56);
     place (8, 28, 460, 80, 78);
     place (13, 116, 460, 80, 78);
     place (9, 34, 612, 74, 104);
@@ -588,8 +588,8 @@ void CharacterCompressorEditor::resized()
     labels[11].setText ("DC BIAS", juce::dontSendNotification);
     labels[13].setText ("SC HIGH TILT", juce::dontSendNotification);
     upward.setBounds (146, 156, 76, 20);
-    midSide.setBounds (234, 452, 72, 104);
-    transformer.setBounds (238, 618, 76, 110);
+    midSide.setBounds (241, 481, 58, 64);
+    transformer.setBounds (247, 646, 58, 64);
 }
 
 void CharacterCompressorEditor::timerCallback()
