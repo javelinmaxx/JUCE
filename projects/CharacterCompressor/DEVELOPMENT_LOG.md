@@ -693,3 +693,4 @@ implementation, not a production-release claim.
 ### 2026-10-19 — J-SONIC header and company metadata
 - Changed the company display and plug-in metadata to J-SONIC, moved the company
   line down 20 px, and aligned Bypass vertically with the plug-in title.
+- Removed the blank top band by moving the company line to the top edge.

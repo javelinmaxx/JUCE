@@ -463,7 +463,7 @@ void CharacterCompressorEditor::paint (juce::Graphics& g)
     g.fillAll();
     g.setColour (theme.background.getPerceivedBrightness() > 0.7f ? theme.text : theme.control);
     g.setFont (juce::FontOptions (12.0f));
-    g.drawText ("J-SONIC  /  DYNAMICS", 24, 38, 500, 20, juce::Justification::centredLeft);
+    g.drawText ("J-SONIC  /  DYNAMICS", 24, 0, 500, 20, juce::Justification::centredLeft);
     g.setColour (theme.text);
     g.setFont (juce::FontOptions (29.0f));
     g.drawText ("YIN/YANG COMP", 24, 60, 420, 38, juce::Justification::centredLeft);
