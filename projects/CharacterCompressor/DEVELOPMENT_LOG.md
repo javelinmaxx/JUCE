@@ -724,7 +724,7 @@ implementation, not a production-release claim.
   mapping.
 
 ### 2026-10-20 — Yin gain meter and time-control allocation
-- Flipped the Yin meter to rise from its 0 dB center line, with a -12 to +12 dB
+- Flipped the Yin meter to rise from its 0 dB baseline, with a -6 to +12 dB
   scale and a +12 dB ceiling. Yang retains its downward 0–18 dB GR scale.
 - Swapped the internal Attack and Release time values in Yin while keeping the
   slider attachments, captions, and host automation assignments unchanged.

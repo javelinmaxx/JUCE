@@ -503,10 +503,10 @@ void CharacterCompressorEditor::paintMeter (juce::Graphics& g)
     const auto meterY = [&] (float db)
     {
         return yinMode
-            ? plot.getY() + plot.getHeight() * (12.0f - db) / 24.0f
+            ? plot.getY() + plot.getHeight() * (12.0f - db) / 18.0f
             : plot.getY() + plot.getHeight() * db / GainReductionHistory::maxReductionDb;
     };
-    const auto tickStart = yinMode ? -12 : 0;
+    const auto tickStart = yinMode ? -6 : 0;
     const auto tickEnd = yinMode ? 12 : static_cast<int> (GainReductionHistory::maxReductionDb);
     for (int db = tickStart; db <= tickEnd; db += 6)
     {
@@ -527,10 +527,10 @@ void CharacterCompressorEditor::paintMeter (juce::Graphics& g)
     const auto meterMaximum = yinMode ? 12.0f : GainReductionHistory::maxReductionDb;
     const auto glow = std::clamp (0.22f + displayedReduction / (meterMaximum * 2.1f), 0.22f, 0.95f);
     const auto fillAmount = std::clamp (displayedReduction / meterMaximum, 0.0f, 1.0f);
-    const auto fill = yinMode
-        ? juce::Rectangle<float> (bar.getX(), bar.getY(), bar.getWidth(), bar.getHeight() * fillAmount * 0.5f)
-        : bar.withHeight (bar.getHeight() * fillAmount);
-    const auto visibleFill = yinMode ? fill.withY (bar.getCentreY() - fill.getHeight()) : fill.withY (bar.getBottom() - fill.getHeight());
+    const auto baselineY = yinMode ? meterY (0.0f) : bar.getBottom();
+    const auto availableHeight = baselineY - bar.getY();
+    const juce::Rectangle<float> visibleFill (bar.getX(), baselineY - availableHeight * fillAmount,
+                                               bar.getWidth(), availableHeight * fillAmount);
     if (visibleFill.getHeight() > 0)
     {
         for (int layer = 5; layer >= 1; --layer)
