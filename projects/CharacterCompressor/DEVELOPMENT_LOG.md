@@ -705,3 +705,8 @@ implementation, not a production-release claim.
 - Set the slider value-display default to white as well, removing the warm tint
   from FET Yin knob captions and readouts.
 - Set the FET Yin secondary label and knob-marking color to white too.
+
+### 2026-10-19 — verified M/S decoding to L/R
+- Added a bypassed round-trip DSP check. It caught an inverted side-channel
+  polarity in the encoder; corrected the matrix so the inverse decode restores
+  the original L/R channel order after the 64-sample latency.

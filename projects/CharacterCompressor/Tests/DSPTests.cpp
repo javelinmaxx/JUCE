@@ -226,6 +226,19 @@ int main()
            && std::abs (midSide[0] - independent[0]) > 0.01f,
            "mid/side mode encodes stereo before compression and decodes afterward");
 
+    Compressor midSideRoundTrip;
+    midSideRoundTrip.prepare (48000);
+    Parameters roundTripParameters;
+    roundTripParameters.sidechainHz = 0;
+    roundTripParameters.bypass = true;
+    roundTripParameters.midSide = true;
+    midSideRoundTrip.setParameters (roundTripParameters);
+    std::vector<float> roundTripLeft (48000, 0.31f), roundTripRight (48000, -0.17f);
+    run (midSideRoundTrip, roundTripLeft, roundTripRight);
+    check (std::abs (roundTripLeft.back() - 0.31f) < 1.0e-5f
+           && std::abs (roundTripRight.back() + 0.17f) < 1.0e-5f,
+           "M/S inverse matrix restores the original L/R output after latency");
+
     std::vector<float> source (48000);
     for (size_t i = 0; i < source.size(); ++i)
         source[i] = 0.8f * std::sin (2 * 3.141592653589793 * 997 * static_cast<double> (i) / 48000);

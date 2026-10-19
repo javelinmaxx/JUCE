@@ -157,8 +157,9 @@ public:
                 if (channelCount == 2 && values[midSide] > 0)
                 {
                     const auto other = std::isfinite (channels[1 - ch][sample]) ? channels[1 - ch][sample] : 0.0f;
+                    // Orthonormal M/S encode: M = (L + R) / sqrt(2), S = (L - R) / sqrt(2).
                     raw = raw * (1.0f - values[midSide])
-                        + (ch == 0 ? raw + other : raw - other) * encode;
+                        + (ch == 0 ? raw + other : other - raw) * encode;
                 }
                 dry[c] = raw;
                 // Input gain feeds the compressor branch. The untouched input
@@ -294,6 +295,7 @@ public:
             }
             if (channelCount == 2 && values[midSide] > 0)
             {
+                // Reverse M/S matrix restores L/R after compression and output processing.
                 const auto left = channels[0][sample], right = channels[1][sample];
                 const auto decodedLeft = (left + right) * 0.7071067811865475f;
                 const auto decodedRight = (left - right) * 0.7071067811865475f;
