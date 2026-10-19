@@ -44,6 +44,33 @@ float steadyGain (character::Model model, float ratio)
     run (dsp, a, b);
     return a.back() / 0.5f;
 }
+
+float steadyUpwardOutput (character::Model model, float inputDb, float ratio,
+                          double sampleRate = 48000, float mix = 1,
+                          bool bypass = false)
+{
+    using namespace character;
+    Compressor dsp;
+    dsp.prepare (sampleRate);
+    Parameters p;
+    p.model = model;
+    p.thresholdDb = -18;
+    p.ratio = ratio;
+    p.kneeDb = 0;
+    p.attackMs = 10;
+    p.releaseMs = 150;
+    p.sidechainHz = 0;
+    p.driveDb = 0;
+    p.mix = mix;
+    p.bypass = bypass;
+    p.upward = true;
+    dsp.setParameters (p);
+    const auto input = Compressor::gain (inputDb);
+    const auto frames = static_cast<size_t> (sampleRate * 2);
+    std::vector<float> left (frames, input), right = left;
+    run (dsp, left, right, 37);
+    return left.back();
+}
 }
 
 int main()
@@ -59,6 +86,92 @@ int main()
     check (std::abs (steadyGain (Model::optical, 4) - expected) < 0.005f, "optical static curve");
     for (int m = 0; m < 4; ++m)
         check (std::abs (steadyGain (static_cast<Model> (m), 1) - 1) < 0.0001f, "1:1 is unity");
+
+    // Upward mode leaves signals above threshold at unity and raises signals
+    // below threshold by the configured below-threshold ratio.
+    const auto quietDb = -30.0f, thresholdDb = -18.0f, ratio = 4.0f;
+    const auto expectedBoostDb = (thresholdDb - quietDb) * (1 - 1 / ratio);
+    for (int m = 0; m < 4; ++m)
+    {
+        const auto model = static_cast<Model> (m);
+        const auto above = steadyUpwardOutput (model, -6, ratio);
+        check (std::abs (Compressor::db (above) - (-6)) < 0.03f,
+               "upward mode preserves above-threshold unity for every model");
+
+        const auto boosted = steadyUpwardOutput (model, quietDb, ratio);
+        const auto actualBoostDb = Compressor::db (boosted) - quietDb;
+        if (model == Model::variMu)
+        {
+            const auto effectiveRatio = 1 + (ratio - 1) * (1 - std::exp (-12.0f / 12));
+            const auto muBoostDb = 12 * (1 - 1 / effectiveRatio);
+            check (std::abs (actualBoostDb - muBoostDb) < 0.12f,
+                   "variable-mu upward ratio rises progressively toward its maximum");
+        }
+        else
+        {
+            if (std::abs (actualBoostDb - expectedBoostDb) >= 0.12f)
+                std::cerr << "Upward static curve model " << m << ": expected " << expectedBoostDb
+                          << " dB boost, got " << actualBoostDb << " dB\n";
+            check (std::abs (actualBoostDb - expectedBoostDb) < 0.12f,
+                   "upward mode follows the below-threshold ratio for every model");
+        }
+
+        check (std::abs (steadyUpwardOutput (model, quietDb, 1) - Compressor::gain (quietDb)) < 1.0e-6f,
+               "upward 1:1 remains unity for every model");
+        check (steadyUpwardOutput (model, quietDb, ratio, 48000, 0) == Compressor::gain (quietDb),
+               "zero wet mix preserves the exact latency-aligned dry signal");
+        check (steadyUpwardOutput (model, quietDb, ratio, 48000, 1, true) == Compressor::gain (quietDb),
+               "bypass preserves the exact latency-aligned input");
+    }
+
+    // Exercise upward gain at every supported sample rate and verify the
+    // linked stereo channels receive the same gain.
+    for (const auto rate : { 8000.0, 44100.0, 48000.0, 96000.0, 192000.0 })
+        for (int m = 0; m < 4; ++m)
+        {
+            const auto output = steadyUpwardOutput (static_cast<Model> (m), -30, 20, rate);
+            check (std::isfinite (output) && Compressor::db (output) > -30 && Compressor::db (output) < -17,
+                   "upward gain stays finite and below threshold at every sample rate");
+        }
+
+    Compressor upwardStereo;
+    upwardStereo.prepare (48000);
+    Parameters upwardParams;
+    upwardParams.upward = true;
+    upwardParams.thresholdDb = -18;
+    upwardParams.ratio = 4;
+    upwardParams.sidechainHz = 0;
+    upwardStereo.setParameters (upwardParams);
+    std::vector<float> upwardLeft (48000, Compressor::gain (-30)), upwardRight (48000, Compressor::gain (-42));
+    run (upwardStereo, upwardLeft, upwardRight, 37);
+    check (std::abs (upwardLeft.back() / Compressor::gain (-30) - upwardRight.back() / Compressor::gain (-42)) < 1.0e-5f,
+           "upward compression preserves stereo linking");
+
+    const auto renderUnequalStereo = [] (float link, bool midSide)
+    {
+        Compressor dsp;
+        dsp.prepare (48000);
+        Parameters p;
+        p.thresholdDb = -24; p.ratio = 4; p.kneeDb = 0; p.sidechainHz = 0;
+        p.driveDb = 0; p.stereoLink = link; p.midSide = midSide;
+        dsp.setParameters (p);
+        std::vector<float> left (48000, Compressor::gain (-12));
+        std::vector<float> right (48000, Compressor::gain (-30));
+        run (dsp, left, right);
+        return std::array<float, 2> { left.back(), right.back() };
+    };
+    const auto independent = renderUnequalStereo (0, false);
+    check (std::abs (independent[0] / Compressor::gain (-12)
+                   - independent[1] / Compressor::gain (-30)) > 0.05f,
+           "zero stereo link allows independent channel gain reduction");
+    const auto fullyLinked = renderUnequalStereo (100, false);
+    check (std::abs (fullyLinked[0] / Compressor::gain (-12)
+                   - fullyLinked[1] / Compressor::gain (-30)) < 1.0e-5f,
+           "full stereo link applies the same gain to both channels");
+    const auto midSide = renderUnequalStereo (0, true);
+    check (std::isfinite (midSide[0]) && std::isfinite (midSide[1])
+           && std::abs (midSide[0] - independent[0]) > 0.01f,
+           "mid/side mode encodes stereo before compression and decodes afterward");
 
     std::vector<float> source (48000);
     for (size_t i = 0; i < source.size(); ++i)

@@ -3,8 +3,8 @@
 
 namespace
 {
-constexpr std::array<const char*, 15> ids { "model", "input", "threshold", "ratio", "attack",
-    "release", "knee", "output", "mix", "sidechain", "drive", "transformer", "bypass", "highTilt", "upward" };
+constexpr std::array<const char*, 17> ids { "model", "input", "threshold", "ratio", "attack",
+    "release", "knee", "output", "mix", "sidechain", "drive", "transformer", "bypass", "highTilt", "upward", "stereoLink", "midSide" };
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout CharacterCompressorProcessor::layout()
@@ -41,6 +41,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout CharacterCompressorProcessor
         "Sidechain high tilt", false));
     result.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "upward", 3 },
         "Upward compression", false));
+    result.add (std::make_unique<juce::AudioParameterFloat> (juce::ParameterID { "stereoLink", 1 },
+        "Stereo link", juce::NormalisableRange<float> (0, 100, 1), 100,
+        juce::AudioParameterFloatAttributes().withLabel ("%")));
+    result.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "midSide", 1 },
+        "Mid/Side mode", false));
     return result;
 }
 
@@ -65,6 +70,8 @@ character::Parameters CharacterCompressorProcessor::readParameters() const noexc
     p.transformer = value (11) >= 0.5f; p.bypass = value (12) >= 0.5f;
     p.highTilt = value (13) >= 0.5f;
     p.upward = value (14) >= 0.5f;
+    p.stereoLink = value (15);
+    p.midSide = value (16) >= 0.5f;
     return p;
 }
 

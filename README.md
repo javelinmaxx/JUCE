@@ -19,6 +19,8 @@ and as an Audio Unit (AU) for macOS.
   detector high-pass filter, transformer drive, and bypass.
 - Mono/stereo operation, host automation, saved settings, and a fixed 64-sample
   latency reported to the host.
+- Optional Mid/Side encoding before compression, with a Stereo Link control from
+  independent channel detection (0%) to fully linked detection (100%).
 
 The models are behavioral approximations for creative use, not calibrated
 recreations of specific hardware. The plug-in currently appears in hosts as
