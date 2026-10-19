@@ -68,12 +68,15 @@ def design_response(frequency, rate):
     processing_rate = 2 * rate
     z = np.exp(-2j * np.pi * frequency / processing_rate)
     low_k = np.tan(np.pi * 20 / processing_rate)
-    hp = (1 / (1 + low_k)) * (1 - z) / (1 + (low_k - 1) / (low_k + 1) * z)
+    low_norm = 1 / (1 + low_k + low_k * low_k)
+    hp = (low_norm - 2 * low_norm * z + low_norm * z * z) / (
+        1 + 2 * (low_k * low_k - 1) * low_norm * z
+        + (1 - low_k + low_k * low_k) * low_norm * z * z)
     k = np.tan(np.pi * min(19000, processing_rate * .4) / processing_rate)
-    norm = 1 / (1 + k / 2.0 + k * k)
+    norm = 1 / (1 + k / 1.2 + k * k)
     b0 = k * k * norm
     lp = (b0 + 2 * b0 * z + b0 * z * z) / (1 + 2 * (k * k - 1) * norm * z
-         + (1 - k / 2.0 + k * k) * norm * z * z)
+         + (1 - k / 1.2 + k * k) * norm * z * z)
     return hp * lp
 
 with tempfile.TemporaryDirectory(prefix='character-phase-') as tmp:
@@ -103,8 +106,10 @@ with tempfile.TemporaryDirectory(prefix='character-phase-') as tmp:
         end = y[FS + int(.009 * FS)]
         return 100 * (1 - end / start)
     new_droop = droop(outputs[50])
-    expected_droop = 100 * (1 - np.exp(-2 * np.pi * 20 * .008))
-    assert abs(new_droop - expected_droop) < .5, 'Square-wave droop does not match LF pole'
+    bins_full = np.fft.rfftfreq(len(inputs[50]), 1 / FS)
+    predicted = np.fft.irfft(np.fft.rfft(inputs[50]) * design_response(bins_full, FS), n=len(inputs[50]))
+    expected_droop = droop(predicted)
+    assert abs(new_droop - expected_droop) < .5, 'Square-wave droop does not match LF filter'
 
     # Requested phase check at the other common host sample rates. This is a
     # focused measurement, not a rerun of the existing DSP/processor test suites.
@@ -121,7 +126,7 @@ with tempfile.TemporaryDirectory(prefix='character-phase-') as tmp:
 metrics = {
     'sample_rate_hz': FS, 'input_peak_dbfs': -60, 'drive_db': 0, 'ratio': 1,
     'oversampling_factor': 2, 'compensated_latency_samples': 64,
-    'lf_corner_hz': 20, 'hf_corner_hz': 19000, 'hf_q': 2.0,
+    'lf_corner_hz': 20, 'lf_q': 1.0, 'hf_corner_hz': 19000, 'hf_q': 1.2,
     'phase_degrees_at_50hz': float(phase[0]),
     'phase_degrees_at_17950hz': float(phase[-1]),
     'max_design_phase_error_degrees_50_to_17950hz': float(np.max(error)),
@@ -176,7 +181,7 @@ ax.semilogx(harmonics,20*np.log10(np.abs(new_h)),color=colors['new'],label='Load
 ax.axhline(0,lw=1,color='#9ca3af')
 ax.set(title='Corresponding magnitude response',xlabel='Frequency (Hz)',ylabel='Gain (dB)',xlim=(50,18000))
 ax.legend(fontsize=8)
-fig.text(.06,.037,f'LF model: 8 Hz • HF model: 22 kHz, Q 0.8 • maximum phase error vs design: {np.max(error):.4f}°',fontsize=9,color='#526173')
+fig.text(.06,.037,f'LF model: 20 Hz, Q 1.0 • HF model: 19 kHz, Q 1.2 • maximum phase error vs design: {np.max(error):.4f}°',fontsize=9,color='#526173')
 fig.text(.06,.016,'Behavioral loaded-transformer approximation; no specific hardware calibration. Low-level squares isolate phase from saturation.',fontsize=9,color='#526173')
 fig.savefig(OUT/'square_wave_phase.png',dpi=180)
 fig.savefig(OUT/'square_wave_phase.svg')

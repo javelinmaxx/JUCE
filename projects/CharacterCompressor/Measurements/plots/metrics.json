@@ -13,10 +13,10 @@
   "dsp_sha256": {
     "CompressorDSP.h": "34f72329e65b7d58dfc643dc5b4f722db8bca9bd815ab395dc20b3ccc68b52e0",
     "OversampledTransformer.h": "50450015c049efe9a3de6214cf89f0f02043a6eda75500e9af3eb88456167c60",
-    "TransformerResponse.h": "4fc227c72190bfd04c869480474a5a7cd071048ec33bda3ca35a2c8f357e8d27",
+    "TransformerResponse.h": "b8ab069e598442b7c5146849f62bcfb0ba777ed28f2b962c87b3b38800ce23c8",
     "HighTilt.h": "08bb893fc879f5f95990aae0529f83281e7310f8e7795f8bc8be091d3f85bbf6"
   },
-  "source_commit": "4e40122137b486311b763cd3980b2c1c9fdfa7c0",
+  "source_commit": "9dd051c96452cf7e0e43e191022981febf65b6b3",
   "metrics": {
     "FET (feed-forward)": {
       "steady_step_reduction_db": 8.99994257980238,
@@ -39,9 +39,10 @@
       "release_to_10_percent_ms": 1145.8125
     },
     "Transformer": {
-      "drive18_1khz_third_harmonic_dbc": -56.30082065055093,
-      "drive18_10khz_alias18khz_dbfs": -115.24741085169792,
-      "drive18_10khz_fundamental_dbfs": -4.164561597180144
+      "saturation_test_tone_hz": 100,
+      "drive18_third_harmonic_dbc": -15.000988606577124,
+      "drive18_10khz_alias18khz_dbfs": -117.20479025205924,
+      "drive18_10khz_fundamental_dbfs": -4.777730735149446
     }
   }
 }

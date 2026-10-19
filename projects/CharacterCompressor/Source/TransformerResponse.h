@@ -6,15 +6,16 @@
 namespace character
 {
 // Small-signal loaded-transformer approximation. The LF magnetizing branch is
-// a one-pole high-pass; leakage inductance and winding capacitance form a damped
-// two-pole low-pass. Magnitude and phase come from these same causal filters.
+// a damped two-pole high-pass; leakage inductance and winding capacitance form
+// a second damped low-pass. Magnitude and phase come from the same causal filters.
 // These defaults are design choices, not measurements of a particular unit.
 class TransformerResponse
 {
 public:
     static constexpr double lowCornerHz = 20.0;
+    static constexpr double lowQ = 1.0;
     static constexpr double highCornerHz = 19000.0;
-    static constexpr double highQ = 2.0;
+    static constexpr double highQ = 1.2;
 
     void prepare (double processingRate) noexcept
     {
@@ -22,12 +23,16 @@ public:
         const auto rate = std::isfinite (processingRate) && processingRate >= 8000
                         ? processingRate : 96000.0;
 
-        // Bilinear-transform the LF first-order high-pass and HF second-order
-        // low-pass, prewarped at their corners. This runs at the transformer's
-        // oversampled rate. Clamp the HF corner below Nyquist at low host rates.
+        // Bilinear-transform the LF and HF second-order filters, prewarped at
+        // their corners. These run at the oversampled rate. Clamp the corners
+        // below Nyquist at low host rates.
         const auto lowK = std::tan (pi * lowCornerHz / rate);
-        hpB = 1.0 / (1.0 + lowK);
-        hpA = (lowK - 1.0) / (lowK + 1.0);
+        const auto lowNormalise = 1.0 / (1.0 + lowK / lowQ + lowK * lowK);
+        lowB0 = lowNormalise;
+        lowB1 = -2.0 * lowNormalise;
+        lowB2 = lowNormalise;
+        lowA1 = 2.0 * (lowK * lowK - 1.0) * lowNormalise;
+        lowA2 = (1.0 - lowK / lowQ + lowK * lowK) * lowNormalise;
 
         const auto highK = std::tan (pi * std::min (highCornerHz, rate * 0.4) / rate);
         const auto normalise = 1.0 / (1.0 + highK / highQ + highK * highK);
@@ -39,7 +44,7 @@ public:
         reset();
     }
 
-    void reset() noexcept { previousInput = previousHighpass = z1 = z2 = 0; }
+    void reset() noexcept { lowZ1 = lowZ2 = z1 = z2 = 0; }
 
     float process (float sample) noexcept
     {
@@ -47,9 +52,9 @@ public:
         // First remove the LF magnetizing-branch response, then apply the
         // damped HF pole pair. These causal filters create the modeled phase
         // shift and magnitude response together.
-        const auto highpass = hpB * (input - previousInput) - hpA * previousHighpass;
-        previousInput = input;
-        previousHighpass = highpass;
+        const auto highpass = lowB0 * input + lowZ1;
+        lowZ1 = lowB1 * input - lowA1 * highpass + lowZ2;
+        lowZ2 = lowB2 * input - lowA2 * highpass;
         const auto output = b0 * highpass + z1;
         z1 = b1 * highpass - a1 * output + z2;
         z2 = b2 * highpass - a2 * output;
@@ -57,7 +62,8 @@ public:
     }
 
 private:
-    double hpB = 0, hpA = 0, b0 = 0, b1 = 0, b2 = 0, a1 = 0, a2 = 0;
-    double previousInput = 0, previousHighpass = 0, z1 = 0, z2 = 0;
+    double lowB0 = 0, lowB1 = 0, lowB2 = 0, lowA1 = 0, lowA2 = 0;
+    double lowZ1 = 0, lowZ2 = 0;
+    double b0 = 0, b1 = 0, b2 = 0, a1 = 0, a2 = 0, z1 = 0, z2 = 0;
 };
 } // namespace character

@@ -273,14 +273,33 @@ int main()
         a[i] = 0.6f * std::sin (2 * 3.141592653589793 * 100 * static_cast<double> (i) / 48000);
     b = a;
     run (iron, a, b);
-    double thirdSin = 0, thirdCos = 0;
-    for (size_t i = 48000; i < a.size(); ++i)
+    const auto amplitudeAt = [] (const std::vector<float>& signal, int frequency)
     {
-        const auto phase = 2 * 3.141592653589793 * 300 * static_cast<double> (i) / 48000;
-        thirdSin += a[i] * std::sin (phase);
-        thirdCos += a[i] * std::cos (phase);
-    }
-    check (std::hypot (thirdSin, thirdCos) / 24000 > 0.005, "output transformer produces low-frequency odd harmonics");
+        double sine = 0, cosine = 0;
+        for (size_t i = 48000; i < signal.size(); ++i)
+        {
+            const auto phase = 2 * 3.141592653589793 * frequency * static_cast<double> (i) / 48000;
+            sine += signal[i] * std::sin (phase);
+            cosine += signal[i] * std::cos (phase);
+        }
+        return std::hypot (sine, cosine) / 24000;
+    };
+    const auto highDriveThird = amplitudeAt (a, 300);
+    const auto highDriveFundamental = amplitudeAt (a, 100);
+    check (highDriveThird > 0.005, "output transformer produces low-frequency odd harmonics");
+    Compressor lowDriveIron;
+    lowDriveIron.prepare (48000);
+    p.driveDb = 0;
+    lowDriveIron.setParameters (p);
+    a.resize (96000);
+    for (size_t i = 0; i < a.size(); ++i)
+        a[i] = 0.6f * std::sin (2 * 3.141592653589793 * 100 * static_cast<double> (i) / 48000);
+    b = a;
+    run (lowDriveIron, a, b);
+    const auto lowDriveThird = amplitudeAt (a, 300);
+    const auto lowDriveFundamental = amplitudeAt (a, 100);
+    check (highDriveThird / highDriveFundamental > 4 * lowDriveThird / lowDriveFundamental,
+           "increasing transformer drive substantially increases low-frequency saturation harmonics");
     a.assign (96000, 0.5f); b = a;
     run (iron, a, b);
     check (std::abs (a.back()) < 0.001f, "transformer rejects DC");

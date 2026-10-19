@@ -49,14 +49,16 @@ and soft-knee behavior differ. FET and optical DC transfer curves overlap,
 but their sine response and dynamics differ. Variable-mu has a gentler,
 progressive steady-state curve and transient gain-reduction overshoot.
 
-Transformer measurements disable compression with a 1:1 ratio. The 1 kHz
-waveform/harmonic plots use −6 dBFS peak, with 0/6/12/18 dB drive. Harmonics
-are relative to the **output** fundamental (dBc). The small-signal frequency
+Transformer measurements disable compression with a 1:1 ratio. The waveform
+and saturation-harmonic plots use a 100 Hz tone at −6 dBFS peak, with
+0/6/12/18 dB drive, keeping the measured odd harmonics below the 500 Hz
+residual-filter corner. Harmonics are relative to the **output** fundamental
+(dBc). The small-signal frequency
 response uses −60 dBFS peak and 6 dB drive; it measures fundamental gain,
 not total RMS energy including harmonics. Integer-frequency probes and the
 last one second of two-second tones provide coherent, unwindowed FFT bins.
 
-At 18 dB drive, the 1 kHz third harmonic measures −56.30 dBc. With a 10 kHz,
+At 18 dB drive, the 100 Hz third harmonic measures −14.70 dBc. With a 10 kHz,
 −6 dBFS peak input, the 18 kHz component measures −115.25 dBFS. The previous
 1× measurements are preserved in `baseline/metrics.json` and
 `baseline/alias_spectrum.csv` for comparison.

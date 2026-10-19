@@ -10,41 +10,41 @@
     "peak_dbfs": -6,
     "drive_db": 12,
     "reference": "same current DSP with the residual filter disabled",
-    "max_attenuation_error_db": 0.04835576848746115,
+    "max_attenuation_error_db": 0.01516431651617367,
     "fifth_harmonic_probe_attenuation_db": {
-      "500": -3.0102877346461803,
-      "1000": -12.308802880386917,
-      "2000": -24.122128772173284
+      "500": -3.010288776043181,
+      "1000": -12.308797665490994,
+      "2000": -24.1223812294732
     }
   },
   "thd_percent_drive6": {
     "50": {
-      "before": 2.5550341877804668,
-      "after": 1.1673719071157345
+      "before": 2.2463136565478505,
+      "after": 1.020095376889182
     },
     "100": {
-      "before": 2.217211365110449,
-      "after": 0.7380710869262781
+      "before": 2.141394126732324,
+      "after": 0.7117024483874308
     },
     "250": {
-      "before": 2.0240939633655746,
-      "after": 0.18642562491174605
+      "before": 2.0121829840528815,
+      "after": 0.18527166976340487
     },
     "500": {
-      "before": 1.9923515831485392,
-      "after": 0.042066035865798504
+      "before": 1.9876549056709563,
+      "after": 0.04194831776061741
     },
     "1000": {
-      "before": 2.004730274654521,
-      "after": 0.011022238467157618
+      "before": 1.996296391887578,
+      "after": 0.010949584678059506
     },
     "2000": {
-      "before": 2.098454837846375,
-      "after": 0.00307001522367853
+      "before": 2.061989480523213,
+      "after": 0.002965863264992464
     },
     "5000": {
-      "before": 3.2450315712433566,
-      "after": 0.0005778491436415819
+      "before": 2.4944296662650887,
+      "after": 0.00043544922048905857
     }
   },
   "shelf_gain_db": {
@@ -81,19 +81,19 @@
       "10000_with_hpf80": 4.4986041381582424
     }
   },
-  "clean_hf_response_change_db": {
-    "1000": 1.1547365962322044e-05,
-    "5000": 9.11895067439991e-06,
-    "10000": 8.8768741040275e-06,
-    "18000": 8.60344379278998e-06
+  "transformer_response_error_db": {
+    "1000": -3.061812914125079e-05,
+    "5000": -3.127098719482357e-05,
+    "10000": -5.397951728808541e-05,
+    "18000": 0.001178479049037433
   },
   "other_sample_rates": {
     "44100": {
-      "harmonic_attenuation_max_error_db": 0.04459639608051447,
+      "harmonic_attenuation_max_error_db": 0.02352707225237438,
       "shelf_midpoint_db": 3.000000602921994
     },
     "96000": {
-      "harmonic_attenuation_max_error_db": 0.003625907300175868,
+      "harmonic_attenuation_max_error_db": 0.0013019323452709841,
       "shelf_midpoint_db": 3.0000007175441086
     }
   },
@@ -102,7 +102,7 @@
   "source_sha256": {
     "CompressorDSP.h": "34f72329e65b7d58dfc643dc5b4f722db8bca9bd815ab395dc20b3ccc68b52e0",
     "OversampledTransformer.h": "50450015c049efe9a3de6214cf89f0f02043a6eda75500e9af3eb88456167c60",
-    "TransformerResponse.h": "4fc227c72190bfd04c869480474a5a7cd071048ec33bda3ca35a2c8f357e8d27",
+    "TransformerResponse.h": "b8ab069e598442b7c5146849f62bcfb0ba777ed28f2b962c87b3b38800ce23c8",
     "HighTilt.h": "08bb893fc879f5f95990aae0529f83281e7310f8e7795f8bc8be091d3f85bbf6"
   },
   "before_transformer_sha256": "175936fec890ea2f07c01f936730ddc07d4c40465bf4a556a4dc3ee0ad1697a3",

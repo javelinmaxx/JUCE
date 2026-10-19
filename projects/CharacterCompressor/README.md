@@ -10,10 +10,10 @@ isolated as a nonlinear residual, filtered by a **500 Hz second-order Butterwort
 low-pass (12 dB/octave)**, and added back to the clean signal. This preserves clean
 high frequencies while reducing harmonics above 500 Hz; the cutoff is gradual.
 The combined signal then passes through a causal loaded
-transformer response: a 20 Hz high-pass models low-frequency phase lead and
-droop, while a 19 kHz second-order low-pass (Q 2.0) models high-frequency phase
-lag and stronger vintage-style resonance from leakage inductance and winding
-capacitance. These are provisional design values. The transformer runs at fixed
+transformer response: a 20 Hz second-order high-pass (Q 1.0) models
+low-frequency phase lead and droop, while a 19 kHz second-order low-pass
+(Q 1.2) models high-frequency phase lag and resonance from leakage inductance
+and winding capacitance. These are provisional design values. The transformer runs at fixed
 2× the host sample rate, with FIR interpolation and decimation filters. This is
 intended to reduce aliasing; strong drive can still produce residual aliases. It
 is a prototype for listening and refinement, not a release claimed to match

@@ -85,12 +85,14 @@ with tempfile.TemporaryDirectory(prefix='character-measure-') as temp:
 
     print('Measuring transformer...', flush=True)
     drives = [0, 6, 12, 18]
-    tone = 10 ** (-6 / 20) * np.sin(2 * np.pi * 1000 * t)
+    transformer_tone_hz = 100
+    tone = 10 ** (-6 / 20) * np.sin(2 * np.pi * transformer_tone_hz * t)
     iron = np.array([render(tone, ratio=1, transformer=True, drive=d) for d in drives])
     harmonics = np.empty((4, 12))
     for i, y in enumerate(iron):
         spectrum = np.abs(np.fft.rfft(y[-FS:])) * 2 / FS
-        harmonics[i] = db(spectrum[np.arange(1, 13) * 1000] / spectrum[1000])
+        harmonics[i] = db(spectrum[np.arange(1, 13) * transformer_tone_hz]
+                          / spectrum[transformer_tone_hz])
     # Integer-Hz probes and a 1 s analysis window avoid FFT leakage.
     frequencies = np.unique(np.round(np.geomspace(10, 20000, 100)).astype(int))
     response = []
@@ -103,7 +105,8 @@ with tempfile.TemporaryDirectory(prefix='character-measure-') as temp:
     high_tone = 10 ** (-6 / 20) * np.sin(2 * np.pi * 10000 * t)
     high_output = render(high_tone, ratio=1, transformer=True, drive=18)
     alias_spectrum = db(np.abs(np.fft.rfft(high_output[-FS:])) * 2 / FS)
-    metrics['Transformer'] = {'drive18_1khz_third_harmonic_dbc': float(harmonics[-1, 2]),
+    metrics['Transformer'] = {'saturation_test_tone_hz': transformer_tone_hz,
+        'drive18_third_harmonic_dbc': float(harmonics[-1, 2]),
         'drive18_10khz_alias18khz_dbfs': float(alias_spectrum[18000]),
         'drive18_10khz_fundamental_dbfs': float(alias_spectrum[10000])}
 
@@ -176,16 +179,16 @@ fig.subplots_adjust(left=.075, right=.97, bottom=.10, top=.85, wspace=.25, hspac
 fig.suptitle('03  /  Output transformer character', x=.06, ha='left', fontsize=21, fontweight='bold', y=.97)
 fig.text(.06, .91, 'Measured C++ DSP • 48 kHz • 2× transformer • compression disabled (1:1) • 0 dB input/output gain', fontsize=10)
 a = axes[0,0]
-segment = np.arange(FS*2-96, FS*2)
+segment = np.arange(FS*2-FS//50, FS*2)
 a.plot((segment-segment[0])/FS*1000, tone[segment], color='#a5aab1', lw=1, label='Clean input')
 for i,d in enumerate(drives):
     a.plot((segment-segment[0])/FS*1000, iron[i,segment], color=COLORS[i], label=f'{d} dB drive')
-a.set(title='1 kHz at −6 dBFS peak: waveform shaping', xlabel='Time (ms)', ylabel='Amplitude')
+a.set(title='100 Hz at −6 dBFS peak: waveform shaping', xlabel='Time (ms)', ylabel='Amplitude')
 a.legend(fontsize=8, ncol=2)
 a = axes[0,1]
 for i,d in enumerate(drives):
     a.plot(np.arange(1,13), harmonics[i], 'o-', color=COLORS[i], ms=3, label=f'{d} dB drive')
-a.set(title='1 kHz harmonics relative to output fundamental', xlabel='Harmonic number', ylabel='Level (dBc)', ylim=(-120,5), xticks=np.arange(1,13))
+a.set(title='100 Hz harmonics relative to output fundamental', xlabel='Harmonic number', ylabel='Level (dBc)', ylim=(-120,5), xticks=np.arange(1,13))
 a.legend(fontsize=8)
 a = axes[1,0]
 a.semilogx(frequencies, response, color=COLORS[0])

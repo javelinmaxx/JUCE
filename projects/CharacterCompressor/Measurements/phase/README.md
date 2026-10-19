@@ -9,20 +9,20 @@ host sample rate. Low-level input isolates the small-signal response from
 saturation. Both before/after traces use 2× oversampling. Only the fixed
 64-sample FIR transport delay is removed; transformer phase remains intact.
 
-The loaded-transformer approximation uses a 20 Hz first-order high-pass and a
-19 kHz second-order low-pass, Q 2.0. Both operate at 2× the host rate. The
-hysteresis is a causal scalar play operator with a drive-scaled coercive band;
+The loaded-transformer approximation uses a 20 Hz second-order high-pass
+(Q 1.0) and a 19 kHz second-order low-pass (Q 1.2). Both operate at 2× the
+host rate. The hysteresis is a causal scalar play operator with a drive-scaled coercive band;
 it is a behavioral approximation, not a calibrated physical-core model.
 
 | Focused check | Result |
 | --- | ---: |
-| Phase at 50 Hz | +21.736° |
-| Phase at 17.95 kHz | −73.555° |
-| Maximum phase error versus specified filter response, 50 Hz–17.95 kHz | 0.0231° |
-| 50 Hz square droop, 1–9 ms after rising edge | 63.311% |
-| Predicted droop from the 20 Hz pole | 63.407% |
+| Phase at 50 Hz | +25.354° |
+| Phase at 17.95 kHz | −79.949° |
+| Maximum phase error versus specified filter response, 50 Hz–17.95 kHz | 0.0170° |
+| 50 Hz square droop, 1–9 ms after rising edge | 73.701% |
+| Predicted droop from the 20 Hz, Q 1.0 filter | 73.422% |
 | Maximum phase error at 44.1 kHz host rate | 0.0318° |
-| Maximum phase error at 96 kHz host rate | 0.0019° |
+| Maximum phase error at 96 kHz host rate | 0.0018° |
 | Transformer disabled | Exact delayed input |
 | Reported transport latency | 64 samples |
 

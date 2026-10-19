@@ -100,6 +100,23 @@ def lowpass_db(frequencies, rate):
     return -10 * np.log10(1 + ratio**4)
 
 
+def transformer_response(frequency, rate):
+    processing_rate = 2 * rate
+    z = np.exp(-2j * np.pi * frequency / processing_rate)
+    low_k = np.tan(np.pi * 20 / processing_rate)
+    low_norm = 1 / (1 + low_k + low_k * low_k)
+    hp = (low_norm - 2 * low_norm * z + low_norm * z * z) / (
+        1 + 2 * (low_k * low_k - 1) * low_norm * z
+        + (1 - low_k + low_k * low_k) * low_norm * z * z)
+    high_k = np.tan(np.pi * min(19000, processing_rate * .4) / processing_rate)
+    high_norm = 1 / (1 + high_k / 1.2 + high_k * high_k)
+    b0 = high_k * high_k * high_norm
+    lp = (b0 + 2 * b0 * z + b0 * z * z) / (
+        1 + 2 * (high_k * high_k - 1) * high_norm * z
+        + (1 - high_k / 1.2 + high_k * high_k) * high_norm * z * z)
+    return hp * lp
+
+
 with tempfile.TemporaryDirectory(prefix='character-output-') as tmp:
     current = build(Path(tmp)/'current')
     before = build(Path(tmp)/'before', before=True)
@@ -166,16 +183,17 @@ with tempfile.TemporaryDirectory(prefix='character-output-') as tmp:
     assert np.max(np.abs(output_delta)) < .00001
     assert np.all(np.diff(shelf) > -0.001), 'Shelf should rise monotonically'
 
-    # Compare current vs previous small-signal response with shelf off. The new
-    # filter must not low-pass the clean high-frequency signal.
-    clean_response_delta = {}
+    # Verify the small-signal output response against the specified transformer
+    # filters. These response changes are intentional model settings.
+    transformer_response_error = {}
     for frequency in [1000, 5000, 10000, 18000]:
         x = tone(frequency, level=-60)
-        a = spectrum(render(before, x))[frequency]
         b = spectrum(render(current, x))[frequency]
-        delta = float(db(b/a))
-        assert abs(delta) < .01, 'Clean HF response changed'
-        clean_response_delta[str(frequency)] = delta
+        measured = b / spectrum(x)[frequency]
+        expected_transfer = transformer_response(frequency, FS)
+        error = float(db(measured / expected_transfer))
+        assert abs(error) < .1, f'Transformer response differs from specified filters at {frequency} Hz'
+        transformer_response_error[str(frequency)] = error
 
     other_rates = {}
     for rate in [44100, 96000]:
@@ -236,7 +254,7 @@ metrics = {
     'shelf_location': 'sidechain after detector HPF, before rectification and stereo linking',
     'ratio1_output_identical_with_tilt_on_off': True,
     'sidechain_extra_gain_reduction_db': sidechain_results,
-    'clean_hf_response_change_db': clean_response_delta,
+    'transformer_response_error_db': transformer_response_error,
     'other_sample_rates': other_rates,
     'disabled_stages_exact_delayed_input': True, 'bypass_exact_delayed_input': True,
     'source_sha256': {name: hashlib.sha256((HERE.parent/'Source'/name).read_bytes()).hexdigest()

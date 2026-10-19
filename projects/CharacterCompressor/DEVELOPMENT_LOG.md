@@ -288,6 +288,26 @@ passed at 48, 44.1, and 96 kHz; maximum design-response phase error was 0.024°
 at 48 kHz through 17.95 kHz. The Linux Debug VST3 target compiled and linked.
 Full DSP/processor test suites and distortion/aliasing sweeps were not run.
 
+### 2026-10-19 — standalone Upward tests and transformer saturation check
+
+- Added a separate `CharacterUpwardCompression` CTest executable. Its 40 checks
+  cover the upward curves for all four models, unity above threshold, the
+  variable-mu progressive ratio, 1:1, wet/dry and bypass behavior, and all five
+  supported sample rates. The standalone test compiled with `g++` and passed;
+  CTest registration could not be run because CMake is unavailable here. The
+  processor suite retains its host-parameter Upward integration checks.
+- Reviewed the transformer result that appeared weak at 1 kHz. The nonlinear
+  residual is intentionally low-passed at 500 Hz, which strongly attenuates
+  the 3 kHz harmonic from a 1 kHz tone. Repeated the saturation measurement at
+  100 Hz, below that corner: at −6 dBFS peak, THD measured 1.374% / 6.169% /
+  15.191% / 19.265% for 0 / 6 / 12 / 18 dB drive; the 18 dB third harmonic
+  measured −14.70 dBc. This confirms drive-dependent saturation in the
+  low-frequency test band.
+- Changed the transformer waveform/harmonic plot test tone to 100 Hz and
+  refreshed the plot data. Added a DSP regression check requiring the
+  normalized 100 Hz third harmonic at 18 dB drive to exceed the 0 dB-drive
+  result by at least 4×. The direct DSP executable passed all 115 checks.
+
 ## Validation status
 
 Prior 1× revision validated in the Linux cloud instance on 2026-10-17
@@ -337,3 +357,19 @@ implementation, not a production-release claim.
 - Replace provisional product/manufacturer identifiers before public release.
 - Review JUCE licensing before distribution: modules are AGPLv3 or commercial;
   a commercial JUCE licence may be required.
+
+### 2026-10-19 — transformer filter Q settings and regenerated measurements
+
+- Set the transformer low-frequency second-order high-pass to 20 Hz, Q 1.0,
+  and its 19 kHz low-pass to Q 1.2. Both causal biquads run at the existing
+  2× processing rate.
+- Regenerated the characteristic, square-wave phase, and output-stage reports.
+  The phase model agrees with measured DSP within 0.017° from 50 Hz to 17.95
+  kHz; the 50 Hz square-wave droop is 73.70% from 1–9 ms. Phase checks also
+  pass at 44.1 and 96 kHz. The output-stage report verifies the updated
+  small-signal response against the specified filter transfer functions.
+- The transformer saturation plot continues to use the requested 100 Hz test
+  tone; at 18 dB drive its third harmonic is approximately −15.00 dBc.
+- Updated transformer response documentation and the focused measurement
+  results. The complete JUCE/CMake build was unavailable in this environment;
+  focused C++ DSP and measurement-script verification is being run directly.
