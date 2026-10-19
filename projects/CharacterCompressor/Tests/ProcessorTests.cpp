@@ -33,6 +33,8 @@ int runTests (int argc, char** argv)
     juce::ScopedJuceInitialiser_GUI juce;
     CharacterCompressorProcessor p;
     check (p.getParameters().size() == 20, "all host parameters registered");
+    check (std::abs (p.parameters.getParameter ("ratio")->getNormalisableRange().interval - 0.01f) < 1.0e-7f,
+           "ratio parameter supports 0.01 increments");
     auto buses = p.getBusesLayout();
     buses.inputBuses.set (0, juce::AudioChannelSet::mono());
     buses.outputBuses.set (0, juce::AudioChannelSet::mono());
@@ -292,13 +294,17 @@ int runTests (int argc, char** argv)
                 upwardUpdatedParameter = upward->getToggleState()
                     && exact (restored.parameters.getRawParameterValue ("upward")->load(), 1.0f);
             if (frame == 30)
+            {
                 yinRatioRange = std::abs (ratio->getMinimum() - 1.0) < 1.0e-9
                              && std::abs (ratio->getMaximum() - 2.0) < 1.0e-9;
+                ratio->setValue (2.0, juce::sendNotificationSync);
+            }
             if (frame == 40) upward->triggerClick();
             if (frame == 50)
                 yangRatioRange = ! upward->getToggleState()
                     && std::abs (ratio->getMinimum() - 1.0) < 1.0e-9
-                    && std::abs (ratio->getMaximum() - 20.0) < 1.0e-9;
+                    && std::abs (ratio->getMaximum() - 20.0) < 1.0e-9
+                    && std::abs (ratio->getValue() - 20.0) < 1.0e-6;
             if (frame == 180) juce::MessageManager::getInstance()->stopDispatchLoop();
         };
         transformer->triggerClick();
@@ -308,7 +314,7 @@ int runTests (int argc, char** argv)
         check (clickUpdatedParameter, "animated switch click updates host parameter");
         check (automationUpdatedSwitch, "host automation updates animated switch");
         check (upwardUpdatedParameter, "upward switch updates new host parameter");
-        check (yinRatioRange && yangRatioRange, "ratio knob range switches between Yin 1:1–2:1 and Yang 1:1–20:1");
+        check (yinRatioRange && yangRatioRange, "ratio knob switches between Yin 1:1–2:1 and Yang 1:1–20:1, mapping Yin 2:1 to Yang 20:1");
         // Exercise actual component rendering, not only construction.
         auto image = editor->createComponentSnapshot (editor->getLocalBounds());
         check (image.isValid(), "native editor renders to an image");

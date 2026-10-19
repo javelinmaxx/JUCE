@@ -640,13 +640,20 @@ void CharacterCompressorEditor::timerCallback()
         if (upwardMode != lastUpwardMode)
         {
             auto& ratio = sliders[2];
-            if (upwardMode && ratio.getValue() > 2.0)
-                ratio.setValue (2.0, juce::sendNotificationSync);
+            const auto oldMinimum = ratio.getMinimum();
+            const auto oldMaximum = ratio.getMaximum();
+            const auto oldSpan = oldMaximum - oldMinimum;
+            const auto position = oldSpan > 0.0
+                ? std::clamp ((ratio.getValue() - oldMinimum) / oldSpan, 0.0, 1.0)
+                : 0.0;
             auto range = ratio.getNormalisableRange();
             range.start = 1.0;
             range.end = upwardMode ? 2.0 : 20.0;
+            range.interval = 0.01f;
             ratio.setNormalisableRange (range);
             ratio.setSkewFactorFromMidPoint (upwardMode ? 1.4 : 4.0);
+            const auto scaledValue = std::round ((range.start + position * (range.end - range.start)) * 100.0) / 100.0;
+            ratio.setValue (scaledValue, juce::sendNotificationSync);
         }
         theme = themeFor (modelIndex, upwardMode);
         applyTheme();

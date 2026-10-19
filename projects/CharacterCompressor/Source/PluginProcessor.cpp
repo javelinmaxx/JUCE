@@ -24,7 +24,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout CharacterCompressorProcessor
     };
     add ("input", "Input", -24, 24, 0.1f, 0, 0, "dB");
     add ("threshold", "Threshold", -60, 0, 0.1f, -18, -30, "dB");
-    add ("ratio", "Ratio", 1, 20, 0.1f, 4, 4, ":1");
+    add ("ratio", "Ratio", 1, 20, 0.01f, 4, 4, ":1");
     add ("attack", "Attack", 0.05f, 100, 0.01f, 10, 10, "ms");
     add ("release", "Release", 10, 2000, 1, 150, 200, "ms");
     add ("knee", "Knee", 0, 24, 0.1f, 6, 12, "dB");

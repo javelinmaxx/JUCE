@@ -716,3 +716,9 @@ implementation, not a production-release claim.
   Yin, restoring 1:1–20:1 in Yang. Reduced the GR display to 0–18 dB and its
   timestamped history to three seconds. The 125 DSP checks and 205 focused
   processor/editor checks passed; all eight previews were regenerated.
+
+### 2026-10-19 — finer ratio steps and Yin/Yang range scaling
+- Changed Ratio to 0.01 increments. Switching modes now preserves the knob's
+  normalized position across their ranges, so Yin 2:1 maps to Yang 20:1.
+- Added focused checks for the parameter increment and the Yin-to-Yang endpoint
+  mapping.
