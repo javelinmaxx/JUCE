@@ -482,18 +482,18 @@ void CharacterCompressorEditor::paint (juce::Graphics& g)
     g.setColour (theme.text);
     g.setFont (juce::FontOptions (29.0f));
     g.drawText ("Character Compressor", 24, 40, 420, 38, juce::Justification::centredLeft);
-    drawBrushedMetalPanel (g, { 24, 150, 300, 358 }, 10, theme.card, theme.grid);
-    drawAnalogPanel (g, { 24, 514, 300, 128 }, 10, theme.card, theme.grid);
-    drawAnalogPanel (g, { 24, 660, 300, 128 }, 10, theme.card, theme.grid);
+    drawBrushedMetalPanel (g, { 24, 150, 300, 342 }, 10, theme.card, theme.grid);
+    drawAnalogPanel (g, { 24, 508, 300, 128 }, 10, theme.card, theme.grid);
+    drawAnalogPanel (g, { 24, 644, 300, 128 }, 10, theme.card, theme.grid);
     g.setColour (theme.text);
     g.setFont (juce::FontOptions (13.0f).withStyle ("bold"));
-    g.drawText ("SIDECHAIN", 38, 522, 250, 18, juce::Justification::centredLeft);
-    g.drawText ("TRANSFORMER STAGE", 38, 666, 270, 20, juce::Justification::centredLeft);
+    g.drawText ("SIDECHAIN", 38, 516, 250, 18, juce::Justification::centredLeft);
+    g.drawText ("TRANSFORMER STAGE", 38, 650, 270, 20, juce::Justification::centredLeft);
     drawAnalogPanel (g, { 344, 644, 180, 128 }, 10, theme.card, theme.grid);
     g.setColour (theme.secondary);
     g.setFont (juce::FontOptions (10.0f).withStyle ("bold"));
     g.drawText ("OUTPUT  /  MIX  /  STEREO LINK", 350, 646, 168, 16, juce::Justification::centred);
-    for (const auto y : { 508, 650 })
+    for (const auto y : { 500, 640 })
     {
         g.setColour (theme.grid);
         g.drawHorizontalLine (y, 24, 324);
@@ -601,17 +601,17 @@ void CharacterCompressorEditor::resized()
             sliders[index].setTextBoxStyle (juce::Slider::TextBoxBelow, false, std::min (width, 100), 22);
         sliders[index].setBounds (x, y + 20, width, height);
     };
-    place (1, 22, 188, 144, 136);
-    place (2, 168, 188, 156, 136);
-    place (3, 62, 346, 80, 58);
-    place (4, 204, 346, 80, 58);
-    place (5, 62, 426, 80, 58);
-    place (12, 204, 426, 80, 58);
+    place (1, 22, 188, 144, 120);
+    place (2, 168, 188, 156, 120);
+    place (3, 62, 330, 80, 58);
+    place (4, 204, 330, 80, 58);
+    place (5, 62, 410, 80, 58);
+    place (12, 204, 410, 80, 58);
     labels[1].setText ("THRES", juce::dontSendNotification);
-    place (8, 30, 540, 80, 78);
-    place (13, 130, 540, 80, 78);
-    place (9, 30, 686, 80, 78);
-    place (11, 130, 686, 80, 78);
+    place (8, 30, 534, 80, 78);
+    place (13, 130, 534, 80, 78);
+    place (9, 30, 670, 80, 78);
+    place (11, 130, 670, 80, 78);
     place (6, 344, 662, 60, 72);
     place (7, 404, 662, 60, 72);
     place (10, 464, 662, 60, 72);
@@ -626,8 +626,8 @@ void CharacterCompressorEditor::resized()
     labels[11].setText ("DC BIAS", juce::dontSendNotification);
     labels[13].setText ("SC HIGH TILT", juce::dontSendNotification);
     upward.setBounds (32, 152, 112, 28);
-    midSide.setBounds (241, 561, 58, 64);
-    transformer.setBounds (241, 707, 58, 64);
+    midSide.setBounds (241, 555, 58, 64);
+    transformer.setBounds (241, 691, 58, 64);
 }
 
 void CharacterCompressorEditor::timerCallback()

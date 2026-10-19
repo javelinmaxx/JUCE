@@ -604,3 +604,10 @@ implementation, not a production-release claim.
   VariTransient now match Attack and Release in size.
 - Rebuilt the VST3 and regenerated all eight mode previews; the focused UI
   preview check passed. The changes remain uncommitted and unpushed.
+
+### 2026-10-19 — compacted compressor and aligned stage bottoms
+- Reduced the Threshold/Ratio knob diameter by about 15%, shortened the
+  Compressor panel, and lifted the lower stages. Matched the Sidechain bottom
+  to the GR panel bottom and kept Transformer Stage level with Output.
+- Rebuilt the VST3 and preview target; all eight mode previews regenerated and
+  passed the focused UI preview check. No full test suite was run.

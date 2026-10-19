@@ -178,6 +178,7 @@ int runTests (int argc, char** argv)
                && input && detectorHpf && scHighTilt && transformerDrive,
                "editor includes the complete knob and switch set");
         check (threshold->getHeight() > attack->getHeight() && ratio->getHeight() > release->getHeight()
+               && threshold->getHeight() == 120 && ratio->getHeight() == 120
                && knee->getHeight() == attack->getHeight()
                && variTransient->getHeight() == release->getHeight()
                && knee->getWidth() == attack->getWidth()
