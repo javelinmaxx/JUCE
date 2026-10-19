@@ -14,7 +14,7 @@ transformer response: a 20 Hz second-order high-pass (Q 1.0) models
 low-frequency phase lead and droop, while a 19 kHz second-order low-pass
 (Q 1.2) models high-frequency phase lag and resonance from leakage inductance
 and winding capacitance. These are provisional design values. The transformer runs at fixed
-2× the host sample rate, with FIR interpolation and decimation filters. This is
+4× the host sample rate, with 257-tap FIR interpolation and decimation filters. This is
 intended to reduce aliasing; strong drive can still produce residual aliases. It
 is a prototype for listening and refinement, not a release claimed to match
 analog hardware.
@@ -47,6 +47,10 @@ four models through this branch; it does not EQ the audio output.
 - **Transformer drive:** increases saturation without increasing small-signal
   gain. Generated distortion rolls off above 500 Hz. The existing 0–18 dB
   drive range and 6 dB default are retained. Output gain can drive the transformer harder as well.
+- **Even harmonics:** optional transformer DC magnetizing current, off at 0% by
+  default. Increasing it biases the core response and adds asymmetric
+  distortion and even-order harmonics. It is independently automatable and
+  saved with the session.
 - **SC High Tilt:** sidechain high shelf, off by default. The 1.5 kHz
   midpoint has +3 dB gain, rising smoothly to +6 dB at high frequencies (shelf
   slope S = 1). It follows the detector HPF and increases high-frequency
@@ -59,14 +63,15 @@ gain controls and toggle transitions are smoothed over approximately 20 ms.
 Mono and stereo layouts are supported, with no lookahead and a fixed
 64-sample latency (1.33 ms at 48 kHz), reported to the host for compensation.
 The transformer, clean output, and bypass paths retain this latency even when
-the transformer is disabled. Both resampling filters have 129 taps; only the
-transformer stage runs at 2×, and its filter coefficients use that higher rate.
-Host automation and session state recall cover all 15 parameters. Existing
-parameter IDs/order are retained; High Tilt and Upward are appended with AU
-version hints 2 and 3. There is no external sidechain, oversampling selector,
+the transformer is disabled. Both resampling filters have 257 taps; only the
+transformer stage runs at 4×, and its filter coefficients use that higher rate.
+Host automation and session state recall cover all 18 parameters. Existing
+parameter IDs/order are retained; High Tilt, Upward, Stereo Link, Mid/Side,
+and Even harmonics are appended. AU version hints 2, 3, and 4 mark the
+compatible additions. There is no external sidechain, oversampling selector,
 automatic makeup gain, or preset browser yet.
 
-The 580 × 940 portrait editor puts the larger threshold and ratio knobs first,
+The 580 × 980 portrait editor puts the larger threshold and ratio knobs first,
 with attack and release together beneath them and smaller secondary controls
 below. The right-hand display pairs a vertical 0–30 dB gain-reduction meter
 with a scrolling five-second history line (oldest at left, current at right).
@@ -81,33 +86,28 @@ meter Upward Gain. The palette follows model automation and session recall.
 
 ## Measured characteristics
 
-See [the measurement report](Measurements/README.md) for compression curves,
-attack/recovery plots, transformer harmonics and frequency response, and the
-previous 1× high-drive aliasing measurements. Those plots are the baseline
-from before the 2× change, not a validation of the new code. Figures are available
-as PNG, SVG, and PDF. Per the user’s request, the test suites and measurement
-sweep were not rerun after the 2× implementation.
+See [the measurement report](Measurements/README.md) for current compression
+curves, attack/recovery plots, upward-compression curves, and transformer
+harmonic, frequency-response, and phase measurements. Figures are available as
+PNG, SVG, and PDF. Original 1× alias measurements remain preserved under
+`Measurements/baseline/` for comparison.
 
-The subsequent [square-wave phase verification](Measurements/phase/README.md)
-records focused square-wave measurements for the current 2× transformer. At
-48 kHz, measured phase is +21.74° at 50 Hz and −73.56° at 17.95 kHz after
-removing fixed FIR delay. Maximum phase error against the specified filter
-response is 0.024° through 17.95 kHz; focused checks also pass at 44.1 and
-96 kHz. The full DSP/processor test suites remain unrerun.
+The [square-wave phase verification](Measurements/phase/README.md) records
+focused measurements for the current 4× transformer. Its 257-tap filters keep
+the reported round-trip latency at 64 host samples.
 
-The [existing output-stage measurements](Measurements/output_stage/README.md)
-were made with the former 24 dB/octave slope, before the hysteresis and updated
-bandwidth/resonance settings. Their roll-off numbers do not describe this 12
-dB/octave filter. They verify High Tilt at 44.1, 48, and 96 kHz.
-At −12 dBFS peak and 6 dB drive, THD falls from 2.14% at 100 Hz to 0.0221%
-at 500 Hz and 0.00142% at 1 kHz. These tests use compression 1:1 and High Tilt off.
-The detector shelf measures +3.00 dB at 1.5 kHz and +6.00 dB at 10 kHz.
-At ratio 1:1, toggling High Tilt leaves the output sample-identical with the
-transformer both on and off. With compression active it increases HF gain
-reduction in all four models.
+The [output-stage measurements](Measurements/output_stage/README.md) use the
+current 500 Hz / 12 dB-per-octave residual filter and 4× transformer path.
+They verify transformer harmonic roll-off and High Tilt at 44.1, 48, and
+96 kHz. At −12 dBFS peak and 6 dB drive, THD measures 0.7114% at 100 Hz,
+0.04205% at 500 Hz, and 0.01101% at 1 kHz. The detector shelf measures
++3.00 dB at 1.5 kHz and +6.00 dB at 10 kHz. At ratio 1:1, toggling High Tilt
+leaves output sample-identical with the transformer on or off; with compression
+active it increases HF gain reduction in all four models.
 
 The user confirmed that the preceding VST3 and AU builds work on their Mac.
-The new output-stage revision still needs a macOS rebuild and listening check.
+The current 4× transformer and Even harmonics control still need a macOS rebuild
+and listening check.
 
 ## Build and test in this cloud workspace
 

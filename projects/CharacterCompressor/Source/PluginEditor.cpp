@@ -23,12 +23,12 @@ CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcess
     highTilt.setTooltip ("Sidechain high shelf: +3 dB at 1.5 kHz, rising to +6 dB. Increases high-frequency compression sensitivity; no direct output EQ.");
     upward.setTooltip ("Boosts levels below threshold toward it; ratio sets the below-threshold slope.");
 
-    const std::array<const char*, 11> ids { "input", "threshold", "ratio", "attack", "release",
-        "knee", "output", "mix", "sidechain", "drive", "stereoLink" };
-    const std::array<const char*, 11> names { "INPUT", "THRESHOLD", "RATIO", "ATTACK", "RELEASE",
-        "KNEE", "OUTPUT", "MIX", "DETECTOR HPF", "TRANSFORMER DRIVE", "STEREO LINK" };
-    const std::array<const char*, 11> units { " dB", " dB", ":1", " ms", " ms",
-        " dB", " dB", " %", " Hz", " dB", " %" };
+    const std::array<const char*, 12> ids { "input", "threshold", "ratio", "attack", "release",
+        "knee", "output", "mix", "sidechain", "drive", "stereoLink", "evenHarmonics" };
+    const std::array<const char*, 12> names { "INPUT", "THRESHOLD", "RATIO", "ATTACK", "RELEASE",
+        "KNEE", "OUTPUT", "MIX", "DETECTOR HPF", "TRANSFORMER DRIVE", "STEREO LINK", "EVEN HARMONICS" };
+    const std::array<const char*, 12> units { " dB", " dB", ":1", " ms", " ms",
+        " dB", " dB", " %", " Hz", " dB", " %", " %" };
     for (size_t i = 0; i < sliders.size(); ++i)
     {
         auto& slider = sliders[i];
@@ -52,6 +52,7 @@ CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcess
     sliders[8].setTooltip ("High-pass filter in the detector only. 0 Hz disables it.");
     sliders[9].setTooltip ("Transformer saturation drive. Generated distortion rolls off above 500 Hz; clean highs pass through.");
     sliders[10].setTooltip ("Blends each channel's detector with the louder detector: 0% is independent, 100% is fully linked.");
+    sliders[11].setTooltip ("Simulates transformer DC magnetizing current, increasing transfer asymmetry and even-order harmonics.");
     midSide.setTooltip ("Encode stereo to Mid and Side before compression, then decode back to Left and Right.");
     modelDescription.setJustificationType (juce::Justification::centred);
     addAndMakeVisible (modelDescription);
@@ -261,7 +262,7 @@ void CharacterCompressorEditor::paintMeter (juce::Graphics& g)
 void CharacterCompressorEditor::resized()
 {
     model.setBounds (24, 92, 532, 32);
-    modelDescription.setBounds (24, 132, 532, 24);
+    modelDescription.setBounds (24, 128, 532, 20);
     const auto place = [this] (size_t index, int x, int y, int width, int height)
     {
         labels[index].setBounds (x, y, width, 20);
@@ -271,16 +272,17 @@ void CharacterCompressorEditor::resized()
     place (2, 191, 178, 155, 154);
     place (3, 32, 378, 155, 94);
     place (4, 191, 378, 155, 94);
-    place (0, 24, 506, 110, 88);
-    place (6, 134, 506, 110, 88);
-    place (7, 244, 506, 110, 88);
-    place (5, 24, 634, 110, 88);
-    place (8, 134, 634, 110, 88);
-    place (9, 244, 634, 110, 88);
-    place (10, 354, 634, 110, 88);
+    place (0, 24, 500, 104, 60);
+    place (6, 136, 500, 104, 60);
+    place (7, 248, 500, 104, 60);
+    place (5, 24, 584, 104, 60);
+    place (8, 136, 584, 104, 60);
+    place (9, 248, 584, 104, 60);
+    place (10, 24, 668, 104, 60);
+    place (11, 136, 668, 104, 60);
     // The long drive label needs a compact caption at the secondary control size.
     labels[9].setText ("IRON DRIVE", juce::dontSendNotification);
-    meters.setBounds (24, 742, 532, 20);
+    meters.setBounds (24, 150, 532, 20);
     transformer.setBounds (24, 766, 532, 36);
     highTilt.setBounds (24, 806, 532, 36);
     upward.setBounds (24, 846, 532, 36);

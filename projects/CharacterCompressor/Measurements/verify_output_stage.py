@@ -35,6 +35,12 @@ def build(directory, before=False, residual_filter=True):
         shutil.copy(header, source)
     if before:
         shutil.copy(HERE / 'baseline/transformer_before_frequency.h', source / 'OversampledTransformer.h')
+        dsp_header = source / 'CompressorDSP.h'
+        code = dsp_header.read_text()
+        current_call = 'transformers[c].process (mixed, values[drive], values[evenHarmonics])'
+        assert current_call in code, 'Could not adapt current DSP wrapper to the preserved 2x transformer'
+        dsp_header.write_text(code.replace(current_call,
+            'transformers[c].process (mixed, values[drive])'))
     elif not residual_filter:
         transformer = source / 'OversampledTransformer.h'
         code = transformer.read_text()
@@ -96,12 +102,12 @@ def thd(spec, frequency, rate=FS):
 
 def lowpass_db(frequencies, rate):
     # Independent second-order Butterworth magnitude, prewarped at 500 Hz.
-    ratio = np.tan(np.pi*frequencies/(2*rate)) / np.tan(np.pi*500/(2*rate))
+    ratio = np.tan(np.pi*frequencies/(4*rate)) / np.tan(np.pi*500/(4*rate))
     return -10 * np.log10(1 + ratio**4)
 
 
 def transformer_response(frequency, rate):
-    processing_rate = 2 * rate
+    processing_rate = 4 * rate
     z = np.exp(-2j * np.pi * frequency / processing_rate)
     low_k = np.tan(np.pi * 20 / processing_rate)
     low_norm = 1 / (1 + low_k + low_k * low_k)
@@ -241,7 +247,7 @@ with tempfile.TemporaryDirectory(prefix='character-output-') as tmp:
     assert low_frequency_thd[-1] > low_frequency_thd[0]
 
 metrics = {
-    'sample_rate_hz': FS, 'oversampling_factor': 2, 'latency_samples': LATENCY,
+    'sample_rate_hz': FS, 'oversampling_factor': 4, 'latency_samples': LATENCY,
     'thd_input_peak_dbfs': -12, 'thd_harmonics': 'H2-H10 below Nyquist',
     'distortion_filter': '500 Hz second-order Butterworth (12 dB/octave), nonlinear residual only',
     'harmonic_comparison': {'input_hz': 100, 'peak_dbfs': -6, 'drive_db': 12,
@@ -276,7 +282,7 @@ plt.rcParams.update({'font.family':'DejaVu Sans','font.size':10,'axes.spines.top
 fig, axes = plt.subplots(2,2,figsize=(12,8.5))
 fig.subplots_adjust(left=.08,right=.97,bottom=.11,top=.84,wspace=.28,hspace=.46)
 fig.suptitle('Transformer distortion / high-tilt verification', x=.06, ha='left', y=.97, fontsize=21, fontweight='bold')
-fig.text(.06,.91,'Production C++ DSP • 48 kHz • 2× transformer • compression 1:1 • fixed 64-sample delay removed',fontsize=10)
+fig.text(.06,.91,'Production C++ DSP • 48 kHz • 4× transformer • compression 1:1 • fixed 64-sample delay removed',fontsize=10)
 fig.text(.06,.87,'500 Hz / 12 dB per octave filtering applies to generated distortion; the clean high-frequency signal remains.',fontsize=9,color='#526173')
 colors=['#0072b2','#d55e00','#009e73','#8b58a5']
 ax=axes[0,0]

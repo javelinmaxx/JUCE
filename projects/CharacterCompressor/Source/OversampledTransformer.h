@@ -8,23 +8,25 @@
 
 namespace character
 {
-// Fixed 2x oversampling with two 129-tap Blackman-windowed sinc filters.
-// The interpolation and decimation filters each delay the signal by 64 samples
-// at 2x rate, for an integer 64-sample round-trip delay at the host rate.
+// Fixed 4x oversampling with two 257-tap Blackman-windowed sinc filters.
+// The interpolation and decimation group delays sum to an integer 64-sample
+// round-trip delay at the host rate.
 class OversampledTransformer
 {
 public:
-    static constexpr int factor = 2;
-    static constexpr int latencySamples = 64;
+    static constexpr size_t taps = 257;
+    static constexpr int factor = 4;
+    static constexpr int latencySamples = static_cast<int> ((taps - 1) / factor);
     static constexpr double distortionCornerHz = 500.0;
 
     void prepare (double sampleRate) noexcept
     {
         constexpr double pi = 3.14159265358979323846;
-        // Design one unity-sum Blackman-windowed sinc for both halves of the
-        // 2x converter. Its 0.235-cycle cutoff leaves a transition below host
-        // Nyquist (0.25 cycles at the oversampled rate).
-        constexpr double cutoff = 0.235;
+        // Design a unity-sum Blackman-windowed sinc for both halves of the
+        // 4x converter. The cutoff is just below host Nyquist (0.125 cycles
+        // at the oversampled rate), with enough taps to retain a narrow
+        // transition band and strong stopband rejection.
+        constexpr double cutoff = 0.1175;
         double sum = 0;
         for (size_t i = 0; i < taps; ++i)
         {
@@ -40,7 +42,7 @@ public:
             c = static_cast<float> (c / sum);
 
         const auto rate = sampleRate * factor;
-        // Flux state runs at 2x as well; the 60 Hz pole sets its memory time.
+        // Flux state runs at 4x as well; the 60 Hz pole sets its memory time.
         fluxCoefficient = static_cast<float> (std::exp (-2 * pi * 60 / rate));
         // Second-order Butterworth at 500 Hz, applied only to the nonlinear
         // residual. Generated harmonics roll off at 12 dB/octave above the corner.
@@ -63,22 +65,21 @@ public:
         response.reset();
     }
 
-    float process (float x, float drive) noexcept
+    float process (float x, float drive, float evenHarmonics = 0) noexcept
     {
-        // Insert a zero between host samples, apply the appropriate FIR phase,
-        // pass both high-rate samples through the nonlinear stage, then retain
-        // every other output sample for decimation.
+        // Zero-stuff the host input, apply each FIR phase, pass all high-rate
+        // samples through the nonlinear stage, then retain one per host sample.
         inputPosition = inputPosition == 0 ? inputLength - 1 : inputPosition - 1;
         inputHistory[inputPosition] = inputHistory[inputPosition + inputLength] = x;
         float output = 0;
         for (size_t phase = 0; phase < factor; ++phase)
         {
             // Polyphase interpolation omits the inserted zeros. Multiplication
-            // by 2 compensates zero insertion and preserves the passband level.
+            // by the factor compensates zero insertion and preserves the passband level.
             float interpolated = 0;
             for (size_t k = phase; k < taps; k += factor)
                 interpolated += coefficients[k] * inputHistory[inputPosition + k / factor];
-            const auto shaped = saturate (interpolated * factor, drive);
+            const auto shaped = saturate (interpolated * factor, drive, evenHarmonics);
             outputPosition = outputPosition == 0 ? taps - 1 : outputPosition - 1;
             outputHistory[outputPosition] = outputHistory[outputPosition + taps] = shaped;
             if (phase == 0)
@@ -89,7 +90,7 @@ public:
     }
 
 private:
-    float saturate (float x, float drive) noexcept
+    float saturate (float x, float drive, float evenHarmonics) noexcept
     {
         // Filter only the generated-distortion residual below. Clean highs
         // retain the transformer response.
@@ -102,7 +103,10 @@ private:
 
         flux = x + fluxCoefficient * (flux - x);
         // Flux adds a small signal-dependent bias for asymmetric coloration.
-        const auto bias = 0.12f * std::tanh (flux * drive);
+        // A controlled DC magnetizing current biases the core and makes its
+        // transfer curve asymmetric, increasing even-order harmonics. The
+        // zero setting preserves the original symmetric operating point.
+        const auto bias = 0.12f * std::tanh (flux * drive) + 0.8f * evenHarmonics;
         const auto b = std::tanh (bias);
         // Bias-corrected tanh, normalized for unity minor-loop small-signal
         // slope. Filtering only (shaped - x) preserves clean highs while
@@ -138,8 +142,7 @@ private:
         double b0 = 0, a1 = 0, a2 = 0, z1 = 0, z2 = 0;
     };
 
-    static constexpr size_t taps = 129;
-    static constexpr size_t inputLength = (taps + 1) / factor;
+    static constexpr size_t inputLength = (taps + factor - 1) / factor;
     std::array<float, taps> coefficients {};
     // Mirrored ring buffers keep convolution reads contiguous and allocation-free.
     std::array<float, inputLength * 2> inputHistory {};

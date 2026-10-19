@@ -121,7 +121,7 @@ np.savetxt(OUT / 'static_curves.csv', np.column_stack([levels, static.T, sine_gr
 metadata = {'sample_rate_hz': FS, 'threshold_dbfs': -18, 'ratio_control': 4,
     'attack_control_ms': 10, 'release_control_ms': 150, 'knee_db': 6,
     'detector_hpf_hz': 0, 'input_output_gain_db': 0, 'mix': 1,
-    'oversampling_factor': 2, 'compensated_latency_samples': latency,
+    'oversampling_factor': 4, 'compensated_latency_samples': latency,
     'dsp_sha256': {name: hashlib.sha256((HERE.parent / 'Source' / name).read_bytes()).hexdigest()
                    for name in ['CompressorDSP.h', 'OversampledTransformer.h', 'TransformerResponse.h', 'HighTilt.h']},
     'source_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=HERE, text=True).strip(),
@@ -177,7 +177,7 @@ finish(fig, '02_attack_release', 'DC isolates envelope dynamics; detector HPF an
 fig, axes = plt.subplots(2, 2, figsize=(12, 8.7))
 fig.subplots_adjust(left=.075, right=.97, bottom=.10, top=.85, wspace=.25, hspace=.44)
 fig.suptitle('03  /  Output transformer character', x=.06, ha='left', fontsize=21, fontweight='bold', y=.97)
-fig.text(.06, .91, 'Measured C++ DSP • 48 kHz • 2× transformer • compression disabled (1:1) • 0 dB input/output gain', fontsize=10)
+fig.text(.06, .91, 'Measured C++ DSP • 48 kHz • 4× transformer • compression disabled (1:1) • 0 dB input/output gain', fontsize=10)
 a = axes[0,0]
 segment = np.arange(FS*2-FS//50, FS*2)
 a.plot((segment-segment[0])/FS*1000, tone[segment], color='#a5aab1', lw=1, label='Clean input')
@@ -201,12 +201,12 @@ baseline_path = HERE / 'baseline/alias_spectrum.csv'
 if baseline_path.exists():
     baseline = np.loadtxt(baseline_path, delimiter=',', skiprows=1)
     a.plot(baseline[:,0]/1000, baseline[:,1], color='#a5aab1', lw=1, alpha=.65, label='Previous 1×')
-    a.plot(f/1000, alias_spectrum, color=COLORS[3], lw=1, label='Current 2×')
+    a.plot(f/1000, alias_spectrum, color=COLORS[3], lw=1, label='Current 4×')
     a.legend(fontsize=8)
 a.set(title='10 kHz at −6 dBFS peak, 18 dB drive', xlabel='Frequency (kHz)', ylabel='Output spectral level (dBFS)', xlim=(0,24), ylim=(-120,0))
 a.annotate('18 kHz alias bin', xy=(18,max(-115,alias_spectrum[18000])), xytext=(11,-14), fontsize=9,
            arrowprops={'arrowstyle':'->','color':'#526173'})
-finish(fig, '03_transformer', 'Spectra: final 1 s of coherent 2 s tones. 2× oversampling reduces aliasing; residual products remain possible. Fixed delay removed.')
+finish(fig, '03_transformer', 'Spectra: final 1 s of coherent 2 s tones. 4× oversampling reduces aliasing; residual products remain possible. Fixed delay removed.')
 with PdfPages(OUT / 'character_compressor_report.pdf') as pdf:
     for fig in figures:
         pdf.savefig(fig)

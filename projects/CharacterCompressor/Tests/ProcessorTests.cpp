@@ -26,7 +26,7 @@ int runTests (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI juce;
     CharacterCompressorProcessor p;
-    check (p.getParameters().size() == 17, "all host parameters registered");
+    check (p.getParameters().size() == 18, "all host parameters registered");
     auto buses = p.getBusesLayout();
     buses.inputBuses.set (0, juce::AudioChannelSet::mono());
     buses.outputBuses.set (0, juce::AudioChannelSet::mono());
@@ -39,7 +39,7 @@ int runTests (int argc, char** argv)
 
     set (p, "model", 2); set (p, "threshold", -27); set (p, "ratio", 7);
     set (p, "transformer", 1); set (p, "drive", 12); set (p, "mix", 65);
-    set (p, "highTilt", 1);
+    set (p, "highTilt", 1); set (p, "evenHarmonics", 37.5f);
     juce::MemoryBlock saved;
     p.getStateInformation (saved);
     CharacterCompressorProcessor restored;
@@ -127,7 +127,7 @@ int runTests (int argc, char** argv)
         check (editor->getNumChildComponents() >= 25, "editor contains controls and meters");
         juce::Slider *threshold = nullptr, *ratio = nullptr, *attack = nullptr, *release = nullptr;
         AnimatedSwitch *transformer = nullptr, *upward = nullptr, *midSide = nullptr;
-        juce::Slider* stereoLink = nullptr;
+        juce::Slider *stereoLink = nullptr, *evenHarmonics = nullptr;
         for (auto* child : editor->getChildren())
         {
             check (editor->getLocalBounds().contains (child->getBounds()), "controls fit inside portrait panel");
@@ -138,6 +138,7 @@ int runTests (int argc, char** argv)
                 if (slider->getName() == "ATTACK") attack = slider;
                 if (slider->getName() == "RELEASE") release = slider;
                 if (slider->getName() == "STEREO LINK") stereoLink = slider;
+                if (slider->getName() == "EVEN HARMONICS") evenHarmonics = slider;
             }
             if (auto* button = dynamic_cast<AnimatedSwitch*> (child))
             {
@@ -146,8 +147,8 @@ int runTests (int argc, char** argv)
                 if (button->getButtonText() == "MID / SIDE MODE") midSide = button;
             }
         }
-        check (threshold && ratio && attack && release && transformer && upward && midSide && stereoLink,
-               "portrait controls include mid/side and stereo link");
+        check (threshold && ratio && attack && release && transformer && upward && midSide && stereoLink && evenHarmonics,
+               "portrait controls include mid/side, stereo link, and Even harmonics");
         check (threshold->getHeight() > attack->getHeight() && ratio->getHeight() > release->getHeight(),
                "primary knobs are larger than timing knobs");
         check (attack->getY() == release->getY() && attack->getRight() <= release->getX(),
@@ -168,6 +169,10 @@ int runTests (int argc, char** argv)
         history.visit (18.0, [&] (float, float, double) { ++visible; });
         check (visible == 0, "history expires by elapsed time when UI timer stalls");
         // Run a real message loop so switch clicks and timer-driven animation execute.
+        set (restored, "transformer", 0);
+        transformer->setToggleState (false, juce::dontSendNotification);
+        set (restored, "upward", 0);
+        upward->setToggleState (false, juce::dontSendNotification);
         struct CaptureTimer final : juce::Timer
         {
             std::function<void()> tick;
@@ -181,11 +186,15 @@ int runTests (int argc, char** argv)
             restored.reduction.store (8.0f + 6.0f * std::sin (static_cast<float> (frame) * 0.09f));
             if (frame == 8)
             {
-                clickUpdatedParameter = ! transformer->getToggleState()
-                    && exact (restored.parameters.getRawParameterValue ("transformer")->load(), 0.0f);
+                clickUpdatedParameter = transformer->getToggleState()
+                    && exact (restored.parameters.getRawParameterValue ("transformer")->load(), 1.0f);
+                set (restored, "transformer", 0);
+            }
+            if (frame == 16)
+            {
+                automationUpdatedSwitch = ! transformer->getToggleState();
                 set (restored, "transformer", 1);
             }
-            if (frame == 16) automationUpdatedSwitch = transformer->getToggleState();
             if (frame == 20) upward->triggerClick();
             if (frame == 28)
                 upwardUpdatedParameter = upward->getToggleState()
@@ -219,7 +228,7 @@ int runOutputStageTests (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI juce;
     CharacterCompressorProcessor p;
-    check (p.getParameters().size() == 17, "stereo and mid/side parameters registered");
+    check (p.getParameters().size() == 18, "stereo, mid/side, and transformer parameters registered");
     auto* tilt = p.parameters.getParameter ("highTilt");
     check (tilt && tilt == p.getParameters()[13]
            && p.parameters.getParameter ("upward") == p.getParameters()[14],
@@ -227,6 +236,9 @@ int runOutputStageTests (int argc, char** argv)
     check (p.parameters.getParameter ("stereoLink") == p.getParameters()[15]
            && p.parameters.getParameter ("midSide") == p.getParameters()[16],
            "stereo link and mid/side append without moving existing automation");
+    check (p.parameters.getParameter ("evenHarmonics") == p.getParameters()[17]
+           && exact (p.parameters.getRawParameterValue ("evenHarmonics")->load(), 0.0f),
+           "Even harmonics is appended and defaults off");
     check (exact (tilt->getValue(), 0.0f), "high tilt defaults off");
     set (p, "ratio", 1); set (p, "highTilt", 1);
     juce::MemoryBlock saved;
@@ -238,6 +250,7 @@ int runOutputStageTests (int argc, char** argv)
 
     auto oldState = p.parameters.copyState();
     oldState.removeChild (oldState.getChildWithProperty ("id", "highTilt"), nullptr);
+    oldState.removeChild (oldState.getChildWithProperty ("id", "evenHarmonics"), nullptr);
     juce::MemoryBlock legacy;
     juce::AudioProcessor::copyXmlToBinary (*oldState.createXml(), legacy);
     restored.setStateInformation (legacy.getData(), static_cast<int> (legacy.getSize()));
@@ -245,6 +258,8 @@ int runOutputStageTests (int argc, char** argv)
            "legacy state turns shelf off even when previously enabled");
     check (exact (restored.parameters.getRawParameterValue ("ratio")->load(), 1.0f),
            "legacy state preserves existing settings");
+    check (exact (restored.parameters.getRawParameterValue ("evenHarmonics")->load(), 0.0f),
+           "legacy state defaults transformer DC current to off");
 
     // A real processBlock render verifies that host automation reaches the DSP.
     restored.prepareToPlay (48000, 256);

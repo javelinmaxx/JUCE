@@ -34,7 +34,7 @@
   the mix/output controls. High Tilt acts in the detector branch after the HPF,
   before rectification and stereo linking, for all four compressor models.
 - These are original behavioral approximations, not calibrated circuit models
-  or exact reproductions of named hardware. Fixed 2× transformer oversampling is
+  or exact reproductions of named hardware. Fixed 4× transformer oversampling is
   implemented; residual aliasing, reference measurement, and listening remain.
 
 ## Change log
@@ -327,9 +327,9 @@ DSP checks cover steady-state FET/VCA ratios, the variable-mu progressive curve,
 optical steady-state behavior, unity ratio, stereo linking, block-size invariance,
 dry mix, exact bypass, automation transitions, transformer harmonics/DC rejection,
 reset, invalid inputs, and finite output at extreme settings from 8–192 kHz.
-Processor checks cover all 13 parameter registrations, mono/stereo layout rules,
-state recall, malformed-state rejection, actual processing, host bypass, zero
-latency, empty buffers, and optional editor construction/rendering.
+Processor checks cover all 18 parameter registrations, mono/stereo layout rules,
+state recall, malformed-state rejection, actual processing, host bypass,
+64-sample latency, empty buffers, and optional editor construction/rendering.
 
 Build outputs and detailed test logs are outside the checkout under
 `/workspace/juce-env/character-build` and `/workspace/juce-env/character-*.log`.
@@ -352,7 +352,7 @@ implementation, not a production-release claim.
   mono/stereo instances in Logic Pro X 10.5.7.
 - Listen and tune attack/release, model transitions, optical recovery, and
   transformer coloration against the desired references.
-- Run the updated tests and 2× aliasing measurements when requested; assess
+- Run the updated tests and 4× aliasing measurements when requested; assess
   residual aliases and CPU usage before release.
 - Replace provisional product/manufacturer identifiers before public release.
 - Review JUCE licensing before distribution: modules are AGPLv3 or commercial;
@@ -373,6 +373,25 @@ implementation, not a production-release claim.
 - Updated transformer response documentation and the focused measurement
   results. The complete JUCE/CMake build was unavailable in this environment;
   focused C++ DSP and measurement-script verification is being run directly.
+
+### 2026-10-19 — 4× transformer oversampling and Even harmonics control
+
+- Increased fixed transformer oversampling from 2× to 4×. Expanded the
+  Blackman-windowed interpolation/decimation filters from 129 to 257 taps to
+  preserve the transition width; their combined group delay keeps host latency
+  at 64 samples. Updated phase/output verification to use the 4× processing
+  rate and regenerated the characteristic, output-stage, and phase plots.
+- Added the automatable `Even harmonics` knob (0–100%, default 0%) to simulate
+  transformer DC magnetizing current. The current biases the core transfer
+  curve, creating asymmetry and even-order distortion while the zero setting
+  preserves the prior response. Older sessions default the new parameter off.
+- Added the dedicated 100 Hz transformer test plot, showing the waveform and
+  H2/H4/H6/H8/H10 as the control increases. At 18 dB drive and −6 dBFS input,
+  H2 rises from the numerical floor at 0% to −17.27 dBc at 100%.
+- CTest passed all three suites (DSP, processor, upward compression); the
+  editor integration passed 253 checks, including rendering the new knob. The
+  Linux Debug VST3 target built successfully. Phase, output-stage, upward, and
+  transformer even-harmonic measurements all regenerated successfully.
 
 ### 2026-10-19 — dedicated upward-compression plot
 

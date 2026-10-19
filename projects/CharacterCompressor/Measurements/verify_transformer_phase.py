@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Focused square-wave verification of the real 2x transformer processing path."""
+"""Focused square-wave verification of the real 4x transformer processing path."""
 import ctypes
 import hashlib
 import json
@@ -39,6 +39,13 @@ def build(directory, old=False):
     shutil.copy(HERE / 'render.cpp', measure)
     shutil.copy(HERE / 'baseline/transformer_before_phase.h' if old else
                 HERE.parent / 'Source/OversampledTransformer.h', source / 'OversampledTransformer.h')
+    if old:
+        dsp_header = source / 'CompressorDSP.h'
+        code = dsp_header.read_text()
+        current_call = 'transformers[c].process (mixed, values[drive], values[evenHarmonics])'
+        assert current_call in code, 'Could not adapt current DSP wrapper to the preserved 2x transformer'
+        dsp_header.write_text(code.replace(current_call,
+            'transformers[c].process (mixed, values[drive])'))
     if not old:
         shutil.copy(HERE.parent / 'Source/TransformerResponse.h', source)
     destination = directory / 'render.so'
@@ -65,7 +72,7 @@ def render(lib, signal, transformer=True, rate=FS):
 
 def design_response(frequency, rate):
     # Independent frequency-domain transfer of the specified loaded model.
-    processing_rate = 2 * rate
+    processing_rate = 4 * rate
     z = np.exp(-2j * np.pi * frequency / processing_rate)
     low_k = np.tan(np.pi * 20 / processing_rate)
     low_norm = 1 / (1 + low_k + low_k * low_k)
@@ -125,7 +132,7 @@ with tempfile.TemporaryDirectory(prefix='character-phase-') as tmp:
 
 metrics = {
     'sample_rate_hz': FS, 'input_peak_dbfs': -60, 'drive_db': 0, 'ratio': 1,
-    'oversampling_factor': 2, 'compensated_latency_samples': 64,
+    'oversampling_factor': 4, 'compensated_latency_samples': 64,
     'lf_corner_hz': 20, 'lf_q': 1.0, 'hf_corner_hz': 19000, 'hf_q': 1.2,
     'phase_degrees_at_50hz': float(phase[0]),
     'phase_degrees_at_17950hz': float(phase[-1]),
@@ -155,8 +162,8 @@ fig, axes = plt.subplots(2,2,figsize=(12,8.5))
 fig.subplots_adjust(left=.075,right=.97,bottom=.11,top=.84,wspace=.25,hspace=.42)
 fig.suptitle('Transformer phase / square-wave verification', x=.06, ha='left', y=.97,
              fontsize=21, fontweight='bold')
-fig.text(.06,.91,'Actual DSP • 48 kHz host / 2× transformer • −60 dBFS peak • compression 1:1 • drive 0 dB',fontsize=10)
-fig.text(.06,.87,'64-sample FIR delay removed; transformer phase remains. Both before/after traces use 2× oversampling.',fontsize=9,color='#526173')
+fig.text(.06,.91,'Actual DSP • 48 kHz host / 4× transformer • −60 dBFS peak • compression 1:1 • drive 0 dB',fontsize=10)
+fig.text(.06,.87,'64-sample FIR delay removed; transformer phase remains. Previous/current traces use 2× / 4× oversampling.',fontsize=9,color='#526173')
 colors={'clean':'#9ca3af','old':'#d55e00','new':'#0072b2'}
 for f, ax, bounds, title in [(50,axes[0,0],(-2,22),'50 Hz square: LF droop'),
                             (2000,axes[0,1],(-.1,.45),'2 kHz square: edge shaping and HF lag')]:

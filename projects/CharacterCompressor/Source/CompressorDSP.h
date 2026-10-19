@@ -18,7 +18,7 @@ struct Parameters
     Model model = Model::fet;
     float inputDb = 0, thresholdDb = -18, ratio = 4, attackMs = 10;
     float releaseMs = 150, kneeDb = 6, outputDb = 0, mix = 1;
-    float sidechainHz = 80, driveDb = 6, stereoLink = 100;
+    float sidechainHz = 80, driveDb = 6, stereoLink = 100, evenHarmonics = 0;
     bool transformer = false, bypass = false, highTilt = false, upward = false, midSide = false;
 };
 
@@ -84,12 +84,14 @@ public:
         p.sidechainHz = safe (p.sidechainHz, 0, 300, 80);
         p.driveDb = safe (p.driveDb, 0, 18, 6);
         p.stereoLink = safe (p.stereoLink, 0, 100, 100);
+        p.evenHarmonics = safe (p.evenHarmonics, 0, 100, 0);
         selected = std::clamp (static_cast<int> (p.model), 0, 3);
         targets = { gain (p.inputDb), p.thresholdDb, p.ratio, p.kneeDb,
                     gain (p.outputDb), p.mix, gain (p.driveDb),
                     p.transformer ? 1.0f : 0.0f, p.bypass ? 1.0f : 0.0f,
                     p.highTilt ? 1.0f : 0.0f, p.upward ? 1.0f : 0.0f,
-                    p.stereoLink * 0.01f, p.midSide ? 1.0f : 0.0f };
+                    p.stereoLink * 0.01f, p.midSide ? 1.0f : 0.0f,
+                    p.evenHarmonics * 0.01f };
         // This one-pole HPF affects only the detector. High Tilt is a separate
         // shelf applied to the signed sidechain after this HPF.
         hpEnabled = p.sidechainHz > 0;
@@ -259,7 +261,7 @@ public:
                                  * values[output];
                 // Keep the oversampler warm even when disabled; the clean and
                 // bypass paths retain the same fixed latency during automation.
-                const auto coloured = transformers[c].process (mixed, values[drive]);
+                const auto coloured = transformers[c].process (mixed, values[drive], values[evenHarmonics]);
                 // Delay the clean branch to match the oversampler's 64 samples.
                 // Bypass has its own equally delayed original-input line.
                 const auto clean = cleanDelay[c][delayPosition];
@@ -288,7 +290,7 @@ public:
 private:
     static constexpr float pi = 3.14159265358979323846f;
     // Indexes into the smoothed value/target arrays above.
-    enum Control { input, threshold, ratio, knee, output, mix, drive, transformer, bypass, highTilt, upward, stereoLink, midSide };
+    enum Control { input, threshold, ratio, knee, output, mix, drive, transformer, bypass, highTilt, upward, stereoLink, midSide, evenHarmonics };
 
     struct Detector
     {
@@ -321,7 +323,7 @@ private:
     int selected = 0;
     float smoothing = 0, hpCoefficient = 0, slowRelease = 0, rmsCoefficient = 0;
     float meterReduction = 0;
-    std::array<float, 13> values {}, targets {};
+    std::array<float, 14> values {}, targets {};
     std::array<float, 4> weights {}, attacks {}, releases {};
     std::array<std::array<Detector, 4>, 2> states {};
     std::array<OversampledTransformer, 2> transformers {};

@@ -6,8 +6,8 @@
   "upward": true,
   "detector_highpass_hz": 0,
   "settling_duration_seconds": 6,
-  "dsp_sha256": "34f72329e65b7d58dfc643dc5b4f722db8bca9bd815ab395dc20b3ccc68b52e0",
-  "source_commit": "efcb87e5d8daf58b3071f49372f1f94bdf20b80a",
+  "dsp_sha256": "21f4d8b4a93a6f25613b647870c5de56bae524064435813801a855f60a48fbc9",
+  "source_commit": "a99bcda3e2c8cb5b8ef931d2ecc22e067c69ec11",
   "measured_boost_db_at_minus30_dbfs": {
     "FET (feed-forward)": 8.999941475489099,
     "VCA (feedback)": 8.999768657627193,

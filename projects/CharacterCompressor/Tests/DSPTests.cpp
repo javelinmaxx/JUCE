@@ -240,7 +240,7 @@ int main()
     run (osA, osLeft, osRight, 256);
     run (osB, osOtherLeft, osOtherRight, 17);
     check (osLeft == osOtherLeft && osRight == osOtherRight,
-           "2x transformer processing is invariant to block partitioning");
+           "4x transformer processing is invariant to block partitioning");
 
     // Automation should ramp rather than instantaneously jump to a new gain/model.
     Compressor automated;
@@ -286,6 +286,7 @@ int main()
     };
     const auto highDriveThird = amplitudeAt (a, 300);
     const auto highDriveFundamental = amplitudeAt (a, 100);
+    const auto symmetricSecond = amplitudeAt (a, 200);
     check (highDriveThird > 0.005, "output transformer produces low-frequency odd harmonics");
     Compressor lowDriveIron;
     lowDriveIron.prepare (48000);
@@ -300,6 +301,18 @@ int main()
     const auto lowDriveFundamental = amplitudeAt (a, 100);
     check (highDriveThird / highDriveFundamental > 4 * lowDriveThird / lowDriveFundamental,
            "increasing transformer drive substantially increases low-frequency saturation harmonics");
+    Compressor dcBiasedIron;
+    dcBiasedIron.prepare (48000);
+    p.evenHarmonics = 100;
+    dcBiasedIron.setParameters (p);
+    a.resize (96000);
+    for (size_t i = 0; i < a.size(); ++i)
+        a[i] = 0.6f * std::sin (2 * 3.141592653589793 * 100 * static_cast<double> (i) / 48000);
+    b = a;
+    run (dcBiasedIron, a, b);
+    const auto biasedSecond = amplitudeAt (a, 200);
+    check (biasedSecond > symmetricSecond + 0.001f,
+           "simulated transformer DC current increases even-order harmonics");
     a.assign (96000, 0.5f); b = a;
     run (iron, a, b);
     check (std::abs (a.back()) < 0.001f, "transformer rejects DC");

@@ -3,8 +3,8 @@
 
 namespace
 {
-constexpr std::array<const char*, 17> ids { "model", "input", "threshold", "ratio", "attack",
-    "release", "knee", "output", "mix", "sidechain", "drive", "transformer", "bypass", "highTilt", "upward", "stereoLink", "midSide" };
+constexpr std::array<const char*, 18> ids { "model", "input", "threshold", "ratio", "attack",
+    "release", "knee", "output", "mix", "sidechain", "drive", "transformer", "bypass", "highTilt", "upward", "stereoLink", "midSide", "evenHarmonics" };
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout CharacterCompressorProcessor::layout()
@@ -46,6 +46,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout CharacterCompressorProcessor
         juce::AudioParameterFloatAttributes().withLabel ("%")));
     result.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "midSide", 1 },
         "Mid/Side mode", false));
+    result.add (std::make_unique<juce::AudioParameterFloat> (juce::ParameterID { "evenHarmonics", 4 },
+        "Even harmonics", juce::NormalisableRange<float> (0, 100, 0.1f), 0,
+        juce::AudioParameterFloatAttributes().withLabel ("%")));
     return result;
 }
 
@@ -72,6 +75,7 @@ character::Parameters CharacterCompressorProcessor::readParameters() const noexc
     p.upward = value (14) >= 0.5f;
     p.stereoLink = value (15);
     p.midSide = value (16) >= 0.5f;
+    p.evenHarmonics = value (17);
     return p;
 }
 
@@ -155,6 +159,13 @@ void CharacterCompressorProcessor::setStateInformation (const void* data, int si
                 mode.setProperty ("id", "upward", nullptr);
                 mode.setProperty ("value", 0.0f, nullptr);
                 state.appendChild (mode, nullptr);
+            }
+            if (! state.getChildWithProperty ("id", "evenHarmonics").isValid())
+            {
+                juce::ValueTree harmonics { "PARAM" };
+                harmonics.setProperty ("id", "evenHarmonics", nullptr);
+                harmonics.setProperty ("value", 0.0f, nullptr);
+                state.appendChild (harmonics, nullptr);
             }
             parameters.replaceState (state);
         }

@@ -1,6 +1,6 @@
 {
   "sample_rate_hz": 48000,
-  "oversampling_factor": 2,
+  "oversampling_factor": 4,
   "latency_samples": 64,
   "thd_input_peak_dbfs": -12,
   "thd_harmonics": "H2-H10 below Nyquist",
@@ -10,41 +10,41 @@
     "peak_dbfs": -6,
     "drive_db": 12,
     "reference": "same current DSP with the residual filter disabled",
-    "max_attenuation_error_db": 0.01516431651617367,
+    "max_attenuation_error_db": 0.01652377705972441,
     "fifth_harmonic_probe_attenuation_db": {
-      "500": -3.010288776043181,
-      "1000": -12.308797665490994,
-      "2000": -24.1223812294732
+      "500": -3.010290412091092,
+      "1000": -12.305490460931336,
+      "2000": -24.105268126673174
     }
   },
   "thd_percent_drive6": {
     "50": {
       "before": 2.2463136565478505,
-      "after": 1.020095376889182
+      "after": 1.0199265294406743
     },
     "100": {
       "before": 2.141394126732324,
-      "after": 0.7117024483874308
+      "after": 0.7114104983788412
     },
     "250": {
       "before": 2.0121829840528815,
-      "after": 0.18527166976340487
+      "after": 0.18520859826180058
     },
     "500": {
       "before": 1.9876549056709563,
-      "after": 0.04194831776061741
+      "after": 0.04205059843180176
     },
     "1000": {
       "before": 1.996296391887578,
-      "after": 0.010949584678059506
+      "after": 0.011013474280169648
     },
     "2000": {
       "before": 2.061989480523213,
-      "after": 0.002965863264992464
+      "after": 0.0030802356987452277
     },
     "5000": {
       "before": 2.4944296662650887,
-      "after": 0.00043544922048905857
+      "after": 0.0004704933593824686
     }
   },
   "shelf_gain_db": {
@@ -82,26 +82,26 @@
     }
   },
   "transformer_response_error_db": {
-    "1000": -3.061812914125079e-05,
-    "5000": -3.127098719482357e-05,
-    "10000": -5.397951728808541e-05,
-    "18000": 0.001178479049037433
+    "1000": -3.186735452473908e-05,
+    "5000": -3.1131080784713646e-05,
+    "10000": -5.438802748369739e-05,
+    "18000": 0.001179816476144344
   },
   "other_sample_rates": {
     "44100": {
-      "harmonic_attenuation_max_error_db": 0.02352707225237438,
+      "harmonic_attenuation_max_error_db": 0.02208479367704541,
       "shelf_midpoint_db": 3.000000602921994
     },
     "96000": {
-      "harmonic_attenuation_max_error_db": 0.0013019323452709841,
+      "harmonic_attenuation_max_error_db": 0.010846458168646933,
       "shelf_midpoint_db": 3.0000007175441086
     }
   },
   "disabled_stages_exact_delayed_input": true,
   "bypass_exact_delayed_input": true,
   "source_sha256": {
-    "CompressorDSP.h": "34f72329e65b7d58dfc643dc5b4f722db8bca9bd815ab395dc20b3ccc68b52e0",
-    "OversampledTransformer.h": "50450015c049efe9a3de6214cf89f0f02043a6eda75500e9af3eb88456167c60",
+    "CompressorDSP.h": "21f4d8b4a93a6f25613b647870c5de56bae524064435813801a855f60a48fbc9",
+    "OversampledTransformer.h": "fde3175976d53788e30550ed75a323cc78357438c31f03d658d666aeab9bf678",
     "TransformerResponse.h": "b8ab069e598442b7c5146849f62bcfb0ba777ed28f2b962c87b3b38800ce23c8",
     "HighTilt.h": "08bb893fc879f5f95990aae0529f83281e7310f8e7795f8bc8be091d3f85bbf6"
   },
