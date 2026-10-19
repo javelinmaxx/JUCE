@@ -158,41 +158,41 @@ CompressorTheme themeFor (int model, bool upward)
                 return { colour (0xff382f22), colour (0xff473b2b), colour (0xff191c1f),
                          colour (0xfffff2d8), colour (0xffd4c5a7), colour (0xffe2b85f),
                          colour (0xffa9b1b9), colour (0xff504331), colour (0xff4b5055),
-                         colour (0xff4c4436), colour (0xff695843), colour (0xff292622) };
+                         colour (0xff4c4436), colour (0xffb79b68), colour (0xff5c4930) };
             return { colour (0xff252b31), colour (0xff303840), colour (0xff151a1e),
                      colour (0xfff0f1ee), colour (0xffb7c0c6), colour (0xffa9b1b9),
                      colour (0xffe2b85f), colour (0xff35404a), colour (0xff414b53),
-                     colour (0xff354048), colour (0xff59646d), colour (0xff222930) };
+                     colour (0xff354048), colour (0xffb8c2ca), colour (0xff586875) };
         case 1: // VCA: blue panel and white reduction.
             if (upward)
                 return { colour (0xff23465d), colour (0xff2d536b), colour (0xff102333),
                          colour (0xfff7fbff), colour (0xffcadce8), colour (0xfff7fbff),
                          colour (0xff48a9dc), colour (0xff365f78), colour (0xff435d70),
-                         colour (0xff36566b), colour (0xff617d91), colour (0xff263f50) };
+                         colour (0xff36566b), colour (0xffb8d7e6), colour (0xff527991) };
             return { colour (0xff142b3d), colour (0xff203e54), colour (0xff0d1d2b),
                      colour (0xfff2f8fc), colour (0xffadc9d8), colour (0xff48a9dc),
                      colour (0xfff7fbff), colour (0xff24475e), colour (0xff3c5262),
-                     colour (0xff314e60), colour (0xff54738b), colour (0xff1a3447) };
+                     colour (0xff314e60), colour (0xffa8c6d6), colour (0xff42627a) };
         case 2: // Variable-mu: light green panel and white reduction.
             if (upward)
                 return { colour (0xff355a46), colour (0xff406b52), colour (0xff182e25),
                          colour (0xfff8fff7), colour (0xffd5e7d5), colour (0xfff8fff7),
                          colour (0xff91c98a), colour (0xff4a7358), colour (0xff4f7058),
-                         colour (0xff496b54), colour (0xff789582), colour (0xff294a37) };
+                         colour (0xff496b54), colour (0xffa4c9a1), colour (0xff4c7655) };
             return { colour (0xffe4f0df), colour (0xffd1e5c9), colour (0xff1d392b),
                      colour (0xff253b29), colour (0xff526b52), colour (0xff70a963),
                      colour (0xfff8fff7), colour (0xffd1e1ce), colour (0xff526b59),
-                     colour (0xff49624f), colour (0xffedf5e9), colour (0xff6c9273) };
+                     colour (0xff49624f), colour (0xff456b4b), colour (0xff203c2b) };
         default: // Optical: white panel and red reduction.
             if (upward)
                 return { colour (0xff3f2026), colour (0xff542a33), colour (0xff1c1b20),
                          colour (0xfffff7f6), colour (0xffdec6c9), colour (0xffdc4a55),
                          colour (0xfff8faf9), colour (0xff60333b), colour (0xff51454a),
-                         colour (0xff554046), colour (0xff8d5960), colour (0xff37262a) };
+                         colour (0xff554046), colour (0xffd08b8f), colour (0xff6e393f) };
             return { colour (0xfff5f7f6), colour (0xffe8edeb), colour (0xff252a30),
                      colour (0xff283138), colour (0xff56646b), colour (0xfff8faf9),
                      colour (0xffdc4a55), colour (0xffd6dedb), colour (0xff56616a),
-                     colour (0xff525d64), colour (0xff59656c), colour (0xff252d32) };
+                     colour (0xff525d64), colour (0xff9caab0), colour (0xff4a555c) };
     }
 }
 }

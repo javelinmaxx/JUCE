@@ -445,6 +445,13 @@ implementation, not a production-release claim.
   previews were rendered for all eight model/Upward palette combinations; the
   preview renderer verified each image's palette colors and saved all files.
 
+### 2026-10-19 — theme-specific high-contrast knob faces
+- Changed knob face gradients for all four simulation themes in both standard
+  and Upward modes: cool metallic blue-gray for VCA, pale steel for FET,
+  deep green for light Variable Mu, and rose/charcoal for Optical.
+- Rebuilt the VST3 and rendered all eight previews with the focused UI renderer;
+  visually checked dark, light, and Upward palettes. No full test suite run.
+
 ### 2026-10-19 — balanced knobs and compact flip switches
 - Restored a restrained beveled knob rim and subtle face shading while leaving
   out glossy highlights and plastic shine.
