@@ -58,7 +58,7 @@ public:
         ring = theme.grid;
         knobTop = theme.knobTop;
         knobBottom = theme.knobBottom;
-        marking = theme.secondary;
+        marking = theme.text;
     }
 private:
     juce::Colour accent { 0xff168aad };
@@ -82,7 +82,7 @@ private:
     CompressorLookAndFeel look;
     juce::ComboBox model;
     AnimatedSwitch transformer { "OUTPUT TRANSFORMER" }, bypass { "BYPASS", true, false, true };
-    AnimatedSwitch upward { "UPWARD COMPRESSION", false, true };
+    AnimatedSwitch upward { "UPWARD COMPRESSION", true, false, true };
     AnimatedSwitch midSide { "MID / SIDE MODE" };
     std::array<juce::Slider, 14> sliders;
     std::array<juce::Label, 14> labels;

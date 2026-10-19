@@ -175,9 +175,10 @@ int runTests (int argc, char** argv)
                && knee->getHeight() < threshold->getHeight()
                && variTransient->getHeight() == knee->getHeight(),
                "VariTransient matches the Knee knob size");
-        check (threshold->getY() == ratio->getY() && ratio->getY() == knee->getY()
-               && threshold->getRight() <= ratio->getX() && ratio->getRight() <= knee->getX(),
-               "Threshold and Ratio are paired, with Knee beside them");
+        check (threshold->getY() == ratio->getY()
+               && threshold->getRight() <= ratio->getX()
+               && knee->getY() > threshold->getY() && knee->getX() < attack->getX(),
+               "Threshold and Ratio have the first row, with Knee moved below");
         check (attack->getY() == release->getY() && release->getY() == variTransient->getY()
                && attack->getRight() <= release->getX() && release->getRight() <= variTransient->getX(),
                "Attack and Release are paired, with VariTransient beside them");
@@ -186,11 +187,12 @@ int runTests (int argc, char** argv)
                "output, mix, and stereo link sit below the shortened GR section");
         check (transformer->getHeight() > transformer->getWidth()
                && upward->getWidth() > upward->getHeight()
+               && upward->getWidth() >= bypass->getWidth()
                && upward->getY() < 180 && upward->getX() >= 140
                && bypass->getWidth() > bypass->getHeight()
                && bypass->getY() < 80 && bypass->getX() >= 450
                && midSide->getHeight() > midSide->getWidth(),
-               "section toggles are vertical and bypass sits beside the title");
+               "mode and bypass use matching labeled switches beside their section titles");
         check (detectorHpf->getY() == scHighTilt->getY()
                && midSide->getY() < detectorHpf->getBottom()
                && midSide->getX() > scHighTilt->getRight(),

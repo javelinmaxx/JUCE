@@ -19,6 +19,7 @@ CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcess
     upwardAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "upward", upward);
     midSideAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "midSide", midSide);
     upward.setTooltip ("Boosts levels below threshold toward it; ratio sets the below-threshold slope.");
+    upward.setStateCaptions ("UPWARD", "COMPRESSOR");
 
     const std::array<const char*, 14> ids { "input", "threshold", "ratio", "attack", "release",
         "knee", "output", "mix", "sidechain", "drive", "stereoLink", "evenHarmonics", "variTransient", "scHighTilt" };
@@ -230,8 +231,10 @@ void AnimatedSwitch::paintButton (juce::Graphics& g, bool highlighted, bool down
         g.setColour (position > 0.05f ? accent : secondary.withAlpha (0.70f));
         g.drawRoundedRectangle (bounds, 6, 1.0f);
         g.setColour (getToggleState() ? foreground : secondary);
-        g.setFont (juce::FontOptions (9.0f).withStyle ("bold"));
-        g.drawText ("BYPASS", bounds.toNearestInt(), juce::Justification::centred);
+        g.setFont (juce::FontOptions (getButtonText() == "BYPASS" ? 10.5f : 9.5f).withStyle ("bold"));
+        const auto caption = getButtonText() == "BYPASS"
+            ? getButtonText() : (getToggleState() ? onCaption : offCaption);
+        g.drawText (caption, bounds.toNearestInt(), juce::Justification::centred);
         if (hasKeyboardFocus (true))
         {
             g.setColour (accent);
@@ -397,36 +400,6 @@ void CompressorLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
                     centre.x + std::sin (tickAngle) * outer, centre.y - std::cos (tickAngle) * outer,
                     major ? 1.25f : 0.8f);
     }
-    const bool isThreshold = slider.getName() == "THRESHOLD";
-    const bool isRatio = slider.getName() == "RATIO";
-    if (isThreshold || isRatio)
-    {
-        const std::array<float, 8> thresholdValues { -60, -50, -40, -30, -20, -10, 0, 0 };
-        const std::array<float, 8> ratioValues { 1, 1.4f, 2, 3, 5, 8, 12, 20 };
-        const std::array<const char*, 8> thresholdLabels { "-60", "-50", "-40", "-30", "-20", "-10", "0", "" };
-        const std::array<const char*, 8> ratioLabels { "1", "1.4", "2", "3", "5", "8", "12", "20" };
-        const auto count = isThreshold ? 7 : 8;
-        g.setFont (juce::FontOptions (8.5f));
-        for (size_t i = 0; i < static_cast<size_t> (count); ++i)
-        {
-            const auto proportion = slider.valueToProportionOfLength (isThreshold ? thresholdValues[i] : ratioValues[i]);
-            const auto tickAngle = start + static_cast<float> (proportion) * (end - start);
-            const auto labelRadius = radius + 5.0f;
-            const auto px = centre.x + std::sin (tickAngle) * labelRadius;
-            const auto py = centre.y - std::cos (tickAngle) * labelRadius;
-            const auto label = isThreshold ? thresholdLabels[i] : ratioLabels[i];
-            auto labelBounds = juce::Rectangle<float> (px - 12.0f, py - 6.0f, 24.0f, 12.0f);
-            labelBounds.setX (juce::jlimit (static_cast<float> (x), static_cast<float> (x + width) - labelBounds.getWidth(), labelBounds.getX()));
-            labelBounds.setY (juce::jlimit (static_cast<float> (y), static_cast<float> (y + height) - labelBounds.getHeight(), labelBounds.getY()));
-            g.setColour (marking.withAlpha (0.95f));
-            g.drawText (label, labelBounds, juce::Justification::centred, false);
-            g.setColour (marking.withAlpha (0.8f));
-            g.fillEllipse (px - 1.4f, py - 1.4f, 2.8f, 2.8f);
-        }
-        g.setColour (marking.withAlpha (0.95f));
-        g.setFont (juce::FontOptions (8.0f).withStyle ("bold"));
-        g.drawText (isThreshold ? "dB" : ":1", x, y + height - 14, width, 12, juce::Justification::centred);
-    }
     juce::Path arc;
     arc.addCentredArc (centre.x, centre.y, radius, radius, 0, start, end, true);
     g.setColour (ring.withAlpha (0.78f));
@@ -454,6 +427,35 @@ void CompressorLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
     g.setColour (accent);
     g.drawLine (centre.x + std::sin (angle) * inner, centre.y - std::cos (angle) * inner,
                 centre.x + std::sin (angle) * outer, centre.y - std::cos (angle) * outer, 1.8f);
+
+    const bool isThreshold = slider.getName() == "THRESHOLD";
+    const bool isRatio = slider.getName() == "RATIO";
+    if (isThreshold || isRatio)
+    {
+        const std::array<float, 8> thresholdValues { -60, -50, -40, -30, -20, -10, 0, 0 };
+        const std::array<float, 8> ratioValues { 1, 1.4f, 2, 3, 5, 8, 12, 20 };
+        const std::array<const char*, 8> thresholdLabels { "-60", "-50", "-40", "-30", "-20", "-10", "0", "" };
+        const std::array<const char*, 8> ratioLabels { "1", "1.4", "2", "3", "5", "8", "12", "20" };
+        const auto count = isThreshold ? 7 : 8;
+        g.setFont (juce::FontOptions (12.5f).withStyle ("bold"));
+        for (size_t i = 0; i < static_cast<size_t> (count); ++i)
+        {
+            const auto proportion = slider.valueToProportionOfLength (isThreshold ? thresholdValues[i] : ratioValues[i]);
+            const auto tickAngle = start + static_cast<float> (proportion) * (end - start);
+            const auto labelRadius = radius + 10.0f;
+            const auto px = centre.x + std::sin (tickAngle) * labelRadius;
+            const auto py = centre.y - std::cos (tickAngle) * labelRadius;
+            const auto label = isThreshold ? thresholdLabels[i] : ratioLabels[i];
+            auto labelBounds = juce::Rectangle<float> (px - 20.0f, py - 10.0f, 40.0f, 20.0f);
+            labelBounds.setX (juce::jlimit (static_cast<float> (x), static_cast<float> (x + width) - labelBounds.getWidth(), labelBounds.getX()));
+            labelBounds.setY (juce::jlimit (static_cast<float> (y), static_cast<float> (y + height) - labelBounds.getHeight(), labelBounds.getY()));
+            g.setColour (marking);
+            g.drawText (label, labelBounds, juce::Justification::centred, false);
+        }
+        g.setColour (marking.withAlpha (0.95f));
+        g.setFont (juce::FontOptions (10.0f).withStyle ("bold"));
+        g.drawText (isThreshold ? "dB" : ":1", x, y + height - 14, width, 12, juce::Justification::centred);
+    }
 }
 
 void CharacterCompressorEditor::paint (juce::Graphics& g)
@@ -598,12 +600,12 @@ void CharacterCompressorEditor::resized()
             sliders[index].setTextBoxStyle (juce::Slider::TextBoxBelow, false, std::min (width, 100), 22);
         sliders[index].setBounds (x, y + 20, width, height);
     };
-    place (1, 20, 207, 104, 104);
-    place (2, 126, 207, 104, 104);
-    place (5, 236, 207, 76, 56);
-    place (3, 34, 330, 72, 66);
-    place (4, 124, 330, 72, 66);
-    place (12, 214, 330, 72, 56);
+    place (1, 22, 180, 144, 128);
+    place (2, 168, 180, 156, 128);
+    place (5, 24, 330, 58, 56);
+    place (3, 86, 330, 68, 66);
+    place (4, 158, 330, 68, 66);
+    place (12, 232, 330, 80, 56);
     labels[1].setText ("THRES", juce::dontSendNotification);
     place (8, 28, 460, 80, 78);
     place (13, 116, 460, 80, 78);
@@ -613,7 +615,7 @@ void CharacterCompressorEditor::resized()
     place (7, 404, 662, 60, 72);
     place (10, 464, 662, 60, 72);
     labels[0].setBounds (222, 168, 40, 14);
-    labels[0].setFont (juce::FontOptions (8.0f).withStyle ("bold"));
+    labels[0].setFont (juce::FontOptions (9.5f).withStyle ("bold"));
     labels[0].setJustificationType (juce::Justification::centredRight);
     sliders[0].setTextBoxStyle (juce::Slider::TextBoxBelow, false, 53, 14);
     sliders[0].setBounds (265, 150, 53, 54);
@@ -622,7 +624,7 @@ void CharacterCompressorEditor::resized()
     labels[9].setText ("CORE DRIVE", juce::dontSendNotification);
     labels[11].setText ("DC BIAS", juce::dontSendNotification);
     labels[13].setText ("SC HIGH TILT", juce::dontSendNotification);
-    upward.setBounds (146, 156, 76, 20);
+    upward.setBounds (142, 152, 80, 28);
     midSide.setBounds (241, 481, 58, 64);
     transformer.setBounds (247, 646, 58, 64);
 }

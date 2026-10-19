@@ -569,3 +569,13 @@ implementation, not a production-release claim.
   preserve spacing within the Compressor panel.
 - Regenerated all eight model/Upward UI previews. The VST3 and focused preview
   renderer built and passed; no full test suite was run.
+
+### 2026-10-19 — clearer dial values and compressor mode button
+- Increased the Threshold/Ratio value label size and contrast, and gave each
+  marking more room around the enlarged dial face. Moved Knee to the second
+  control row so Threshold and Ratio can use the available width.
+- Replaced the small Upward indicator with a Bypass-style illuminated button:
+  it reads “COMPRESSOR” in normal mode and “UPWARD” when engaged. Repositioned
+  the compact Input control to clear the new button.
+- Rebuilt the VST3 and preview target; all eight model/Upward previews rendered
+  and passed the focused UI check. No full test suite was run.
