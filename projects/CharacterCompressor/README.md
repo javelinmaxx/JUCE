@@ -66,6 +66,16 @@ parameter IDs/order are retained; High Tilt and Upward are appended with AU
 version hints 2 and 3. There is no external sidechain, oversampling selector,
 automatic makeup gain, or preset browser yet.
 
+The 580 × 940 portrait editor puts the larger threshold and ratio knobs first,
+with attack and release together beneath them and smaller secondary controls
+below. The right-hand display pairs a vertical 0–30 dB gain-reduction meter
+with a scrolling five-second history line (oldest at left, current at right).
+The display samples gain reduction at 30 Hz while the editor is open; timestamps
+keep the window at five seconds even if UI updates are delayed. Closing the
+editor clears its display history. Transformer, High Tilt, Upward, and bypass
+use animated switches with keyboard access and host automation. Switching to
+Upward resets the trace, labels it Upward Gain, and changes its accent color.
+
 ## Measured characteristics
 
 See [the measurement report](Measurements/README.md) for compression curves,
@@ -116,6 +126,10 @@ mkdir -p /workspace/juce-env/cache
 XDG_CACHE_HOME=/workspace/juce-env/cache xvfb-run -a \
     /workspace/juce-env/character-build/CharacterProcessorTests --editor
 ```
+
+The editor check also exercises switch clicks, automation, and history expiry.
+It runs the message loop for six seconds with a synthetic GR signal to verify
+the animated display. Add an absolute PNG path after `--editor` to save a preview.
 
 Linux artifact:
 `/workspace/juce-env/character-build/CharacterCompressor_artefacts/Debug/VST3/Character Compressor.vst3`.

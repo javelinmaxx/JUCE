@@ -1,4 +1,5 @@
 #include "../Source/PluginProcessor.h"
+#include "../Source/PluginEditor.h"
 #include <cstdlib>
 #include <iostream>
 #include <cstring>
@@ -25,7 +26,7 @@ int runTests (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI juce;
     CharacterCompressorProcessor p;
-    check (p.getParameters().size() == 14, "all host parameters registered");
+    check (p.getParameters().size() == 15, "all host parameters registered");
     auto buses = p.getBusesLayout();
     buses.inputBuses.set (0, juce::AudioChannelSet::mono());
     buses.outputBuses.set (0, juce::AudioChannelSet::mono());
@@ -82,8 +83,78 @@ int runTests (int argc, char** argv)
     if (argc > 1 && juce::String (argv[1]) == "--editor")
     {
         std::unique_ptr<juce::AudioProcessorEditor> editor (restored.createEditor());
-        check (editor && editor->getWidth() == 780 && editor->getHeight() == 530, "editor creates at expected size");
+        check (editor && editor->getWidth() == 580 && editor->getHeight() == 940, "portrait editor creates at expected size");
         check (editor->getNumChildComponents() >= 25, "editor contains controls and meters");
+        juce::Slider *threshold = nullptr, *ratio = nullptr, *attack = nullptr, *release = nullptr;
+        AnimatedSwitch *transformer = nullptr, *upward = nullptr;
+        for (auto* child : editor->getChildren())
+        {
+            check (editor->getLocalBounds().contains (child->getBounds()), "controls fit inside portrait panel");
+            if (auto* slider = dynamic_cast<juce::Slider*> (child))
+            {
+                if (slider->getName() == "THRESHOLD") threshold = slider;
+                if (slider->getName() == "RATIO") ratio = slider;
+                if (slider->getName() == "ATTACK") attack = slider;
+                if (slider->getName() == "RELEASE") release = slider;
+            }
+            if (auto* button = dynamic_cast<AnimatedSwitch*> (child))
+            {
+                if (button->getButtonText() == "OUTPUT TRANSFORMER") transformer = button;
+                if (button->getButtonText() == "UPWARD COMPRESSION") upward = button;
+            }
+        }
+        check (threshold && ratio && attack && release && transformer && upward, "portrait controls exist");
+        check (threshold->getHeight() > attack->getHeight() && ratio->getHeight() > release->getHeight(),
+               "primary knobs are larger than timing knobs");
+        check (attack->getY() == release->getY() && attack->getRight() <= release->getX(),
+               "attack and release are adjacent");
+        GainReductionHistory history;
+        for (int i = 0; i <= 360; ++i) history.push (i / 30.0, static_cast<float> (i % 31));
+        int visible = 0;
+        float previousX = -1;
+        history.visit (12.0, [&] (float x, float gr, double time)
+        {
+            check (x >= previousX && x >= 0 && x <= 1 && gr >= 0 && gr <= 30 && time >= 7,
+                   "wrapped history remains chronological within five seconds");
+            previousX = x;
+            ++visible;
+        });
+        check (visible >= 150 && visible <= 151, "history retains five seconds after ring wraps");
+        visible = 0;
+        history.visit (18.0, [&] (float, float, double) { ++visible; });
+        check (visible == 0, "history expires by elapsed time when UI timer stalls");
+        // Run a real message loop so switch clicks and timer-driven animation execute.
+        struct CaptureTimer final : juce::Timer
+        {
+            std::function<void()> tick;
+            void timerCallback() override { tick(); }
+        } capture;
+        int frame = 0;
+        bool clickUpdatedParameter = false, automationUpdatedSwitch = false, upwardUpdatedParameter = false;
+        capture.tick = [&]
+        {
+            ++frame;
+            restored.reduction.store (8.0f + 6.0f * std::sin (static_cast<float> (frame) * 0.09f));
+            if (frame == 8)
+            {
+                clickUpdatedParameter = ! transformer->getToggleState()
+                    && exact (restored.parameters.getRawParameterValue ("transformer")->load(), 0.0f);
+                set (restored, "transformer", 1);
+            }
+            if (frame == 16) automationUpdatedSwitch = transformer->getToggleState();
+            if (frame == 20) upward->triggerClick();
+            if (frame == 28)
+                upwardUpdatedParameter = upward->getToggleState()
+                    && exact (restored.parameters.getRawParameterValue ("upward")->load(), 1.0f);
+            if (frame == 180) juce::MessageManager::getInstance()->stopDispatchLoop();
+        };
+        transformer->triggerClick();
+        capture.startTimer (34);
+        juce::MessageManager::getInstance()->runDispatchLoop();
+        capture.stopTimer();
+        check (clickUpdatedParameter, "animated switch click updates host parameter");
+        check (automationUpdatedSwitch, "host automation updates animated switch");
+        check (upwardUpdatedParameter, "upward switch updates new host parameter");
         // Exercise actual component rendering, not only construction.
         auto image = editor->createComponentSnapshot (editor->getLocalBounds());
         check (image.isValid(), "native editor renders to an image");
@@ -104,9 +175,11 @@ int runOutputStageTests (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI juce;
     CharacterCompressorProcessor p;
-    check (p.getParameters().size() == 14, "new high-tilt parameter registered");
+    check (p.getParameters().size() == 15, "new high-tilt parameter registered");
     auto* tilt = p.parameters.getParameter ("highTilt");
-    check (tilt && tilt == p.getParameters().getLast(), "high tilt appended without shifting old indices");
+    check (tilt && tilt == p.getParameters()[13]
+           && p.parameters.getParameter ("upward") == p.getParameters()[14],
+           "high tilt and upward retain their appended parameter indices");
     check (exact (tilt->getValue(), 0.0f), "high tilt defaults off");
     set (p, "ratio", 1); set (p, "highTilt", 1);
     juce::MemoryBlock saved;
