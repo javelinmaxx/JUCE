@@ -5,8 +5,6 @@ CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcess
 {
     setOpaque (true);
     setLookAndFeel (&look);
-    look.setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff222b34));
-    look.setColour (juce::ComboBox::outlineColourId, juce::Colour (0xff39444f));
     model.addItemList ({ "FET / Feed-forward", "VCA / Feedback", "Variable-mu", "Optical" }, 1);
     model.setAccessible (true);
     model.setTitle ("Compressor model");
@@ -67,8 +65,53 @@ CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcess
 
 namespace
 {
-const juce::Colour gold (0xffdbaf66), blue (0xff168aad), orange (0xfff28e2b),
-                   ink (0xff10171e), muted (0xff92a0ad);
+CompressorTheme themeFor (int model, bool upward)
+{
+    const auto colour = [] (juce::uint32 argb) { return juce::Colour (argb); };
+    switch (model)
+    {
+        case 0: // FET: charcoal panel and gold reduction.
+            if (upward)
+                return { colour (0xff382f22), colour (0xff473b2b), colour (0xff191c1f),
+                         colour (0xfffff2d8), colour (0xffd4c5a7), colour (0xffe2b85f),
+                         colour (0xffa9b1b9), colour (0xff504331), colour (0xff4b5055),
+                         colour (0xff4c4436), colour (0xff695843), colour (0xff292622) };
+            return { colour (0xff252b31), colour (0xff303840), colour (0xff151a1e),
+                     colour (0xfff0f1ee), colour (0xffb7c0c6), colour (0xffa9b1b9),
+                     colour (0xffe2b85f), colour (0xff35404a), colour (0xff414b53),
+                     colour (0xff354048), colour (0xff59646d), colour (0xff222930) };
+        case 1: // VCA: blue panel and white reduction.
+            if (upward)
+                return { colour (0xff23465d), colour (0xff2d536b), colour (0xff102333),
+                         colour (0xfff7fbff), colour (0xffcadce8), colour (0xfff7fbff),
+                         colour (0xff48a9dc), colour (0xff365f78), colour (0xff435d70),
+                         colour (0xff36566b), colour (0xff617d91), colour (0xff263f50) };
+            return { colour (0xff142b3d), colour (0xff203e54), colour (0xff0d1d2b),
+                     colour (0xfff2f8fc), colour (0xffadc9d8), colour (0xff48a9dc),
+                     colour (0xfff7fbff), colour (0xff24475e), colour (0xff3c5262),
+                     colour (0xff314e60), colour (0xff54738b), colour (0xff1a3447) };
+        case 2: // Variable-mu: light green panel and white reduction.
+            if (upward)
+                return { colour (0xff355a46), colour (0xff406b52), colour (0xff182e25),
+                         colour (0xfff8fff7), colour (0xffd5e7d5), colour (0xfff8fff7),
+                         colour (0xff91c98a), colour (0xff4a7358), colour (0xff4f7058),
+                         colour (0xff496b54), colour (0xff789582), colour (0xff294a37) };
+            return { colour (0xffe4f0df), colour (0xffd1e5c9), colour (0xff1d392b),
+                     colour (0xff253b29), colour (0xff526b52), colour (0xff70a963),
+                     colour (0xfff8fff7), colour (0xffd1e1ce), colour (0xff526b59),
+                     colour (0xff49624f), colour (0xffedf5e9), colour (0xff6c9273) };
+        default: // Optical: white panel and red reduction.
+            if (upward)
+                return { colour (0xff3f2026), colour (0xff542a33), colour (0xff1c1b20),
+                         colour (0xfffff7f6), colour (0xffdec6c9), colour (0xffdc4a55),
+                         colour (0xfff8faf9), colour (0xff60333b), colour (0xff51454a),
+                         colour (0xff554046), colour (0xff8d5960), colour (0xff37262a) };
+            return { colour (0xfff5f7f6), colour (0xffe8edeb), colour (0xff252a30),
+                     colour (0xff283138), colour (0xff56646b), colour (0xfff8faf9),
+                     colour (0xffdc4a55), colour (0xffd6dedb), colour (0xff56616a),
+                     colour (0xff525d64), colour (0xff59656c), colour (0xff252d32) };
+    }
+}
 }
 
 void AnimatedSwitch::advance (float elapsed)
@@ -82,23 +125,23 @@ void AnimatedSwitch::advance (float elapsed)
 void AnimatedSwitch::paintButton (juce::Graphics& g, bool highlighted, bool down)
 {
     auto bounds = getLocalBounds().toFloat().reduced (1);
-    g.setColour (juce::Colour (highlighted ? 0xff283440 : 0xff202a34));
+    g.setColour (highlighted ? surface.brighter (0.08f) : surface);
     g.fillRoundedRectangle (bounds, 7);
     if (hasKeyboardFocus (true))
     {
         g.setColour (accent);
         g.drawRoundedRectangle (bounds, 7, 1);
     }
-    g.setColour (getToggleState() ? accent : muted);
+    g.setColour (getToggleState() ? foreground : secondary);
     g.setFont (juce::FontOptions (12.0f));
     g.drawText (getButtonText(), getLocalBounds().reduced (12, 0).withTrimmedRight (100),
                 juce::Justification::centredLeft);
     const auto track = juce::Rectangle<float> (static_cast<float> (getWidth() - 64), 7, 48, 22);
-    g.setColour (juce::Colour (0xff414c57).interpolatedWith (accent, position));
+    g.setColour (secondary.withMultipliedBrightness (0.7f).interpolatedWith (accent, position));
     g.fillRoundedRectangle (track, 11);
-    g.setColour (down ? juce::Colours::white : juce::Colour (0xfff4ead9));
+    g.setColour (down ? juce::Colours::white : accent.contrasting());
     g.fillEllipse (track.getX() + 3 + position * 26, track.getY() + 3, 16, 16);
-    g.setColour (muted);
+    g.setColour (secondary);
     g.setFont (juce::FontOptions (10.0f));
     g.drawText (getToggleState() ? "ON" : "OFF", getWidth() - 105, 0, 32, getHeight(),
                 juce::Justification::centredRight);
@@ -114,18 +157,18 @@ void CompressorLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
     auto dial = juce::Rectangle<float> (radius * 2, radius * 2).withCentre (centre);
     juce::Path arc;
     arc.addCentredArc (centre.x, centre.y, radius, radius, 0, start, end, true);
-    g.setColour (juce::Colour (0xff38434e));
+    g.setColour (ring);
     g.strokePath (arc, juce::PathStrokeType (3.0f));
     juce::Path active;
     const auto angle = start + value * (end - start);
     active.addCentredArc (centre.x, centre.y, radius, radius, 0, start, angle, true);
-    g.setColour (slider.isEnabled() ? accent : muted);
+    g.setColour (slider.isEnabled() ? accent : ring);
     g.strokePath (active, juce::PathStrokeType (3.0f));
     dial.reduce (6, 6);
-    g.setGradientFill (juce::ColourGradient (juce::Colour (0xff46515e), dial.getTopLeft(),
-                                            juce::Colour (0xff1b242d), dial.getBottomRight(), false));
+    g.setGradientFill (juce::ColourGradient (knobTop, dial.getTopLeft(),
+                                            knobBottom, dial.getBottomRight(), false));
     g.fillEllipse (dial);
-    g.setColour (juce::Colour (0xff53606d));
+    g.setColour (ring);
     g.drawEllipse (dial, 1);
     const auto outer = dial.getWidth() * 0.40f;
     const auto inner = outer * 0.58f;
@@ -136,18 +179,18 @@ void CompressorLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
 
 void CharacterCompressorEditor::paint (juce::Graphics& g)
 {
-    g.fillAll (juce::Colour (0xff171e26));
-    g.setColour (upward.getToggleState() ? orange : blue);
+    g.fillAll (theme.background);
+    g.setColour (theme.background.getPerceivedBrightness() > 0.7f ? theme.text : theme.control);
     g.setFont (juce::FontOptions (12.0f));
     g.drawText ("CHARACTER AUDIO  /  DYNAMICS", 24, 18, 532, 20, juce::Justification::centredLeft);
-    g.setColour (juce::Colour (0xfff0ddbb));
+    g.setColour (theme.text);
     g.setFont (juce::FontOptions (29.0f));
     g.drawText ("Character Compressor", 24, 40, 532, 38, juce::Justification::centredLeft);
-    g.setColour (juce::Colour (0xff202a34));
+    g.setColour (theme.card);
     g.fillRoundedRectangle (24, 170, 330, 190, 10);
     for (const auto y : { 370, 498, 626 })
     {
-        g.setColour (juce::Colour (0xff303c48));
+        g.setColour (theme.grid);
         g.drawHorizontalLine (y, 24, 354);
     }
     paintMeter (g);
@@ -155,30 +198,30 @@ void CharacterCompressorEditor::paint (juce::Graphics& g)
 
 void CharacterCompressorEditor::paintMeter (juce::Graphics& g)
 {
-    g.setColour (ink);
+    g.setColour (theme.meterPanel);
     g.fillRoundedRectangle (meterBounds.toFloat(), 10);
-    g.setColour (muted);
+    g.setColour (juce::Colour (0xffb9c8c4));
     g.setFont (juce::FontOptions (11.0f));
     g.drawText (upward.getToggleState() ? "UPWARD GAIN" : "GAIN REDUCTION",
                 388, 188, 156, 20, juce::Justification::centred);
     const juce::Rectangle<float> bar (392, 242, 14, 414), plot (442, 242, 98, 414);
-    g.setColour (juce::Colour (0xff283440));
+    g.setColour (theme.gaugeTrack);
     g.fillRoundedRectangle (bar, 4);
     for (int db = 0; db <= 30; db += 6)
     {
         const auto y = plot.getY() + plot.getHeight() * static_cast<float> (db) / 30.0f;
-        g.setColour (juce::Colour (0xff293540));
+        g.setColour (theme.grid);
         g.drawLine (plot.getX(), y, plot.getRight(), y);
-        g.setColour (muted);
+        g.setColour (juce::Colour (0xffb9c8c4));
         g.drawText (juce::String (db), 410, juce::roundToInt (y) - 8, 26, 16, juce::Justification::centred);
     }
     for (int second = 0; second <= 5; ++second)
     {
         const auto x = plot.getX() + plot.getWidth() * static_cast<float> (second) / 5.0f;
-        g.setColour (juce::Colour (0xff202c36));
+        g.setColour (theme.grid.withAlpha (0.55f));
         g.drawLine (x, plot.getY(), x, plot.getBottom());
     }
-    const auto meterAccent = upward.getToggleState() ? blue : gold;
+    const auto meterAccent = theme.meter;
     g.setColour (meterAccent);
     const auto fill = bar.withHeight (bar.getHeight() * std::clamp (displayedReduction / 30, 0.0f, 1.0f));
     if (fill.getHeight() > 0) g.fillRoundedRectangle (fill, 3);
@@ -202,7 +245,7 @@ void CharacterCompressorEditor::paintMeter (juce::Graphics& g)
     g.setColour (meterAccent);
     g.strokePath (trace, juce::PathStrokeType (1.7f));
     g.restoreState();
-    g.setColour (muted);
+    g.setColour (juce::Colour (0xffb9c8c4));
     g.drawText ("-5 s", 440, 662, 44, 18, juce::Justification::centredLeft);
     g.drawText ("NOW", 498, 662, 44, 18, juce::Justification::centredRight);
     g.setColour (meterAccent);
@@ -248,16 +291,15 @@ void CharacterCompressorEditor::timerCallback()
     upward.advance (elapsed);
     bypass.advance (elapsed);
     const auto upwardMode = upward.getToggleState();
-    if (upwardMode != lastUpwardMode)
+    const auto modelIndex = std::clamp (model.getSelectedItemIndex(), 0, 3);
+    if (upwardMode != lastUpwardMode || modelIndex != lastModelIndex)
     {
-        const auto accent = upwardMode ? orange : blue;
-        look.setAccent (accent);
-        for (auto* control : { &transformer, &highTilt, &upward, &bypass })
-            control->setAccent (accent);
-        for (auto& slider : sliders) slider.repaint();
+        theme = themeFor (modelIndex, upwardMode);
+        applyTheme();
         history.clear();
         displayedReduction = 0;
         lastUpwardMode = upwardMode;
+        lastModelIndex = modelIndex;
         repaint();
     }
     const std::array<const char*, 4> descriptions {
@@ -266,7 +308,7 @@ void CharacterCompressorEditor::timerCallback()
         "RMS feedback / progressive ratio / program-dependent recovery",
         "RMS feed-forward / two-stage optical recovery" };
     modelDescription.setFont (juce::FontOptions (12.0f));
-    modelDescription.setColour (juce::Label::textColourId, muted);
+    modelDescription.setColour (juce::Label::textColourId, theme.secondary);
     modelDescription.setText (descriptions[static_cast<size_t> (std::clamp (model.getSelectedItemIndex(), 0, 3))],
                               juce::dontSendNotification);
     const auto raw = processor.reduction.load (std::memory_order_relaxed);
@@ -274,8 +316,31 @@ void CharacterCompressorEditor::timerCallback()
     displayedReduction = std::max (gr, displayedReduction * std::exp (-elapsed / 0.25f));
     history.push (now, gr);
     meters.setFont (juce::FontOptions (11.0f));
-    meters.setColour (juce::Label::textColourId, muted);
+    meters.setColour (juce::Label::textColourId, theme.secondary);
     meters.setText ("IN " + juce::String (processor.inputPeak.load(), 1) + " dBFS    /    OUT "
         + juce::String (processor.outputPeak.load(), 1) + " dBFS", juce::dontSendNotification);
     repaint (meterBounds);
+}
+
+void CharacterCompressorEditor::applyTheme()
+{
+    look.setTheme (theme);
+    look.setColour (juce::ComboBox::backgroundColourId, theme.card);
+    look.setColour (juce::ComboBox::outlineColourId, theme.grid);
+    look.setColour (juce::ComboBox::textColourId, theme.text);
+    look.setColour (juce::ComboBox::arrowColourId, theme.text);
+    look.setColour (juce::PopupMenu::backgroundColourId, theme.card);
+    look.setColour (juce::PopupMenu::textColourId, theme.text);
+    look.setColour (juce::PopupMenu::highlightedBackgroundColourId, theme.control);
+    look.setColour (juce::PopupMenu::highlightedTextColourId, theme.control.contrasting());
+    model.setColour (juce::ComboBox::textColourId, theme.text);
+    model.setColour (juce::ComboBox::arrowColourId, theme.text);
+    for (auto& slider : sliders)
+    {
+        slider.setColour (juce::Slider::textBoxTextColourId, theme.text);
+        slider.repaint();
+    }
+    for (auto& label : labels) label.setColour (juce::Label::textColourId, theme.text);
+    for (auto* control : { &transformer, &highTilt, &upward, &bypass })
+        control->setTheme (theme);
 }

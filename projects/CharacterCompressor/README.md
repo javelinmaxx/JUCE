@@ -73,8 +73,11 @@ with a scrolling five-second history line (oldest at left, current at right).
 The display samples gain reduction at 30 Hz while the editor is open; timestamps
 keep the window at five seconds even if UI updates are delayed. Closing the
 editor clears its display history. Transformer, High Tilt, Upward, and bypass
-use animated switches with keyboard access and host automation. Switching to
-Upward resets the trace, labels it Upward Gain, and changes its accent color.
+use animated switches with keyboard access and host automation. Each model has
+its own palette: FET charcoal with gold GR, VCA blue with white GR,
+Variable-mu light green with white GR, and Optical white with red GR. Upward
+swaps each model's control and GR colors, resets the trace, and labels the
+meter Upward Gain. The palette follows model automation and session recall.
 
 ## Measured characteristics
 
@@ -130,6 +133,14 @@ XDG_CACHE_HOME=/workspace/juce-env/cache xvfb-run -a \
 The editor check also exercises switch clicks, automation, and history expiry.
 It runs the message loop for six seconds with a synthetic GR signal to verify
 the animated display. Add an absolute PNG path after `--editor` to save a preview.
+Preview PNGs for all four models and their Upward reversals are in
+[`Previews`](Previews). To regenerate them after activating the local build
+environment, run from the repository root:
+
+```bash
+xvfb-run -a /workspace/juce-env/character-build/CharacterProcessorTests \
+    --preview-modes projects/CharacterCompressor/Previews
+```
 
 Linux artifact:
 `/workspace/juce-env/character-build/CharacterCompressor_artefacts/Debug/VST3/Character Compressor.vst3`.

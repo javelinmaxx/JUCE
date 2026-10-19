@@ -252,10 +252,75 @@ int runOutputStageTests (int argc, char** argv)
     return 0;
 }
 
+// Capture all four simulation palettes and their Upward reversals using the real editor.
+int renderThemePreviews (const char* directory)
+{
+    juce::ScopedJuceInitialiser_GUI juce;
+    juce::File destination (directory);
+    check (destination.createDirectory(), "preview directory can be created");
+    CharacterCompressorProcessor processor;
+    processor.prepareToPlay (48000, 256);
+    set (processor, "model", 0);
+    set (processor, "upward", 0);
+    std::unique_ptr<juce::AudioProcessorEditor> editor (processor.createEditor());
+    const std::array<juce::String, 4> names { "fet", "vca", "variable-mu", "optical" };
+    const std::array<juce::Colour, 8> background {
+        juce::Colour (0xff252b31), juce::Colour (0xff142b3d),
+        juce::Colour (0xffe4f0df), juce::Colour (0xfff5f7f6),
+        juce::Colour (0xff382f22), juce::Colour (0xff23465d),
+        juce::Colour (0xff355a46), juce::Colour (0xff3f2026) };
+    const std::array<juce::Colour, 8> meter {
+        juce::Colour (0xffe2b85f), juce::Colour (0xfff7fbff),
+        juce::Colour (0xfff8fff7), juce::Colour (0xffdc4a55),
+        juce::Colour (0xffa9b1b9), juce::Colour (0xff48a9dc),
+        juce::Colour (0xff91c98a), juce::Colour (0xfff8faf9) };
+    struct CaptureTimer final : juce::Timer
+    {
+        std::function<void()> tick;
+        void timerCallback() override { tick(); }
+    } timer;
+    int stage = 0, frame = 0;
+    bool succeeded = true;
+    timer.tick = [&]
+    {
+        ++frame;
+        processor.reduction.store (12.0f + 4.0f * std::sin (static_cast<float> (frame) * 0.09f));
+        if (frame < 155) return;
+        const auto image = editor->createComponentSnapshot (editor->getLocalBounds());
+        const auto filename = names[static_cast<size_t> (stage % 4)]
+                            + (stage < 4 ? ".png" : "-upward.png");
+        auto file = destination.getChildFile (filename);
+        succeeded = succeeded && (! file.existsAsFile() || file.deleteFile());
+        auto stream = file.createOutputStream();
+        succeeded = succeeded && image.isValid() && stream != nullptr;
+        if (succeeded)
+            succeeded = juce::PNGImageFormat().writeImageToStream (image, *stream)
+                     && image.getPixelAt (0, 0) == background[static_cast<size_t> (stage)]
+                     && image.getPixelAt (398, 250) == meter[static_cast<size_t> (stage)];
+        ++stage;
+        frame = 0;
+        if (stage == 8)
+        {
+            juce::MessageManager::getInstance()->stopDispatchLoop();
+            return;
+        }
+        set (processor, "model", stage % 4);
+        set (processor, "upward", stage >= 4 ? 1.0f : 0.0f);
+    };
+    timer.startTimer (34);
+    juce::MessageManager::getInstance()->runDispatchLoop();
+    timer.stopTimer();
+    check (succeeded && stage == 8, "eight model and upward preview colors match their palettes");
+    std::cout << "8 theme previews saved to " << destination.getFullPathName() << '\n';
+    return 0;
+}
+
 int main (int argc, char** argv)
 {
     try
     {
+        if (argc > 2 && juce::String (argv[1]) == "--preview-modes")
+            return renderThemePreviews (argv[2]);
         if (argc > 1 && juce::String (argv[1]) == "--output-stage")
             return runOutputStageTests (argc, argv);
         return runTests (argc, argv);

@@ -2,26 +2,47 @@
 #include "PluginProcessor.h"
 #include "GainReductionHistory.h"
 
+struct CompressorTheme
+{
+    juce::Colour background, card, meterPanel, text, secondary, control, meter,
+                 switchSurface, gaugeTrack, grid, knobTop, knobBottom;
+};
+
 class AnimatedSwitch final : public juce::ToggleButton
 {
 public:
     explicit AnimatedSwitch (const juce::String& caption) : ToggleButton (caption) {}
     void advance (float elapsed);
     void snapToState() { position = getToggleState() ? 1.0f : 0.0f; }
-    void setAccent (juce::Colour colour) { accent = colour; repaint(); }
+    void setTheme (const CompressorTheme& theme)
+    {
+        accent = theme.control;
+        surface = theme.switchSurface;
+        foreground = theme.text;
+        secondary = theme.secondary;
+        repaint();
+    }
     void paintButton (juce::Graphics&, bool highlighted, bool down) override;
 private:
     float position = 0;
     juce::Colour accent { 0xff168aad };
+    juce::Colour surface { 0xff202a34 }, foreground { 0xfff0ddbb }, secondary { 0xff92a0ad };
 };
 
 class CompressorLookAndFeel final : public juce::LookAndFeel_V4
 {
 public:
     void drawRotarySlider (juce::Graphics&, int, int, int, int, float, float, float, juce::Slider&) override;
-    void setAccent (juce::Colour colour) { accent = colour; }
+    void setTheme (const CompressorTheme& theme)
+    {
+        accent = theme.control;
+        ring = theme.grid;
+        knobTop = theme.knobTop;
+        knobBottom = theme.knobBottom;
+    }
 private:
     juce::Colour accent { 0xff168aad };
+    juce::Colour ring { 0xff38434e }, knobTop { 0xff46515e }, knobBottom { 0xff1b242d };
 };
 
 class CharacterCompressorEditor final : public juce::AudioProcessorEditor, private juce::Timer
@@ -35,6 +56,7 @@ public:
 private:
     void timerCallback() override;
     void paintMeter (juce::Graphics&);
+    void applyTheme();
     CharacterCompressorProcessor& processor;
     CompressorLookAndFeel look;
     juce::ComboBox model;
@@ -53,5 +75,7 @@ private:
     double lastTick = 0;
     float displayedReduction = 0;
     bool lastUpwardMode = false;
+    int lastModelIndex = -1;
+    CompressorTheme theme;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (CharacterCompressorEditor)
 };
