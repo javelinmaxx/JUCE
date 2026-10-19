@@ -682,3 +682,6 @@ implementation, not a production-release claim.
 - Made the normal VCA panels white with dark text and blue controls. The VCA Yin
   palette keeps its dark panels and uses white knob faces.
 - Updated the Windows artifact names and user-facing build instructions.
+
+### 2026-10-19 — shortened editor title
+- Changed the editor heading to “YIN/YANG COMP” for a more compact title.
