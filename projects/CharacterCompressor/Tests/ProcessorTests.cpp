@@ -125,8 +125,10 @@ int runTests (int argc, char** argv)
         std::unique_ptr<juce::AudioProcessorEditor> editor (restored.createEditor());
         check (editor && editor->getWidth() == 580 && editor->getHeight() == 980, "portrait editor creates at expected size");
         check (editor->getNumChildComponents() >= 25, "editor contains controls and meters");
-        juce::Slider *threshold = nullptr, *ratio = nullptr, *attack = nullptr, *release = nullptr;
-        AnimatedSwitch *transformer = nullptr, *upward = nullptr, *midSide = nullptr;
+        juce::Slider *threshold = nullptr, *knee = nullptr, *ratio = nullptr;
+        juce::Slider *attack = nullptr, *release = nullptr, *output = nullptr, *mix = nullptr;
+        AnimatedSwitch *transformer = nullptr, *highTilt = nullptr, *upward = nullptr;
+        AnimatedSwitch *bypass = nullptr, *midSide = nullptr;
         juce::Slider *stereoLink = nullptr, *evenHarmonics = nullptr, *variTransient = nullptr;
         for (auto* child : editor->getChildren())
         {
@@ -134,9 +136,12 @@ int runTests (int argc, char** argv)
             if (auto* slider = dynamic_cast<juce::Slider*> (child))
             {
                 if (slider->getName() == "THRESHOLD") threshold = slider;
+                if (slider->getName() == "KNEE") knee = slider;
                 if (slider->getName() == "RATIO") ratio = slider;
                 if (slider->getName() == "ATTACK") attack = slider;
                 if (slider->getName() == "RELEASE") release = slider;
+                if (slider->getName() == "OUTPUT") output = slider;
+                if (slider->getName() == "MIX") mix = slider;
                 if (slider->getName() == "STEREO LINK") stereoLink = slider;
                 if (slider->getName() == "EVEN HARMONICS") evenHarmonics = slider;
                 if (slider->getName() == "VARITRANSIENT") variTransient = slider;
@@ -144,16 +149,32 @@ int runTests (int argc, char** argv)
             if (auto* button = dynamic_cast<AnimatedSwitch*> (child))
             {
                 if (button->getButtonText() == "OUTPUT TRANSFORMER") transformer = button;
+                if (button->getButtonText() == "SC HIGH TILT +6 dB") highTilt = button;
                 if (button->getButtonText() == "UPWARD COMPRESSION") upward = button;
+                if (button->getButtonText() == "BYPASS") bypass = button;
                 if (button->getButtonText() == "MID / SIDE MODE") midSide = button;
             }
         }
-        check (threshold && ratio && attack && release && transformer && upward && midSide && stereoLink && evenHarmonics && variTransient,
-               "portrait controls include mid/side, stereo link, and Even harmonics");
+        check (threshold && knee && ratio && attack && release && output && mix && transformer
+               && highTilt && upward && bypass && midSide && stereoLink && evenHarmonics && variTransient,
+               "editor includes the complete knob and switch set");
         check (threshold->getHeight() > attack->getHeight() && ratio->getHeight() > release->getHeight(),
                "primary knobs are larger than timing knobs");
-        check (attack->getY() == release->getY() && attack->getRight() <= release->getX(),
-               "attack and release are adjacent");
+        check (threshold->getY() == knee->getY() && knee->getY() == ratio->getY()
+               && threshold->getRight() <= knee->getX() && knee->getRight() <= ratio->getX(),
+               "knee is between threshold and ratio");
+        check (attack->getY() == variTransient->getY() && variTransient->getY() == release->getY()
+               && attack->getRight() <= variTransient->getX() && variTransient->getRight() <= release->getX(),
+               "VariTransient is between attack and release");
+        check (output->getY() == mix->getY() && mix->getY() == stereoLink->getY()
+               && output->getY() > 176 + 400,
+               "output, mix, and stereo link sit below the shortened GR section");
+        check (transformer->getHeight() > transformer->getWidth()
+               && highTilt->getHeight() > highTilt->getWidth()
+               && upward->getHeight() > upward->getWidth()
+               && bypass->getHeight() > bypass->getWidth()
+               && midSide->getHeight() > midSide->getWidth(),
+               "all animated switches use a vertical layout");
         GainReductionHistory history;
         for (int i = 0; i <= 360; ++i) history.push (i / 30.0, static_cast<float> (i % 31));
         int visible = 0;

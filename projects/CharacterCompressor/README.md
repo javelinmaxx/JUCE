@@ -76,10 +76,13 @@ Even harmonics, and VariTransient are appended. AU version hints 2, 3, 4, and 5
 mark the compatible additions. There is no external sidechain, oversampling selector,
 automatic makeup gain, or preset browser yet.
 
-The 580 × 980 portrait editor puts the larger threshold and ratio knobs first,
-with attack and release together beneath them and smaller secondary controls
-below. The right-hand display pairs a vertical 0–30 dB gain-reduction meter
-with a scrolling five-second history line (oldest at left, current at right).
+The 580 × 980 portrait editor places Threshold, Knee, and Ratio in that order,
+with VariTransient between Attack and Release. The shortened right-hand GR
+display pairs a vertical 0–30 dB meter with a scrolling five-second history;
+Output, Mix, and Stereo Link sit directly below it. Input and Detector HPF are
+in the lower left. Transformer enable, Iron Drive, and Even harmonics share a
+Transformer Stage section. All five animated switches use vertical toggles.
+The history line runs oldest at left to current at right.
 The display samples gain reduction at 30 Hz while the editor is open; timestamps
 keep the window at five seconds even if UI updates are delayed. Closing the
 editor clears its display history. Transformer, High Tilt, Upward, and bypass

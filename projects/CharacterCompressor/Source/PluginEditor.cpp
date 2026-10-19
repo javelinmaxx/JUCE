@@ -140,18 +140,21 @@ void AnimatedSwitch::paintButton (juce::Graphics& g, bool highlighted, bool down
         g.drawRoundedRectangle (bounds, 7, 1);
     }
     g.setColour (getToggleState() ? foreground : secondary);
-    g.setFont (juce::FontOptions (12.0f));
-    g.drawText (getButtonText(), getLocalBounds().reduced (12, 0).withTrimmedRight (100),
-                juce::Justification::centredLeft);
-    const auto track = juce::Rectangle<float> (static_cast<float> (getWidth() - 64), 7, 48, 22);
+    g.setFont (juce::FontOptions (11.0f));
+    g.drawFittedText (getButtonText(), getLocalBounds().reduced (5).withHeight (42),
+                      juce::Justification::centred, 3);
+    const auto trackWidth = 26.0f;
+    const auto trackHeight = std::min (56.0f, static_cast<float> (getHeight()) * 0.38f);
+    const auto track = juce::Rectangle<float> (static_cast<float> (getWidth()) * 0.5f - trackWidth * 0.5f,
+        50.0f, trackWidth, trackHeight);
     g.setColour (secondary.withMultipliedBrightness (0.7f).interpolatedWith (accent, position));
     g.fillRoundedRectangle (track, 11);
     g.setColour (down ? juce::Colours::white : accent.contrasting());
-    g.fillEllipse (track.getX() + 3 + position * 26, track.getY() + 3, 16, 16);
+    g.fillEllipse (track.getCentreX() - 8, track.getBottom() - 19 - position * (trackHeight - 20), 16, 16);
     g.setColour (secondary);
     g.setFont (juce::FontOptions (10.0f));
-    g.drawText (getToggleState() ? "ON" : "OFF", getWidth() - 105, 0, 32, getHeight(),
-                juce::Justification::centredRight);
+    g.drawText (getToggleState() ? "ON" : "OFF", 0, juce::roundToInt (track.getBottom()) + 5,
+                getWidth(), 20, juce::Justification::centred);
 }
 
 void CompressorLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int width, int height,
@@ -194,8 +197,17 @@ void CharacterCompressorEditor::paint (juce::Graphics& g)
     g.setFont (juce::FontOptions (29.0f));
     g.drawText ("Character Compressor", 24, 40, 532, 38, juce::Justification::centredLeft);
     g.setColour (theme.card);
-    g.fillRoundedRectangle (24, 170, 330, 190, 10);
-    for (const auto y : { 370, 498, 626 })
+    g.fillRoundedRectangle (24, 170, 330, 150, 10);
+    g.fillRoundedRectangle (24, 454, 330, 214, 10);
+    g.setColour (theme.text);
+    g.setFont (juce::FontOptions (13.0f).withStyle ("bold"));
+    g.drawText ("TRANSFORMER STAGE", 38, 464, 300, 20, juce::Justification::centredLeft);
+    g.setColour (theme.card);
+    g.fillRoundedRectangle (376, 584, 180, 128, 10);
+    g.setColour (theme.secondary);
+    g.setFont (juce::FontOptions (10.0f).withStyle ("bold"));
+    g.drawText ("OUTPUT  /  MIX  /  STEREO LINK", 382, 586, 168, 16, juce::Justification::centred);
+    for (const auto y : { 326, 442, 674 })
     {
         g.setColour (theme.grid);
         g.drawHorizontalLine (y, 24, 354);
@@ -211,7 +223,7 @@ void CharacterCompressorEditor::paintMeter (juce::Graphics& g)
     g.setFont (juce::FontOptions (11.0f));
     g.drawText (upward.getToggleState() ? "UPWARD GAIN" : "GAIN REDUCTION",
                 388, 188, 156, 20, juce::Justification::centred);
-    const juce::Rectangle<float> bar (392, 242, 14, 414), plot (442, 242, 98, 414);
+    const juce::Rectangle<float> bar (392, 232, 14, 250), plot (442, 232, 98, 250);
     g.setColour (theme.gaugeTrack);
     g.fillRoundedRectangle (bar, 4);
     for (int db = 0; db <= 30; db += 6)
@@ -253,11 +265,11 @@ void CharacterCompressorEditor::paintMeter (juce::Graphics& g)
     g.strokePath (trace, juce::PathStrokeType (1.7f));
     g.restoreState();
     g.setColour (juce::Colour (0xffb9c8c4));
-    g.drawText ("-5 s", 440, 662, 44, 18, juce::Justification::centredLeft);
-    g.drawText ("NOW", 498, 662, 44, 18, juce::Justification::centredRight);
+    g.drawText ("-5 s", 440, 486, 44, 18, juce::Justification::centredLeft);
+    g.drawText ("NOW", 498, 486, 44, 18, juce::Justification::centredRight);
     g.setColour (meterAccent);
     g.setFont (juce::FontOptions (24.0f));
-    g.drawText (juce::String (displayedReduction, 1) + " dB", 388, 694, 156, 32, juce::Justification::centred);
+    g.drawText (juce::String (displayedReduction, 1) + " dB", 388, 512, 156, 32, juce::Justification::centred);
 }
 
 void CharacterCompressorEditor::resized()
@@ -267,29 +279,38 @@ void CharacterCompressorEditor::resized()
     const auto place = [this] (size_t index, int x, int y, int width, int height)
     {
         labels[index].setBounds (x, y, width, 20);
+        if (width < 80)
+        {
+            labels[index].setFont (juce::FontOptions (9.0f));
+            sliders[index].setTextBoxStyle (juce::Slider::TextBoxBelow, false, width, 20);
+        }
+        else
+            sliders[index].setTextBoxStyle (juce::Slider::TextBoxBelow, false, std::min (width, 100), 22);
         sliders[index].setBounds (x, y + 20, width, height);
     };
-    place (1, 32, 178, 155, 154);
-    place (2, 191, 178, 155, 154);
-    place (3, 32, 378, 155, 94);
-    place (4, 191, 378, 155, 94);
-    place (0, 24, 500, 104, 60);
-    place (6, 136, 500, 104, 60);
-    place (7, 248, 500, 104, 60);
-    place (5, 24, 584, 104, 60);
-    place (8, 136, 584, 104, 60);
-    place (9, 248, 584, 104, 60);
-    place (10, 24, 668, 104, 60);
-    place (11, 136, 668, 104, 60);
-    place (12, 248, 668, 104, 60);
-    // The long drive label needs a compact caption at the secondary control size.
+    place (1, 24, 178, 104, 112);
+    place (5, 134, 178, 104, 112);
+    place (2, 244, 178, 104, 112);
+    place (3, 24, 326, 104, 90);
+    place (12, 134, 326, 104, 90);
+    place (4, 244, 326, 104, 90);
+    place (9, 36, 490, 96, 130);
+    place (11, 144, 490, 96, 130);
+    place (0, 24, 682, 154, 70);
+    place (8, 190, 682, 154, 70);
+    place (6, 376, 602, 60, 72);
+    place (7, 436, 602, 60, 72);
+    place (10, 496, 602, 60, 72);
+    labels[6].setText ("OUTPUT", juce::dontSendNotification);
+    labels[10].setText ("ST LINK", juce::dontSendNotification);
     labels[9].setText ("IRON DRIVE", juce::dontSendNotification);
+    labels[11].setText ("EVEN HARMONICS", juce::dontSendNotification);
     meters.setBounds (24, 150, 532, 20);
-    transformer.setBounds (24, 766, 532, 36);
-    highTilt.setBounds (24, 806, 532, 36);
-    upward.setBounds (24, 846, 532, 36);
-    bypass.setBounds (24, 886, 532, 36);
-    midSide.setBounds (24, 926, 532, 36);
+    transformer.setBounds (250, 486, 92, 166);
+    highTilt.setBounds (24, 780, 78, 164);
+    upward.setBounds (106, 780, 78, 164);
+    bypass.setBounds (188, 780, 78, 164);
+    midSide.setBounds (270, 780, 78, 164);
 }
 
 void CharacterCompressorEditor::timerCallback()

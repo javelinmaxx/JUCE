@@ -432,3 +432,15 @@ implementation, not a production-release claim.
   current secondary controls, including Even harmonics and VariTransient.
 - Measurement generation completed successfully and the preview renderer
   validated all eight palettes and files.
+
+### 2026-10-19 — compressor editor control layout
+
+- Reordered the primary controls to Threshold, Knee, Ratio, and placed
+  VariTransient between Attack and Release. Shortened the GR history panel and
+  moved Output, Mix, and Stereo Link below it.
+- Grouped transformer enable, Iron Drive, and Even harmonics in a titled
+  Transformer Stage panel. Changed all five animated switches to vertical
+  tracks and arranged the remaining switches along the lower edge.
+- Editor integration passed 260 checks and the VST3 target built. Updated
+  previews were rendered for all eight model/Upward palette combinations; the
+  preview renderer verified each image's palette colors and saved all files.
