@@ -3,11 +3,15 @@
 [Plots](output_stage.png) · [PDF](output_stage_report.pdf) · [SVG](output_stage.svg)
 · [Results and source hashes](metrics.json)
 
-The production C++ DSP now filters generated transformer distortion above
-500 Hz. It subtracts the clean input from the saturation output, filters that
-nonlinear residual through a fourth-order Butterworth low-pass, and adds it
-back to the clean input. All of this runs at 2× before the existing transformer
-phase/bandwidth response and decimation. This is a 24 dB/octave roll-off with
+These measurements describe an earlier DSP revision. At the time, generated
+transformer distortion above 500 Hz was filtered with a fourth-order
+Butterworth low-pass (24 dB/octave). The current implementation uses a
+second-order Butterworth low-pass (12 dB/octave), so the distortion attenuation
+numbers below are historical and should not be used to characterize the current
+slope. The signal path still subtracts the clean input from the saturation
+output, filters that nonlinear residual, and adds it back to the clean input.
+All of this runs at 2× before the transformer phase/bandwidth response and
+decimation. This historical filter had a 24 dB/octave roll-off with
 −3.01 dB at 500 Hz, not a brick-wall cutoff. The residual includes saturation's
 change to the fundamental as well as generated harmonics; its filtering can
 also affect the large-signal fundamental gain/phase around the corner.

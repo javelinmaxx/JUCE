@@ -67,13 +67,13 @@ def design_response(frequency, rate):
     # Independent frequency-domain transfer of the specified loaded model.
     processing_rate = 2 * rate
     z = np.exp(-2j * np.pi * frequency / processing_rate)
-    low_k = np.tan(np.pi * 8 / processing_rate)
+    low_k = np.tan(np.pi * 20 / processing_rate)
     hp = (1 / (1 + low_k)) * (1 - z) / (1 + (low_k - 1) / (low_k + 1) * z)
-    k = np.tan(np.pi * min(22000, processing_rate * .4) / processing_rate)
-    norm = 1 / (1 + k / .8 + k * k)
+    k = np.tan(np.pi * min(19000, processing_rate * .4) / processing_rate)
+    norm = 1 / (1 + k / 2.0 + k * k)
     b0 = k * k * norm
     lp = (b0 + 2 * b0 * z + b0 * z * z) / (1 + 2 * (k * k - 1) * norm * z
-         + (1 - k / .8 + k * k) * norm * z * z)
+         + (1 - k / 2.0 + k * k) * norm * z * z)
     return hp * lp
 
 with tempfile.TemporaryDirectory(prefix='character-phase-') as tmp:
@@ -103,7 +103,7 @@ with tempfile.TemporaryDirectory(prefix='character-phase-') as tmp:
         end = y[FS + int(.009 * FS)]
         return 100 * (1 - end / start)
     new_droop = droop(outputs[50])
-    expected_droop = 100 * (1 - np.exp(-2 * np.pi * 8 * .008))
+    expected_droop = 100 * (1 - np.exp(-2 * np.pi * 20 * .008))
     assert abs(new_droop - expected_droop) < .5, 'Square-wave droop does not match LF pole'
 
     # Requested phase check at the other common host sample rates. This is a
@@ -121,7 +121,7 @@ with tempfile.TemporaryDirectory(prefix='character-phase-') as tmp:
 metrics = {
     'sample_rate_hz': FS, 'input_peak_dbfs': -60, 'drive_db': 0, 'ratio': 1,
     'oversampling_factor': 2, 'compensated_latency_samples': 64,
-    'lf_corner_hz': 8, 'hf_corner_hz': 22000, 'hf_q': .8,
+    'lf_corner_hz': 20, 'hf_corner_hz': 19000, 'hf_q': 2.0,
     'phase_degrees_at_50hz': float(phase[0]),
     'phase_degrees_at_17950hz': float(phase[-1]),
     'max_design_phase_error_degrees_50_to_17950hz': float(np.max(error)),

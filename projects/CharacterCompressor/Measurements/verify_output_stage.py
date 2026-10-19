@@ -88,9 +88,9 @@ def thd(spec, frequency, rate=FS):
 
 
 def lowpass_db(frequencies, rate):
-    # Independent fourth-order Butterworth magnitude, prewarped at 500 Hz.
+    # Independent second-order Butterworth magnitude, prewarped at 500 Hz.
     ratio = np.tan(np.pi*frequencies/(2*rate)) / np.tan(np.pi*500/(2*rate))
-    return -10 * np.log10(1 + ratio**8)
+    return -10 * np.log10(1 + ratio**4)
 
 
 with tempfile.TemporaryDirectory(prefix='character-output-') as tmp:
@@ -215,7 +215,7 @@ with tempfile.TemporaryDirectory(prefix='character-output-') as tmp:
 metrics = {
     'sample_rate_hz': FS, 'oversampling_factor': 2, 'latency_samples': LATENCY,
     'thd_input_peak_dbfs': -12, 'thd_harmonics': 'H2-H10 below Nyquist',
-    'distortion_filter': '500 Hz fourth-order Butterworth, nonlinear residual only',
+    'distortion_filter': '500 Hz second-order Butterworth (12 dB/octave), nonlinear residual only',
     'harmonic_comparison': {'input_hz': 100, 'peak_dbfs': -6, 'drive_db': 12,
         'max_attenuation_error_db': attenuation_error,
         'fifth_harmonic_probe_attenuation_db': probe_attenuation},
@@ -248,7 +248,7 @@ fig, axes = plt.subplots(2,2,figsize=(12,8.5))
 fig.subplots_adjust(left=.08,right=.97,bottom=.11,top=.84,wspace=.28,hspace=.46)
 fig.suptitle('Transformer distortion / high-tilt verification', x=.06, ha='left', y=.97, fontsize=21, fontweight='bold')
 fig.text(.06,.91,'Production C++ DSP • 48 kHz • 2× transformer • compression 1:1 • fixed 64-sample delay removed',fontsize=10)
-fig.text(.06,.87,'500 Hz / 24 dB per octave filtering applies to generated distortion; the clean high-frequency signal remains.',fontsize=9,color='#526173')
+fig.text(.06,.87,'500 Hz / 12 dB per octave filtering applies to generated distortion; the clean high-frequency signal remains.',fontsize=9,color='#526173')
 colors=['#0072b2','#d55e00','#009e73','#8b58a5']
 ax=axes[0,0]
 ax.loglog(frequencies,baseline,'--',color='#9299a3',label='Before / 6 dB drive')

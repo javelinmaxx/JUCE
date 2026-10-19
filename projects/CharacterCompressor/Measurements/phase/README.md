@@ -3,27 +3,26 @@
 [View the plot](square_wave_phase.png) · [PDF report](transformer_phase_report.pdf)
 · [Vector plot](square_wave_phase.svg) · [Numerical results](metrics.json)
 
-The production DSP revision before the subsequent distortion-filter/high-shelf
-change was measured with 50 Hz and 2 kHz square waves,
+The current production DSP revision, including the causal hysteresis state and updated bandwidth settings, was measured with 50 Hz and 2 kHz square waves,
 at −60 dBFS peak, compression ratio 1:1, transformer drive 0 dB, and 48 kHz
 host sample rate. Low-level input isolates the small-signal response from
 saturation. Both before/after traces use 2× oversampling. Only the fixed
 64-sample FIR transport delay is removed; transformer phase remains intact.
 
-The loaded-transformer approximation uses an 8 Hz first-order high-pass for
-magnetizing-inductance behavior and a 22 kHz second-order low-pass, Q 0.8,
-for leakage-inductance/winding-capacitance behavior. Both operate at 2× the
-host rate. These design values have not been calibrated to physical hardware.
+The loaded-transformer approximation uses a 20 Hz first-order high-pass and a
+19 kHz second-order low-pass, Q 2.0. Both operate at 2× the host rate. The
+hysteresis is a causal scalar play operator with a drive-scaled coercive band;
+it is a behavioral approximation, not a calibrated physical-core model.
 
 | Focused check | Result |
 | --- | ---: |
-| Phase at 50 Hz | +8.957° |
-| Phase at 17.95 kHz | −65.934° |
-| Maximum phase error versus specified filter response, 50 Hz–17.95 kHz | 0.0172° |
-| 50 Hz square droop, 1–9 ms after rising edge | 33.040% |
-| Predicted droop from the 8 Hz pole | 33.110% |
-| Maximum phase error at 44.1 kHz host rate | 0.0232° |
-| Maximum phase error at 96 kHz host rate | 0.0027° |
+| Phase at 50 Hz | +21.736° |
+| Phase at 17.95 kHz | −73.555° |
+| Maximum phase error versus specified filter response, 50 Hz–17.95 kHz | 0.0231° |
+| 50 Hz square droop, 1–9 ms after rising edge | 63.311% |
+| Predicted droop from the 20 Hz pole | 63.407% |
+| Maximum phase error at 44.1 kHz host rate | 0.0318° |
+| Maximum phase error at 96 kHz host rate | 0.0019° |
 | Transformer disabled | Exact delayed input |
 | Reported transport latency | 64 samples |
 
@@ -31,7 +30,7 @@ Phase comes from output/input FFT ratios at the odd harmonics of the 50 Hz
 square, using the final second of a two-second render. The 2 kHz square exposes
 edge shaping and settling. Waveform overshoot and ringing include the combined
 resampling filters and transformer response. Delay compensation exposes some
-FIR pre-ringing before the displayed edge; the actual processing remains causal.
+FIR pre-ringing before the displayed edge; the actual processing remains causal, including the hysteresis state update.
 
 The previous 2× filter implementation is preserved in
 `../baseline/transformer_before_phase.h`. Source hashes are recorded in

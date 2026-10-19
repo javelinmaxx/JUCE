@@ -6,17 +6,18 @@ output transformer stage. Built with JUCE and C++17.
 
 These are behavioral models, not measured recreations of particular hardware.
 The transformer adds flux-dependent saturation. Its generated distortion is
-isolated as a nonlinear residual, filtered by a **500 Hz fourth-order Butterworth
-low-pass (24 dB/octave)**, and added back to the clean signal. This preserves clean
+isolated as a nonlinear residual, filtered by a **500 Hz second-order Butterworth
+low-pass (12 dB/octave)**, and added back to the clean signal. This preserves clean
 high frequencies while reducing harmonics above 500 Hz; the cutoff is gradual.
 The combined signal then passes through a causal loaded
-transformer response: an 8 Hz high-pass models low-frequency phase lead and
-droop, while a 22 kHz second-order low-pass (Q 0.8) models high-frequency phase
-lag from leakage inductance and winding capacitance. These are provisional
-design values. The transformer runs at fixed 2× the host sample rate, with
-FIR interpolation and decimation filters. This is intended to reduce aliasing;
-strong drive can still produce residual aliases. It is a prototype for listening and refinement, not a release
-claimed to match analog hardware.
+transformer response: a 20 Hz high-pass models low-frequency phase lead and
+droop, while a 19 kHz second-order low-pass (Q 2.0) models high-frequency phase
+lag and stronger vintage-style resonance from leakage inductance and winding
+capacitance. These are provisional design values. The transformer runs at fixed
+2× the host sample rate, with FIR interpolation and decimation filters. This is
+intended to reduce aliasing; strong drive can still produce residual aliases. It
+is a prototype for listening and refinement, not a release claimed to match
+analog hardware.
 
 ## Controls and signal path
 
@@ -37,6 +38,11 @@ four models through this branch; it does not EQ the audio output.
   that slows as gain reduction increases. Ratio is a maximum, not a fixed slope.
 - **Optical:** RMS feed-forward control with a slow recovery memory in addition
   to the main envelope. Attack is twice the common attack setting.
+- **Upward:** optional global dynamics mode. Audio at and above Threshold gets
+  0 dB of compressor gain; levels below Threshold are boosted toward it. The
+  Ratio control determines the below-threshold slope (for example, 4:1 raises
+  a signal 3 dB for each 4 dB it falls below threshold). The Knee smooths the
+  transition, and Attack/Release control the gain envelope.
 - **Detector HPF:** filters only the compression detector. Set to 0 Hz to disable.
 - **Transformer drive:** increases saturation without increasing small-signal
   gain. Generated distortion rolls off above 500 Hz. The existing 0–18 dB
@@ -55,9 +61,10 @@ Mono and stereo layouts are supported, with no lookahead and a fixed
 The transformer, clean output, and bypass paths retain this latency even when
 the transformer is disabled. Both resampling filters have 129 taps; only the
 transformer stage runs at 2×, and its filter coefficients use that higher rate.
-Host automation and session state recall cover all 14 parameters. Existing
-parameter IDs/order are retained; High Tilt is appended with AU version hint 2. There is no
-external sidechain, oversampling selector, automatic makeup gain, or preset browser yet.
+Host automation and session state recall cover all 15 parameters. Existing
+parameter IDs/order are retained; High Tilt and Upward are appended with AU
+version hints 2 and 3. There is no external sidechain, oversampling selector,
+automatic makeup gain, or preset browser yet.
 
 ## Measured characteristics
 
@@ -69,13 +76,16 @@ as PNG, SVG, and PDF. Per the user’s request, the test suites and measurement
 sweep were not rerun after the 2× implementation.
 
 The subsequent [square-wave phase verification](Measurements/phase/README.md)
-records the previous 2× transformer revision with 50 Hz and 2 kHz squares. At 48 kHz,
-measured phase is +8.96° at 50 Hz and −65.93° at 17.95 kHz after removing
-the fixed FIR delay. Focused checks also pass at 44.1 and 96 kHz; the full
-test suites remain unrerun.
+records focused square-wave measurements for the current 2× transformer. At
+48 kHz, measured phase is +21.74° at 50 Hz and −73.56° at 17.95 kHz after
+removing fixed FIR delay. Maximum phase error against the specified filter
+response is 0.024° through 17.95 kHz; focused checks also pass at 44.1 and
+96 kHz. The full DSP/processor test suites remain unrerun.
 
-The latest [output-stage measurements](Measurements/output_stage/README.md)
-verify the 500 Hz distortion roll-off and High Tilt at 44.1, 48, and 96 kHz.
+The [existing output-stage measurements](Measurements/output_stage/README.md)
+were made with the former 24 dB/octave slope, before the hysteresis and updated
+bandwidth/resonance settings. Their roll-off numbers do not describe this 12
+dB/octave filter. They verify High Tilt at 44.1, 48, and 96 kHz.
 At −12 dBFS peak and 6 dB drive, THD falls from 2.14% at 100 Hz to 0.0221%
 at 500 Hz and 0.00142% at 1 kHz. These tests use compression 1:1 and High Tilt off.
 The detector shelf measures +3.00 dB at 1.5 kHz and +6.00 dB at 10 kHz.

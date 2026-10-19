@@ -5,25 +5,26 @@
   "ratio": 1,
   "oversampling_factor": 2,
   "compensated_latency_samples": 64,
-  "lf_corner_hz": 8,
-  "hf_corner_hz": 22000,
-  "hf_q": 0.8,
-  "phase_degrees_at_50hz": 8.956755120372593,
-  "phase_degrees_at_17950hz": -65.93363311512164,
-  "max_design_phase_error_degrees_50_to_17950hz": 0.017162540582616754,
+  "lf_corner_hz": 20,
+  "hf_corner_hz": 19000,
+  "hf_q": 2.0,
+  "phase_degrees_at_50hz": 21.736142964828545,
+  "phase_degrees_at_17950hz": -73.55548890609442,
+  "max_design_phase_error_degrees_50_to_17950hz": 0.023093647620624682,
   "other_sample_rate_phase_error_degrees": {
-    "44100": 0.023125279600904675,
-    "96000": 0.0026657143790681805
+    "44100": 0.031806608952451514,
+    "96000": 0.0019203182570985203
   },
-  "square50_droop_percent_between_1_and_9_ms": 33.04016384060616,
+  "square50_droop_percent_between_1_and_9_ms": 63.310935628194365,
   "previous_square50_droop_percent_between_1_and_9_ms": 22.17064264353159,
-  "predicted_square50_droop_percent": 33.11021089057452,
+  "predicted_square50_droop_percent": 63.40686930587067,
   "disabled_transformer_is_exact_delayed_input": true,
   "before_transformer_sha256": "b1c798a5a9ab348d370518031ec30a6ba7220f70e88e450e3b60927d1c2a1cdb",
   "source_sha256": {
-    "CompressorDSP.h": "4acf77226aeec9b1827ae4c4d27d4cc7811b8b6abae1fc6b39f5b490782e6aa3",
-    "OversampledTransformer.h": "175936fec890ea2f07c01f936730ddc07d4c40465bf4a556a4dc3ee0ad1697a3",
-    "TransformerResponse.h": "722c99d846b1947f7d310825c2143c49d7f732328460124bd262a14d2d94717d"
+    "CompressorDSP.h": "1a0fdf74c8d5ad0eed8132e8a85aaac14c8ccd59d2e43915e2ac9843b4bd3dec",
+    "OversampledTransformer.h": "d4bf13956e9734d95ec8a1ba44b4e7da87ef8e31d364941bb8df7a2e9919c216",
+    "TransformerResponse.h": "4fc227c72190bfd04c869480474a5a7cd071048ec33bda3ca35a2c8f357e8d27",
+    "HighTilt.h": "08bb893fc879f5f95990aae0529f83281e7310f8e7795f8bc8be091d3f85bbf6"
   },
   "verification": "passed"
 }
