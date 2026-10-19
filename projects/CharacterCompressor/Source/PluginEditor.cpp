@@ -65,7 +65,7 @@ CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcess
     upward.snapToState();
     midSide.snapToState();
     lastTick = juce::Time::getMillisecondCounterHiRes() * 0.001;
-    setSize (548, 746);
+    setSize (548, 726);
     timerCallback();
     startTimerHz (30);
 }
@@ -462,7 +462,7 @@ void CharacterCompressorEditor::paint (juce::Graphics& g)
         juce::Colours::black.withAlpha (0.22f), 670, 430, true));
     g.fillAll();
     g.saveState();
-    g.addTransform (juce::AffineTransform::translation (0.0f, -10.0f));
+    g.addTransform (juce::AffineTransform::translation (0.0f, -30.0f));
     g.setColour (theme.background.getPerceivedBrightness() > 0.7f ? theme.text : theme.control);
     g.setFont (juce::FontOptions (12.0f));
     g.drawText ("J-SONIC  /  DYNAMICS", 24, 48, 500, 20, juce::Justification::centredLeft);
@@ -572,7 +572,7 @@ void CharacterCompressorEditor::paintMeter (juce::Graphics& g)
 
 void CharacterCompressorEditor::resized()
 {
-    const auto up = [] (int y) { return y - 10; };
+    const auto up = [] (int y) { return y - 30; };
     model.setBounds (24, up (98), 500, 32);
     bypass.setBounds (450, up (63), 74, 28);
     const auto place = [this, &up] (size_t index, int x, int y, int width, int height)

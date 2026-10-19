@@ -699,3 +699,5 @@ implementation, not a production-release claim.
 - Restored the J-SONIC line to its prior vertical location, shifted the remaining
   interface elements up 10 px, and shortened the editor by 10 px to preserve the
   lower margin.
+- Increased the full-layout upward shift by 20 px and reduced the editor height
+  by another 20 px, keeping the bottom margin consistent.

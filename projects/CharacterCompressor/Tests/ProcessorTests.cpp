@@ -471,10 +471,10 @@ int renderThemePreviews (const char* directory)
         {
             const auto index = static_cast<size_t> (stage);
             const auto grLitPixel = gaugeTrack[index].interpolatedWith (meter[index], 0.50f);
-            const auto meterPixel = image.getPixelAt (366, 240);
+            const auto meterPixel = image.getPixelAt (366, 220);
             const auto meterMatches = closeColour (meterPixel, grLitPixel, 20);
-            const auto panelBrightness = image.getPixelAt (30, 240).getPerceivedBrightness();
-            const auto backgroundBrightness = image.getPixelAt (536, 290).getPerceivedBrightness();
+            const auto panelBrightness = image.getPixelAt (30, 220).getPerceivedBrightness();
+            const auto backgroundBrightness = image.getPixelAt (536, 270).getPerceivedBrightness();
             const auto paletteIndex = static_cast<size_t> (stage % 4);
             if (stage < 4)
             {
@@ -488,12 +488,12 @@ int renderThemePreviews (const char* directory)
                           << " is not darker than its normal panel/background.\n";
                 succeeded = false;
             }
-            if (! meterMatches || image.getWidth() != 548 || image.getHeight() != 746)
+            if (! meterMatches || image.getWidth() != 548 || image.getHeight() != 726)
                 std::cerr << "Preview " << stage << " dimensions " << image.getWidth() << 'x' << image.getHeight()
                           << ", meter RGB " << meterPixel.toDisplayString (false).toStdString()
                           << ", expected " << grLitPixel.toDisplayString (false).toStdString() << '\n';
             succeeded = succeeded && juce::PNGImageFormat().writeImageToStream (image, *stream)
-                     && image.getWidth() == 548 && image.getHeight() == 746 && meterMatches;
+                     && image.getWidth() == 548 && image.getHeight() == 726 && meterMatches;
         }
         ++stage;
         frame = 0;
