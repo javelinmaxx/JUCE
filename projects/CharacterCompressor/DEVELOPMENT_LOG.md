@@ -666,3 +666,12 @@ implementation, not a production-release claim.
   to its knob and aligned their vertical centers.
 - Added a focused editor geometry check for the Input label. The focused editor
   checks passed (263 checks); the VST3 build succeeded.
+
+### 2026-10-19 — darker Upward palettes and revised GR accents
+- Darkened the Upward surfaces for FET, VCA, Variable-mu, and Optical. The
+  preview check now compares each Upward compressor panel and background to
+  its normal-mode counterpart and verifies both are darker.
+- Replaced FET's gold GR accent with dark purple and made white the VCA's normal
+  control accent as well as its GR color.
+- Rebuilt the VST3 and regenerated all eight previews. The palette-aware preview
+  check passed; no full test suite was run.

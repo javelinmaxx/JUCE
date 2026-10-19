@@ -438,20 +438,21 @@ int renderThemePreviews (const char* directory)
     std::unique_ptr<juce::AudioProcessorEditor> editor (processor.createEditor());
     const std::array<juce::String, 4> names { "fet", "vca", "variable-mu", "optical" };
     const std::array<juce::Colour, 8> meter {
-        juce::Colour (0xffe2b85f), juce::Colour (0xfff7fbff),
+        juce::Colour (0xff80549b), juce::Colour (0xfff7fbff),
         juce::Colour (0xfff8fff7), juce::Colour (0xffdc4a55),
-        juce::Colour (0xffa9b1b9), juce::Colour (0xff48a9dc),
-        juce::Colour (0xff91c98a), juce::Colour (0xfff8faf9) };
+        juce::Colour (0xff694881), juce::Colour (0xff93b4c8),
+        juce::Colour (0xff8dbd8c), juce::Colour (0xffa83e49) };
     const std::array<juce::Colour, 8> gaugeTrack {
         juce::Colour (0xff414b53), juce::Colour (0xff3c5262),
         juce::Colour (0xff526b59), juce::Colour (0xff56616a),
-        juce::Colour (0xff4b5055), juce::Colour (0xff435d70),
-        juce::Colour (0xff4f7058), juce::Colour (0xff51454a) };
+        juce::Colour (0xff343a40), juce::Colour (0xff304654),
+        juce::Colour (0xff3b5140), juce::Colour (0xff42383d) };
     struct CaptureTimer final : juce::Timer
     {
         std::function<void()> tick;
         void timerCallback() override { tick(); }
     } timer;
+    std::array<float, 4> normalPanelBrightness {}, normalBackgroundBrightness {};
     int stage = 0, frame = 0;
     bool succeeded = true;
     timer.tick = [&]
@@ -472,11 +473,26 @@ int renderThemePreviews (const char* directory)
             const auto grLitPixel = gaugeTrack[index].interpolatedWith (meter[index], 0.50f);
             const auto meterPixel = image.getPixelAt (366, 250);
             const auto meterMatches = closeColour (meterPixel, grLitPixel, 20);
+            const auto panelBrightness = image.getPixelAt (30, 250).getPerceivedBrightness();
+            const auto backgroundBrightness = image.getPixelAt (536, 300).getPerceivedBrightness();
+            const auto paletteIndex = static_cast<size_t> (stage % 4);
+            if (stage < 4)
+            {
+                normalPanelBrightness[paletteIndex] = panelBrightness;
+                normalBackgroundBrightness[paletteIndex] = backgroundBrightness;
+            }
+            else if (! (panelBrightness < normalPanelBrightness[paletteIndex]
+                        && backgroundBrightness < normalBackgroundBrightness[paletteIndex]))
+            {
+                std::cerr << "Upward palette " << paletteIndex
+                          << " is not darker than its normal panel/background.\n";
+                succeeded = false;
+            }
             if (! meterMatches || image.getWidth() != 548 || image.getHeight() != 756)
                 std::cerr << "Preview " << stage << " dimensions " << image.getWidth() << 'x' << image.getHeight()
                           << ", meter RGB " << meterPixel.toDisplayString (false).toStdString()
                           << ", expected " << grLitPixel.toDisplayString (false).toStdString() << '\n';
-            succeeded = juce::PNGImageFormat().writeImageToStream (image, *stream)
+            succeeded = succeeded && juce::PNGImageFormat().writeImageToStream (image, *stream)
                      && image.getWidth() == 548 && image.getHeight() == 756 && meterMatches;
         }
         ++stage;
