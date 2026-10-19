@@ -91,7 +91,7 @@ private:
     std::array<std::unique_ptr<State::SliderAttachment>, 14> attachments;
     std::unique_ptr<State::ButtonAttachment> transformerAttachment, bypassAttachment, upwardAttachment, midSideAttachment;
     GainReductionHistory history;
-    juce::Rectangle<int> meterBounds { 344, 150, 180, 470 };
+    juce::Rectangle<int> meterBounds { 344, 140, 180, 470 };
     double lastTick = 0;
     float displayedReduction = 0;
     bool lastUpwardMode = false;

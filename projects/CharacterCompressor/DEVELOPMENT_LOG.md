@@ -641,3 +641,10 @@ implementation, not a production-release claim.
   rows.
 - Rebuilt the VST3 and regenerated all eight previews. Focused editor checks
   passed (262 checks); no full test suite was run.
+
+### 2026-10-19 — compacted top spacing and knob captions
+- Removed the gap between the model selector and the Compressor/GR panels by
+  moving the complete control layout upward 10 px. Preserved the 12 px section
+  gaps and the 18 px bottom margin.
+- Shifted knob captions 3 px closer to their controls while leaving panel and
+  section margins unchanged.
