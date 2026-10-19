@@ -445,6 +445,20 @@ implementation, not a production-release claim.
   previews were rendered for all eight model/Upward palette combinations; the
   preview renderer verified each image's palette colors and saved all files.
 
+### 2026-10-19 — compact header and studio-lit brushed aluminum
+- Removed the IN/OUT dBFS label, moved Input into the Compressor header as a
+  miniature control, and changed Bypass into a labeled push button with a
+  state-responsive glow.
+- Replaced uniform metal scanlines with irregular, fine horizontal brush marks
+  and a directional specular sheen. Added themed upper-left spill light and a
+  soft chassis vignette to evoke a sidelit studio compressor.
+- Flattened rotary controls by removing stacked face bevels, plastic shine,
+  cast shadows, and grip grooves; retained a thin position arc and indicator.
+  Simplified switch tracks and thumbs to flat fills with fine outlines.
+- Rebuilt the VST3 and UI preview target. Regenerated all eight previews; the
+  focused renderer verified their dimensions and model-specific GR colors.
+  No full test suite was run.
+
 ### 2026-10-19 — denser control layout
 - Reduced the editor to 580×810 and shortened the Compressor and Sidechain
   sections. Reduced Sidechain and Transformer control sizes and tightened row

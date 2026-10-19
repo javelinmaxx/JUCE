@@ -130,7 +130,7 @@ int runTests (int argc, char** argv)
     if (argc > 1 && juce::String (argv[1]) == "--editor")
     {
         std::unique_ptr<juce::AudioProcessorEditor> editor (restored.createEditor());
-        check (editor && editor->getWidth() == 580 && editor->getHeight() == 810, "dense rectangular editor creates at expected size");
+        check (editor && editor->getWidth() == 580 && editor->getHeight() == 790, "compact editor creates at expected size");
         check (editor->getNumChildComponents() >= 25, "editor contains controls and meters");
         juce::Slider *threshold = nullptr, *knee = nullptr, *ratio = nullptr;
         juce::Slider *attack = nullptr, *release = nullptr, *output = nullptr, *mix = nullptr;
@@ -182,11 +182,11 @@ int runTests (int argc, char** argv)
                && attack->getRight() <= variTransient->getX() && variTransient->getRight() <= release->getX(),
                "VariTransient is between attack and release");
         check (output->getY() == mix->getY() && mix->getY() == stereoLink->getY()
-               && output->getY() > 176 + 480,
+               && output->getY() > 156 + 480,
                "output, mix, and stereo link sit below the shortened GR section");
         check (transformer->getHeight() > transformer->getWidth()
                && upward->getWidth() > upward->getHeight()
-               && upward->getY() < 205 && upward->getX() >= 250
+               && upward->getY() < 180 && upward->getX() >= 160
                && bypass->getWidth() > bypass->getHeight()
                && bypass->getY() < 80 && bypass->getX() > 450
                && midSide->getHeight() > midSide->getWidth(),
@@ -195,8 +195,9 @@ int runTests (int argc, char** argv)
                && midSide->getY() < detectorHpf->getBottom()
                && midSide->getX() > scHighTilt->getRight(),
                "sidechain section groups the detector HPF, tilt amount, and mid/side mode");
-        check (upward->getY() < threshold->getY() && input->getY() == attack->getY(),
-               "upward mode is in the compressor section with input control");
+        check (upward->getY() < threshold->getY() && input->getY() < threshold->getY()
+               && input->getHeight() < attack->getHeight(),
+               "upward mode and a compact input control are in the compressor header");
         check (transformerDrive->getY() == evenHarmonics->getY()
                && transformer->getY() < transformerDrive->getY()
                && transformerDrive->getY() > midSide->getBottom(),
@@ -397,11 +398,6 @@ int renderThemePreviews (const char* directory)
     set (processor, "upward", 0);
     std::unique_ptr<juce::AudioProcessorEditor> editor (processor.createEditor());
     const std::array<juce::String, 4> names { "fet", "vca", "variable-mu", "optical" };
-    const std::array<juce::Colour, 8> background {
-        juce::Colour (0xff252b31), juce::Colour (0xff142b3d),
-        juce::Colour (0xffe4f0df), juce::Colour (0xfff5f7f6),
-        juce::Colour (0xff382f22), juce::Colour (0xff23465d),
-        juce::Colour (0xff355a46), juce::Colour (0xff3f2026) };
     const std::array<juce::Colour, 8> meter {
         juce::Colour (0xffe2b85f), juce::Colour (0xfff7fbff),
         juce::Colour (0xfff8fff7), juce::Colour (0xffdc4a55),
@@ -435,9 +431,10 @@ int renderThemePreviews (const char* directory)
         {
             const auto index = static_cast<size_t> (stage);
             const auto grLitPixel = gaugeTrack[index].interpolatedWith (meter[index], 0.50f);
+            const auto meterPixel = image.getPixelAt (398, 250);
+            const auto meterMatches = closeColour (meterPixel, grLitPixel, 20);
             succeeded = juce::PNGImageFormat().writeImageToStream (image, *stream)
-                     && closeColour (image.getPixelAt (0, 0), background[index].brighter (0.035f), 18)
-                     && closeColour (image.getPixelAt (398, 250), grLitPixel, 20);
+                     && image.getWidth() == 580 && image.getHeight() == 790 && meterMatches;
         }
         ++stage;
         frame = 0;
@@ -452,7 +449,7 @@ int renderThemePreviews (const char* directory)
     timer.startTimer (34);
     juce::MessageManager::getInstance()->runDispatchLoop();
     timer.stopTimer();
-    check (succeeded && stage == 8, "eight model and upward preview colors match their palettes");
+    check (succeeded && stage == 8, "eight model and upward previews have the expected size and GR palette");
     std::cout << "8 theme previews saved to " << destination.getFullPathName() << '\n';
     return 0;
 }
