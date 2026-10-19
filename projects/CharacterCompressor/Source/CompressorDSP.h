@@ -19,6 +19,7 @@ struct Parameters
     float inputDb = 0, thresholdDb = -18, ratio = 4, attackMs = 10;
     float releaseMs = 150, kneeDb = 6, outputDb = 0, mix = 1;
     float sidechainHz = 80, driveDb = 6, stereoLink = 100, evenHarmonics = 0;
+    float variTransient = 0;
     bool transformer = false, bypass = false, highTilt = false, upward = false, midSide = false;
 };
 
@@ -85,13 +86,14 @@ public:
         p.driveDb = safe (p.driveDb, 0, 18, 6);
         p.stereoLink = safe (p.stereoLink, 0, 100, 100);
         p.evenHarmonics = safe (p.evenHarmonics, 0, 100, 0);
+        p.variTransient = safe (p.variTransient, 0, 400, 0);
         selected = std::clamp (static_cast<int> (p.model), 0, 3);
         targets = { gain (p.inputDb), p.thresholdDb, p.ratio, p.kneeDb,
                     gain (p.outputDb), p.mix, gain (p.driveDb),
                     p.transformer ? 1.0f : 0.0f, p.bypass ? 1.0f : 0.0f,
                     p.highTilt ? 1.0f : 0.0f, p.upward ? 1.0f : 0.0f,
                     p.stereoLink * 0.01f, p.midSide ? 1.0f : 0.0f,
-                    p.evenHarmonics * 0.01f };
+                    p.evenHarmonics * 0.01f, p.variTransient * 0.0025f };
         // This one-pole HPF affects only the detector. High Tilt is a separate
         // shelf applied to the signed sidechain after this HPF.
         hpEnabled = p.sidechainHz > 0;
@@ -229,6 +231,17 @@ public:
                 if (m == 2)
                     // Mu recovery gets slower as stored gain reduction deepens.
                     release = std::pow (release, 1 / (1 + std::abs (s.reduction) * 0.06f));
+                // VariTransient uses a 3 dB soft knee from 3 to 6 dB GR.
+                // At 400%, attack reaches 4x and release reaches 1/4x.
+                auto transientFactor = 1.0f;
+                if (values[upward] < 0.5f)
+                {
+                    const auto kneePosition = std::clamp ((std::abs (s.reduction) - 3.0f) / 3.0f, 0.0f, 1.0f);
+                    const auto grWeight = kneePosition * kneePosition * (3.0f - 2.0f * kneePosition);
+                    transientFactor += 3.0f * values[variTransient] * grWeight;
+                }
+                attack = std::pow (attack, 1.0f / transientFactor);
+                release = std::pow (release, transientFactor);
                 // In upward mode the control state goes negative as gain rises,
                 // so attack/release must compare gain magnitude, not sign.
                 const auto a = std::abs (desired) > std::abs (s.reduction) ? attack : release;
@@ -238,7 +251,9 @@ public:
                 {
                     // Optical combines its main envelope with a slower memory:
                     // the latter recovers at six times the Release setting.
-                    const auto slow = std::abs (desired) > std::abs (s.memory) ? attacks[m] : slowRelease;
+                    const auto slowAttack = std::pow (attacks[m], 1.0f / transientFactor);
+                    const auto slowRecovery = std::pow (slowRelease, transientFactor);
+                    const auto slow = std::abs (desired) > std::abs (s.memory) ? slowAttack : slowRecovery;
                     s.memory = desired + slow * (s.memory - desired);
                     gr = 0.65f * gr + 0.35f * s.memory;
                 }
@@ -290,7 +305,7 @@ public:
 private:
     static constexpr float pi = 3.14159265358979323846f;
     // Indexes into the smoothed value/target arrays above.
-    enum Control { input, threshold, ratio, knee, output, mix, drive, transformer, bypass, highTilt, upward, stereoLink, midSide, evenHarmonics };
+    enum Control { input, threshold, ratio, knee, output, mix, drive, transformer, bypass, highTilt, upward, stereoLink, midSide, evenHarmonics, variTransient };
 
     struct Detector
     {
@@ -323,7 +338,7 @@ private:
     int selected = 0;
     float smoothing = 0, hpCoefficient = 0, slowRelease = 0, rmsCoefficient = 0;
     float meterReduction = 0;
-    std::array<float, 14> values {}, targets {};
+    std::array<float, 15> values {}, targets {};
     std::array<float, 4> weights {}, attacks {}, releases {};
     std::array<std::array<Detector, 4>, 2> states {};
     std::array<OversampledTransformer, 2> transformers {};

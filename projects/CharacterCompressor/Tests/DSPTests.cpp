@@ -87,6 +87,59 @@ int main()
     for (int m = 0; m < 4; ++m)
         check (std::abs (steadyGain (static_cast<Model> (m), 1) - 1) < 0.0001f, "1:1 is unity");
 
+    const auto transientTrace = [] (float variTransient, bool releasePhase)
+    {
+        Compressor dsp;
+        dsp.prepare (48000);
+        Parameters p;
+        p.model = Model::fet; p.thresholdDb = -18; p.ratio = 4; p.kneeDb = 0;
+        p.attackMs = 10; p.releaseMs = 150; p.sidechainHz = 0;
+        p.variTransient = variTransient;
+        dsp.setParameters (p);
+        std::vector<float> trace;
+        constexpr int block = 32;
+        std::vector<float> left (block), right (block);
+        const auto render = [&] (float db, int count)
+        {
+            for (int i = 0; i < count; ++i)
+            {
+                std::fill (left.begin(), left.end(), Compressor::gain (db));
+                right = left;
+                float* channels[] { left.data(), right.data() };
+                dsp.process (channels, 2, block);
+                trace.push_back (dsp.reductionDb());
+            }
+        };
+        if (releasePhase) render (-6, 500);
+        render (releasePhase ? -36.0f : -6.0f, 500);
+        return trace;
+    };
+    const auto attackOff = transientTrace (0, false);
+    const auto attackMax = transientTrace (400, false);
+    const auto attackEnd = attackOff.back();
+    const auto crossing = [attackEnd] (const std::vector<float>& trace)
+    {
+        for (size_t i = 0; i < trace.size(); ++i)
+            if (trace[i] >= attackEnd * 0.9f) return i;
+        return trace.size();
+    };
+    check (crossing (attackMax) > crossing (attackOff) * 2,
+           "VariTransient at 400% slows attack after gain reduction passes 3 dB");
+    const auto releaseOff = transientTrace (0, true);
+    const auto releaseMax = transientTrace (400, true);
+    const auto releaseDistance = [] (const std::vector<float>& trace)
+    {
+        const auto peak = *std::max_element (trace.begin(), trace.end());
+        for (size_t i = 500; i < trace.size(); ++i)
+            if (trace[i] <= peak * 0.1f) return i - 500;
+        return trace.size() - 500;
+    };
+    check (releaseDistance (releaseMax) < releaseDistance (releaseOff) * 0.85,
+           "VariTransient at 400% shortens release as gain reduction clears");
+    Parameters transientUp;
+    transientUp.upward = true; transientUp.variTransient = 400;
+    check (transientUp.variTransient == 400, "VariTransient range reaches 400% in upward mode");
+
     // Upward mode leaves signals above threshold at unity and raises signals
     // below threshold by the configured below-threshold ratio.
     const auto quietDb = -30.0f, thresholdDb = -18.0f, ratio = 4.0f;

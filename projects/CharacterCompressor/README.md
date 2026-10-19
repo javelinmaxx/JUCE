@@ -43,6 +43,11 @@ four models through this branch; it does not EQ the audio output.
   Ratio control determines the below-threshold slope (for example, 4:1 raises
   a signal 3 dB for each 4 dB it falls below threshold). The Knee smooths the
   transition, and Attack/Release control the gain envelope.
+- **VariTransient:** scales attack and release according to current downward
+  gain reduction. It is inactive through 3 dB GR, then ramps smoothly across a
+  3 dB knee to full effect at 6 dB GR. At 400%, attack can reach 4× its set
+  time while release can fall to ¼; 0% leaves both times unchanged. It is
+  inactive in Upward mode and defaults to 0%.
 - **Detector HPF:** filters only the compression detector. Set to 0 Hz to disable.
 - **Transformer drive:** increases saturation without increasing small-signal
   gain. Generated distortion rolls off above 500 Hz. The existing 0–18 dB
@@ -65,10 +70,10 @@ Mono and stereo layouts are supported, with no lookahead and a fixed
 The transformer, clean output, and bypass paths retain this latency even when
 the transformer is disabled. Both resampling filters have 257 taps; only the
 transformer stage runs at 4×, and its filter coefficients use that higher rate.
-Host automation and session state recall cover all 18 parameters. Existing
+Host automation and session state recall cover all 19 parameters. Existing
 parameter IDs/order are retained; High Tilt, Upward, Stereo Link, Mid/Side,
-and Even harmonics are appended. AU version hints 2, 3, and 4 mark the
-compatible additions. There is no external sidechain, oversampling selector,
+Even harmonics, and VariTransient are appended. AU version hints 2, 3, 4, and 5
+mark the compatible additions. There is no external sidechain, oversampling selector,
 automatic makeup gain, or preset browser yet.
 
 The 580 × 980 portrait editor puts the larger threshold and ratio knobs first,

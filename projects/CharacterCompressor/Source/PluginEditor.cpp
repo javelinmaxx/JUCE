@@ -23,12 +23,12 @@ CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcess
     highTilt.setTooltip ("Sidechain high shelf: +3 dB at 1.5 kHz, rising to +6 dB. Increases high-frequency compression sensitivity; no direct output EQ.");
     upward.setTooltip ("Boosts levels below threshold toward it; ratio sets the below-threshold slope.");
 
-    const std::array<const char*, 12> ids { "input", "threshold", "ratio", "attack", "release",
-        "knee", "output", "mix", "sidechain", "drive", "stereoLink", "evenHarmonics" };
-    const std::array<const char*, 12> names { "INPUT", "THRESHOLD", "RATIO", "ATTACK", "RELEASE",
-        "KNEE", "OUTPUT", "MIX", "DETECTOR HPF", "TRANSFORMER DRIVE", "STEREO LINK", "EVEN HARMONICS" };
-    const std::array<const char*, 12> units { " dB", " dB", ":1", " ms", " ms",
-        " dB", " dB", " %", " Hz", " dB", " %", " %" };
+    const std::array<const char*, 13> ids { "input", "threshold", "ratio", "attack", "release",
+        "knee", "output", "mix", "sidechain", "drive", "stereoLink", "evenHarmonics", "variTransient" };
+    const std::array<const char*, 13> names { "INPUT", "THRESHOLD", "RATIO", "ATTACK", "RELEASE",
+        "KNEE", "OUTPUT", "MIX", "DETECTOR HPF", "TRANSFORMER DRIVE", "STEREO LINK", "EVEN HARMONICS", "VARITRANSIENT" };
+    const std::array<const char*, 13> units { " dB", " dB", ":1", " ms", " ms",
+        " dB", " dB", " %", " Hz", " dB", " %", " %", " %" };
     for (size_t i = 0; i < sliders.size(); ++i)
     {
         auto& slider = sliders[i];
@@ -53,6 +53,7 @@ CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcess
     sliders[9].setTooltip ("Transformer saturation drive. Generated distortion rolls off above 500 Hz; clean highs pass through.");
     sliders[10].setTooltip ("Blends each channel's detector with the louder detector: 0% is independent, 100% is fully linked.");
     sliders[11].setTooltip ("Simulates transformer DC magnetizing current, increasing transfer asymmetry and even-order harmonics.");
+    sliders[12].setTooltip ("GR-dependent attack and release: 0% has no effect; 400% reaches 4x attack and 1/4 release. Ramps through a 3 dB soft knee from 3 to 6 dB gain reduction. Disabled in upward mode.");
     midSide.setTooltip ("Encode stereo to Mid and Side before compression, then decode back to Left and Right.");
     modelDescription.setJustificationType (juce::Justification::centred);
     addAndMakeVisible (modelDescription);
@@ -280,6 +281,7 @@ void CharacterCompressorEditor::resized()
     place (9, 248, 584, 104, 60);
     place (10, 24, 668, 104, 60);
     place (11, 136, 668, 104, 60);
+    place (12, 248, 668, 104, 60);
     // The long drive label needs a compact caption at the secondary control size.
     labels[9].setText ("IRON DRIVE", juce::dontSendNotification);
     meters.setBounds (24, 150, 532, 20);

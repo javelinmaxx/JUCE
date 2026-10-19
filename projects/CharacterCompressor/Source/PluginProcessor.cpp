@@ -3,8 +3,8 @@
 
 namespace
 {
-constexpr std::array<const char*, 18> ids { "model", "input", "threshold", "ratio", "attack",
-    "release", "knee", "output", "mix", "sidechain", "drive", "transformer", "bypass", "highTilt", "upward", "stereoLink", "midSide", "evenHarmonics" };
+constexpr std::array<const char*, 19> ids { "model", "input", "threshold", "ratio", "attack",
+    "release", "knee", "output", "mix", "sidechain", "drive", "transformer", "bypass", "highTilt", "upward", "stereoLink", "midSide", "evenHarmonics", "variTransient" };
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout CharacterCompressorProcessor::layout()
@@ -49,6 +49,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout CharacterCompressorProcessor
     result.add (std::make_unique<juce::AudioParameterFloat> (juce::ParameterID { "evenHarmonics", 4 },
         "Even harmonics", juce::NormalisableRange<float> (0, 100, 0.1f), 0,
         juce::AudioParameterFloatAttributes().withLabel ("%")));
+    result.add (std::make_unique<juce::AudioParameterFloat> (juce::ParameterID { "variTransient", 5 },
+        "VariTransient", juce::NormalisableRange<float> (0, 400, 1), 0,
+        juce::AudioParameterFloatAttributes().withLabel ("%")));
     return result;
 }
 
@@ -76,6 +79,7 @@ character::Parameters CharacterCompressorProcessor::readParameters() const noexc
     p.stereoLink = value (15);
     p.midSide = value (16) >= 0.5f;
     p.evenHarmonics = value (17);
+    p.variTransient = value (18);
     return p;
 }
 
@@ -166,6 +170,13 @@ void CharacterCompressorProcessor::setStateInformation (const void* data, int si
                 harmonics.setProperty ("id", "evenHarmonics", nullptr);
                 harmonics.setProperty ("value", 0.0f, nullptr);
                 state.appendChild (harmonics, nullptr);
+            }
+            if (! state.getChildWithProperty ("id", "variTransient").isValid())
+            {
+                juce::ValueTree transient { "PARAM" };
+                transient.setProperty ("id", "variTransient", nullptr);
+                transient.setProperty ("value", 0.0f, nullptr);
+                state.appendChild (transient, nullptr);
             }
             parameters.replaceState (state);
         }

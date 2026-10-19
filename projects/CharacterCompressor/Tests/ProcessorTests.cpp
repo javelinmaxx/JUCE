@@ -26,7 +26,7 @@ int runTests (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI juce;
     CharacterCompressorProcessor p;
-    check (p.getParameters().size() == 18, "all host parameters registered");
+    check (p.getParameters().size() == 19, "all host parameters registered");
     auto buses = p.getBusesLayout();
     buses.inputBuses.set (0, juce::AudioChannelSet::mono());
     buses.outputBuses.set (0, juce::AudioChannelSet::mono());
@@ -39,7 +39,7 @@ int runTests (int argc, char** argv)
 
     set (p, "model", 2); set (p, "threshold", -27); set (p, "ratio", 7);
     set (p, "transformer", 1); set (p, "drive", 12); set (p, "mix", 65);
-    set (p, "highTilt", 1); set (p, "evenHarmonics", 37.5f);
+    set (p, "highTilt", 1); set (p, "evenHarmonics", 37.5f); set (p, "variTransient", 200);
     juce::MemoryBlock saved;
     p.getStateInformation (saved);
     CharacterCompressorProcessor restored;
@@ -127,7 +127,7 @@ int runTests (int argc, char** argv)
         check (editor->getNumChildComponents() >= 25, "editor contains controls and meters");
         juce::Slider *threshold = nullptr, *ratio = nullptr, *attack = nullptr, *release = nullptr;
         AnimatedSwitch *transformer = nullptr, *upward = nullptr, *midSide = nullptr;
-        juce::Slider *stereoLink = nullptr, *evenHarmonics = nullptr;
+        juce::Slider *stereoLink = nullptr, *evenHarmonics = nullptr, *variTransient = nullptr;
         for (auto* child : editor->getChildren())
         {
             check (editor->getLocalBounds().contains (child->getBounds()), "controls fit inside portrait panel");
@@ -139,6 +139,7 @@ int runTests (int argc, char** argv)
                 if (slider->getName() == "RELEASE") release = slider;
                 if (slider->getName() == "STEREO LINK") stereoLink = slider;
                 if (slider->getName() == "EVEN HARMONICS") evenHarmonics = slider;
+                if (slider->getName() == "VARITRANSIENT") variTransient = slider;
             }
             if (auto* button = dynamic_cast<AnimatedSwitch*> (child))
             {
@@ -147,7 +148,7 @@ int runTests (int argc, char** argv)
                 if (button->getButtonText() == "MID / SIDE MODE") midSide = button;
             }
         }
-        check (threshold && ratio && attack && release && transformer && upward && midSide && stereoLink && evenHarmonics,
+        check (threshold && ratio && attack && release && transformer && upward && midSide && stereoLink && evenHarmonics && variTransient,
                "portrait controls include mid/side, stereo link, and Even harmonics");
         check (threshold->getHeight() > attack->getHeight() && ratio->getHeight() > release->getHeight(),
                "primary knobs are larger than timing knobs");
@@ -228,7 +229,7 @@ int runOutputStageTests (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI juce;
     CharacterCompressorProcessor p;
-    check (p.getParameters().size() == 18, "stereo, mid/side, and transformer parameters registered");
+    check (p.getParameters().size() == 19, "stereo, mid/side, and transformer parameters registered");
     auto* tilt = p.parameters.getParameter ("highTilt");
     check (tilt && tilt == p.getParameters()[13]
            && p.parameters.getParameter ("upward") == p.getParameters()[14],
@@ -239,6 +240,9 @@ int runOutputStageTests (int argc, char** argv)
     check (p.parameters.getParameter ("evenHarmonics") == p.getParameters()[17]
            && exact (p.parameters.getRawParameterValue ("evenHarmonics")->load(), 0.0f),
            "Even harmonics is appended and defaults off");
+    check (p.parameters.getParameter ("variTransient") == p.getParameters()[18]
+           && exact (p.parameters.getRawParameterValue ("variTransient")->load(), 0.0f),
+           "VariTransient is appended and defaults to no envelope change");
     check (exact (tilt->getValue(), 0.0f), "high tilt defaults off");
     set (p, "ratio", 1); set (p, "highTilt", 1);
     juce::MemoryBlock saved;
@@ -251,6 +255,7 @@ int runOutputStageTests (int argc, char** argv)
     auto oldState = p.parameters.copyState();
     oldState.removeChild (oldState.getChildWithProperty ("id", "highTilt"), nullptr);
     oldState.removeChild (oldState.getChildWithProperty ("id", "evenHarmonics"), nullptr);
+    oldState.removeChild (oldState.getChildWithProperty ("id", "variTransient"), nullptr);
     juce::MemoryBlock legacy;
     juce::AudioProcessor::copyXmlToBinary (*oldState.createXml(), legacy);
     restored.setStateInformation (legacy.getData(), static_cast<int> (legacy.getSize()));
@@ -260,6 +265,8 @@ int runOutputStageTests (int argc, char** argv)
            "legacy state preserves existing settings");
     check (exact (restored.parameters.getRawParameterValue ("evenHarmonics")->load(), 0.0f),
            "legacy state defaults transformer DC current to off");
+    check (exact (restored.parameters.getRawParameterValue ("variTransient")->load(), 0.0f),
+           "legacy state defaults VariTransient to no envelope change");
 
     // A real processBlock render verifies that host automation reaches the DSP.
     restored.prepareToPlay (48000, 256);

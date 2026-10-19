@@ -327,7 +327,7 @@ DSP checks cover steady-state FET/VCA ratios, the variable-mu progressive curve,
 optical steady-state behavior, unity ratio, stereo linking, block-size invariance,
 dry mix, exact bypass, automation transitions, transformer harmonics/DC rejection,
 reset, invalid inputs, and finite output at extreme settings from 8–192 kHz.
-Processor checks cover all 18 parameter registrations, mono/stereo layout rules,
+Processor checks cover all 19 parameter registrations, mono/stereo layout rules,
 state recall, malformed-state rejection, actual processing, host bypass,
 64-sample latency, empty buffers, and optional editor construction/rendering.
 
@@ -394,7 +394,6 @@ implementation, not a production-release claim.
   transformer even-harmonic measurements all regenerated successfully.
 
 ### 2026-10-19 — dedicated upward-compression plot
-
 - Added a standalone measurement script and C++ bridge that render the current
   production compressor with Upward enabled across input levels for all four
   models. The resulting figure shows input/output transfer and gain below the
@@ -402,3 +401,19 @@ implementation, not a production-release claim.
 - Verified the expected unity response above threshold and gain increase below
   threshold. At −30 dBFS, measured boost is approximately 9 dB for FET, VCA,
   and Optical, and 7.86 dB for Variable-mu's progressive curve.
+
+### 2026-10-19 — GR-dependent VariTransient control
+
+- Added an automatable 0–400% VariTransient control, defaulting to 0%. Above
+  3 dB downward gain reduction, the envelope-time change blends in through a
+  smooth 3 dB knee and reaches full effect at 6 dB GR. At 400%, attack reaches
+  4× its configured time and release is reduced to one quarter. Upward
+  compression is unaffected.
+- Appended the host parameter with AU version hint 5, preserved earlier
+  automation indices, and added a small editor knob with an explanatory tooltip.
+  Older sessions default the new control to 0%.
+- Added processor registration, editor, state-migration, attack, and release
+  regression checks. All three CTest suites passed (DSP, processor, and upward
+  compression); focused output-stage checks passed, and the editor rendered with
+  the new knob visible (257 processor/editor checks passed). The Linux Debug
+  VST3 target built and linked successfully.
