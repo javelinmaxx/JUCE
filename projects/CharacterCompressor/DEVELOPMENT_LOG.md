@@ -701,3 +701,4 @@ implementation, not a production-release claim.
   lower margin.
 - Increased the full-layout upward shift by 20 px and reduced the editor height
   by another 20 px, keeping the bottom margin consistent.
+- Changed primary text in the FET Yin palette from warm off-white to pure white.

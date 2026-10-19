@@ -161,7 +161,7 @@ CompressorTheme themeFor (int model, bool upward)
         case 0: // FET: charcoal panel and dark-purple reduction.
             if (upward)
                 return { colour (0xff1a1d21), colour (0xff242a30), colour (0xff101316),
-                         colour (0xfffff2d8), colour (0xffa99f8f), colour (0xff78578f),
+                         colour (0xffffffff), colour (0xffa99f8f), colour (0xff78578f),
                          colour (0xff694881), colour (0xff302b35), colour (0xff343a40),
                          colour (0xff302d35), colour (0xff8b789a), colour (0xff40364a) };
             return { colour (0xff252b31), colour (0xff303840), colour (0xff151a1e),
