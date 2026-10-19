@@ -281,41 +281,65 @@ void AnimatedSwitch::paintButton (juce::Graphics& g, bool highlighted, bool down
         return;
     }
 
-    const auto title = getLocalBounds().reduced (3, 0).withHeight (std::min (32, getHeight() / 3));
+    const auto title = getLocalBounds().reduced (2, 0).withHeight (std::min (26, getHeight() / 4));
     g.setColour (getToggleState() ? foreground : (highlighted ? foreground.withAlpha (0.90f) : secondary));
     g.setFont (juce::FontOptions (9.0f));
     g.drawFittedText (getButtonText(), title, juce::Justification::centred, 2);
 
-    // A compact, pivoting lever set into a small metal escutcheon.
+    // Side legend and hardware follow a standard bat-handle panel toggle.
     const auto cx = static_cast<float> (getWidth()) * 0.5f;
-    const auto plateY = static_cast<float> (title.getBottom()) + 7.0f;
-    const auto plate = juce::Rectangle<float> (cx - 11.0f, plateY, 22.0f, 33.0f);
-    g.setColour (surface.darker (0.30f));
-    g.fillRoundedRectangle (plate, 6.0f);
-    g.setColour (secondary.withAlpha (0.72f));
-    g.drawRoundedRectangle (plate, 6.0f, 0.8f);
-    const auto pivot = juce::Point<float> (cx, plate.getBottom() - 5.5f);
-    const auto leverLength = 17.0f;
-    const auto lean = (position - 0.5f) * 0.62f;
-    const juce::Point<float> tip (cx + std::sin (lean) * leverLength,
-                                  pivot.y - std::cos (lean) * leverLength);
-    g.setColour (juce::Colours::black.withAlpha (0.35f));
-    g.drawLine (pivot.x + 1.0f, pivot.y + 1.0f, tip.x + 1.0f, tip.y + 1.0f, 4.0f);
-    g.setColour (getToggleState() ? accent : foreground.withAlpha (0.86f));
-    g.drawLine (pivot.x, pivot.y, tip.x, tip.y, 3.2f);
-    g.setColour (secondary.brighter (0.10f));
-    g.fillEllipse (pivot.x - 3.0f, pivot.y - 3.0f, 6.0f, 6.0f);
+    const auto onY = title.getBottom() + 1;
+    const auto pivotY = static_cast<float> (onY) + 27.0f;
+    g.setFont (juce::FontOptions (8.0f).withStyle ("bold"));
+    g.setColour (getToggleState() ? accent : secondary.withAlpha (0.75f));
+    g.drawText ("ON", 0, onY, getWidth(), 10, juce::Justification::centred);
+    g.setColour (getToggleState() ? secondary.withAlpha (0.75f) : accent);
+    g.drawText ("OFF", 0, juce::roundToInt (pivotY) + 20, getWidth(), 10,
+                juce::Justification::centred);
+
+    const auto pivot = juce::Point<float> (cx, pivotY);
+    const auto flange = juce::Rectangle<float> (cx - 15.0f, pivot.y - 8.0f, 30.0f, 16.0f);
+    g.setColour (surface.darker (0.42f));
+    g.fillEllipse (flange.expanded (1.0f));
+    g.setGradientFill (juce::ColourGradient (secondary.brighter (0.18f), flange.getTopLeft(),
+                                             secondary.darker (0.28f), flange.getBottomLeft(), false));
+    g.fillEllipse (flange);
     g.setColour (surface.darker (0.35f));
-    g.fillEllipse (pivot.x - 1.3f, pivot.y - 1.3f, 2.6f, 2.6f);
-    g.setColour (secondary);
-    g.setFont (juce::FontOptions (8.0f));
-    const auto statusY = juce::roundToInt (plate.getBottom()) + 2;
-    g.drawText (getToggleState() ? "ON" : "OFF", 0, statusY, getWidth(),
-                std::max (0, getHeight() - statusY), juce::Justification::centredTop);
+    g.fillEllipse (flange.reduced (3.0f, 2.0f));
+    g.setColour (secondary.brighter (0.12f).withAlpha (0.85f));
+    g.drawEllipse (flange, 0.7f);
+
+    for (const auto screwX : { cx - 10.0f, cx + 10.0f })
+    {
+        g.setColour (surface.darker (0.42f));
+        g.fillEllipse (screwX - 1.8f, pivot.y - 1.8f, 3.6f, 3.6f);
+        g.setColour (secondary.withAlpha (0.8f));
+        g.drawLine (screwX - 0.8f, pivot.y, screwX + 0.8f, pivot.y, 0.55f);
+    }
+
+    g.setColour (surface.darker (0.50f));
+    g.fillEllipse (pivot.x - 6.0f, pivot.y - 6.0f, 12.0f, 12.0f);
+    g.setColour (secondary.darker (0.18f));
+    g.drawEllipse (pivot.x - 5.3f, pivot.y - 5.3f, 10.6f, 10.6f, 1.0f);
+    const auto leverLength = 17.0f;
+    const auto tipY = pivot.y + (0.5f - position) * leverLength;
+    const juce::Point<float> tip (cx, tipY);
+    g.setColour (juce::Colours::black.withAlpha (0.35f));
+    g.drawLine (pivot.x + 1.0f, pivot.y + 1.0f, tip.x + 1.0f, tip.y + 1.0f, 5.6f);
+    g.setColour (juce::Colour (0xffc6cbd0));
+    g.drawLine (pivot.x, pivot.y, tip.x, tip.y, 4.8f);
+    g.setColour (juce::Colour (0xff8e969d));
+    g.drawLine (pivot.x - 0.8f, pivot.y, tip.x - 0.8f, tip.y, 1.0f);
+    const auto cap = juce::Rectangle<float> (cx - 4.4f, tip.y - 4.4f, 8.8f, 8.8f);
+    g.setGradientFill (juce::ColourGradient (juce::Colour (0xffe0e3e5), cap.getTopLeft(),
+                                             juce::Colour (0xff777f86), cap.getBottomRight(), false));
+    g.fillEllipse (cap);
+    g.setColour (juce::Colour (0xff515a61));
+    g.drawEllipse (cap, 0.8f);
     if (hasKeyboardFocus (true))
     {
         g.setColour (accent);
-        g.drawRoundedRectangle (plate.expanded (3), 8, 1.0f);
+        g.drawEllipse (flange.expanded (3.0f, 4.0f), 1.0f);
     }
 }
 

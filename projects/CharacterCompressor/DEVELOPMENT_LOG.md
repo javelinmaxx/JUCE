@@ -445,6 +445,15 @@ implementation, not a production-release claim.
   previews were rendered for all eight model/Upward palette combinations; the
   preview renderer verified each image's palette colors and saved all files.
 
+### 2026-10-19 — panel toggle with two-sided ON/OFF legend
+- Reworked the vertical switches around a metal bat-handle toggle reference:
+  layered mounting washer, visible pivot hardware, steel lever, and rounded cap.
+- Kept each control's function label above the hardware and placed ON/OFF on
+  opposite sides of the lever travel, with state-aware label emphasis.
+- GitHub public asset search did not surface a suitable downloadable model, so
+  the supplied switch photo guided the vector rendering. Rebuilt the VST3 and
+  rendered all eight UI previews; no full test suite was run.
+
 ### 2026-10-19 — theme-specific high-contrast knob faces
 - Changed knob face gradients for all four simulation themes in both standard
   and Upward modes: cool metallic blue-gray for VCA, pale steel for FET,
