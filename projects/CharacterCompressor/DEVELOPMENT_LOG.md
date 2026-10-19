@@ -694,3 +694,8 @@ implementation, not a production-release claim.
 - Changed the company display and plug-in metadata to J-SONIC, moved the company
   line down 20 px, and aligned Bypass vertically with the plug-in title.
 - Removed the blank top band by moving the company line to the top edge.
+
+### 2026-10-19 — compacted the vertical editor layout
+- Restored the J-SONIC line to its prior vertical location, shifted the remaining
+  interface elements up 10 px, and shortened the editor by 10 px to preserve the
+  lower margin.
