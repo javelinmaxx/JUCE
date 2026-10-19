@@ -23,7 +23,7 @@ CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcess
     const std::array<const char*, 14> ids { "input", "threshold", "ratio", "attack", "release",
         "knee", "output", "mix", "sidechain", "drive", "stereoLink", "evenHarmonics", "variTransient", "scHighTilt" };
     const std::array<const char*, 14> names { "INPUT", "THRESHOLD", "RATIO", "ATTACK", "RELEASE",
-        "KNEE", "OUTPUT", "MIX", "DETECTOR HPF", "TRANSFORMER DRIVE", "STEREO LINK", "EVEN HARMONICS", "VARITRANSIENT", "SC HIGH TILT" };
+        "KNEE", "OUTPUT", "MIX", "DETECTOR HPF", "CORE DRIVE", "STEREO LINK", "DC BIAS", "VARITRANSIENT", "SC HIGH TILT" };
     const std::array<const char*, 14> units { " dB", " dB", ":1", " ms", " ms",
         " dB", " dB", " %", " Hz", " dB", " %", " %", " %", " dB" };
     for (size_t i = 0; i < sliders.size(); ++i)
@@ -47,12 +47,13 @@ CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcess
         attachments[i] = std::make_unique<State::SliderAttachment> (p.parameters, ids[i], slider);
     }
     sliders[8].setTooltip ("High-pass filter in the detector only. 0 Hz disables it.");
-    sliders[9].setTooltip ("Transformer saturation drive. Generated distortion rolls off above 500 Hz; clean highs pass through.");
+    sliders[9].setTooltip ("Core drive adds saturation before the transformer filters. Generated distortion rolls off above 500 Hz; clean highs pass through.");
     sliders[10].setTooltip ("Blends each channel's detector with the louder detector: 0% is independent, 100% is fully linked.");
-    sliders[11].setTooltip ("Simulates transformer DC magnetizing current, increasing transfer asymmetry and even-order harmonics.");
+    sliders[11].setTooltip ("DC bias simulates transformer magnetizing current, increasing transfer asymmetry and even-order harmonics.");
     sliders[12].setTooltip ("GR-dependent attack and release: 0% has no effect; 400% reaches 4x attack and 1/4 release. Ramps through a 3 dB soft knee from 3 to 6 dB gain reduction. Disabled in upward mode.");
     sliders[13].setTooltip ("Sidechain high-shelf boost from 0 to 12 dB. The shelf midpoint is 1.5 kHz; it changes compression sensitivity only and does not EQ the output.");
     midSide.setTooltip ("Encode stereo to Mid and Side before compression, then decode back to Left and Right.");
+    midSide.setStateCaptions ("MS", "LR");
     modelDescription.setJustificationType (juce::Justification::centred);
     addAndMakeVisible (modelDescription);
     transformer.snapToState();
@@ -292,9 +293,9 @@ void AnimatedSwitch::paintButton (juce::Graphics& g, bool highlighted, bool down
     const auto pivotY = static_cast<float> (onY) + 27.0f;
     g.setFont (juce::FontOptions (8.0f).withStyle ("bold"));
     g.setColour (getToggleState() ? accent : secondary.withAlpha (0.75f));
-    g.drawText ("ON", 0, onY, getWidth(), 10, juce::Justification::centred);
+    g.drawText (onCaption, 0, onY, getWidth(), 10, juce::Justification::centred);
     g.setColour (getToggleState() ? secondary.withAlpha (0.75f) : accent);
-    g.drawText ("OFF", 0, juce::roundToInt (pivotY) + 20, getWidth(), 10,
+    g.drawText (offCaption, 0, juce::roundToInt (pivotY) + 20, getWidth(), 10,
                 juce::Justification::centred);
 
     const auto pivot = juce::Point<float> (cx, pivotY);
@@ -326,8 +327,10 @@ void AnimatedSwitch::paintButton (juce::Graphics& g, bool highlighted, bool down
     g.fillPath (nut);
     g.setColour (secondary.darker (0.15f));
     g.strokePath (nut, juce::PathStrokeType (0.8f));
-    g.setColour (surface.withAlpha (0.62f));
+    g.setColour (secondary.darker (0.20f));
     g.fillPath (innerNut);
+    g.setColour (secondary.darker (0.34f).withAlpha (0.8f));
+    g.strokePath (innerNut, juce::PathStrokeType (0.65f));
 
     const auto flange = juce::Rectangle<float> (cx - 12.0f, pivot.y - 12.0f, 24.0f, 24.0f);
     g.setColour (surface.darker (0.42f));
@@ -339,14 +342,6 @@ void AnimatedSwitch::paintButton (juce::Graphics& g, bool highlighted, bool down
     g.fillEllipse (flange.reduced (3.0f));
     g.setColour (secondary.brighter (0.12f).withAlpha (0.85f));
     g.drawEllipse (flange, 0.7f);
-
-    for (const auto screwX : { cx - 14.0f, cx + 14.0f })
-    {
-        g.setColour (surface.darker (0.42f));
-        g.fillEllipse (screwX - 1.8f, pivot.y - 1.8f, 3.6f, 3.6f);
-        g.setColour (secondary.withAlpha (0.8f));
-        g.drawLine (screwX - 0.8f, pivot.y, screwX + 0.8f, pivot.y, 0.55f);
-    }
 
     g.setColour (surface.darker (0.50f));
     g.fillEllipse (pivot.x - 6.0f, pivot.y - 6.0f, 12.0f, 12.0f);
@@ -583,8 +578,8 @@ void CharacterCompressorEditor::resized()
     sliders[0].setBounds (299, 150, 53, 54);
     labels[6].setText ("OUTPUT", juce::dontSendNotification);
     labels[10].setText ("ST LINK", juce::dontSendNotification);
-    labels[9].setText ("IRON DRIVE", juce::dontSendNotification);
-    labels[11].setText ("EVEN HARMONICS", juce::dontSendNotification);
+    labels[9].setText ("CORE DRIVE", juce::dontSendNotification);
+    labels[11].setText ("DC BIAS", juce::dontSendNotification);
     labels[13].setText ("SC HIGH TILT", juce::dontSendNotification);
     upward.setBounds (168, 156, 76, 20);
     midSide.setBounds (258, 452, 72, 104);

@@ -17,6 +17,12 @@ public:
           labeledButton (labeledButtonStyle) {}
     void advance (float elapsed);
     void snapToState() { position = getToggleState() ? 1.0f : 0.0f; }
+    void setStateCaptions (juce::String onText, juce::String offText)
+    {
+        onCaption = std::move (onText);
+        offCaption = std::move (offText);
+        repaint();
+    }
     void setTheme (const CompressorTheme& theme)
     {
         accent = theme.control;
@@ -33,6 +39,7 @@ private:
     bool labeledButton = false;
     juce::Colour accent { 0xff168aad };
     juce::Colour surface { 0xff202a34 }, foreground { 0xfff0ddbb }, secondary { 0xff92a0ad };
+    juce::String onCaption { "ON" }, offCaption { "OFF" };
 };
 
 class CompressorLookAndFeel final : public juce::LookAndFeel_V4

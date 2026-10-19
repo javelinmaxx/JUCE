@@ -445,6 +445,15 @@ implementation, not a production-release claim.
   previews were rendered for all eight model/Upward palette combinations; the
   preview renderer verified each image's palette colors and saved all files.
 
+### 2026-10-19 — clean switch nut and updated control legends
+- Removed the protruding faux screw heads that made the toggle retaining nut
+  read like a winged plate; made the inset hex face opaque for a clean hex and
+  circular-washer stack.
+- Renamed Iron Drive to Core Drive and Even Harmonics to DC Bias. Mid/Side
+  switch legends now read MS (on) and LR (off).
+- Rebuilt the VST3 and regenerated all eight UI previews; visually inspected
+  the switch close-up and full panel. No full test suite was run.
+
 ### 2026-10-19 — round toggle bezel
 - Changed the switch hardware from an oval plate to a circular bezel and washer,
   nested in a compact hex retaining nut to match the supplied reference image.
