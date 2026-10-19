@@ -685,3 +685,7 @@ implementation, not a production-release claim.
 
 ### 2026-10-19 — shortened editor title
 - Changed the editor heading to “YIN/YANG COMP” for a more compact title.
+
+### 2026-10-19 — balanced title and section spacing
+- Moved the editor title down 20 px so its visible gap to the model selector matches
+  the 10 px gap between the selector and the main sections.
