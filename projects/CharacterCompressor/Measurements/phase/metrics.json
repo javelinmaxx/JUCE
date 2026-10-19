@@ -8,21 +8,21 @@
   "lf_corner_hz": 20,
   "hf_corner_hz": 19000,
   "hf_q": 2.0,
-  "phase_degrees_at_50hz": 21.736142964828545,
-  "phase_degrees_at_17950hz": -73.55548890609442,
-  "max_design_phase_error_degrees_50_to_17950hz": 0.023093647620624682,
+  "phase_degrees_at_50hz": 21.73613870228492,
+  "phase_degrees_at_17950hz": -73.55554613093636,
+  "max_design_phase_error_degrees_50_to_17950hz": 0.023119630993952138,
   "other_sample_rate_phase_error_degrees": {
-    "44100": 0.031806608952451514,
-    "96000": 0.0019203182570985203
+    "44100": 0.0318215889267848,
+    "96000": 0.0019260472901544646
   },
-  "square50_droop_percent_between_1_and_9_ms": 63.310935628194365,
+  "square50_droop_percent_between_1_and_9_ms": 63.31092006118681,
   "previous_square50_droop_percent_between_1_and_9_ms": 22.17064264353159,
   "predicted_square50_droop_percent": 63.40686930587067,
   "disabled_transformer_is_exact_delayed_input": true,
   "before_transformer_sha256": "b1c798a5a9ab348d370518031ec30a6ba7220f70e88e450e3b60927d1c2a1cdb",
   "source_sha256": {
-    "CompressorDSP.h": "1a0fdf74c8d5ad0eed8132e8a85aaac14c8ccd59d2e43915e2ac9843b4bd3dec",
-    "OversampledTransformer.h": "d4bf13956e9734d95ec8a1ba44b4e7da87ef8e31d364941bb8df7a2e9919c216",
+    "CompressorDSP.h": "34f72329e65b7d58dfc643dc5b4f722db8bca9bd815ab395dc20b3ccc68b52e0",
+    "OversampledTransformer.h": "50450015c049efe9a3de6214cf89f0f02043a6eda75500e9af3eb88456167c60",
     "TransformerResponse.h": "4fc227c72190bfd04c869480474a5a7cd071048ec33bda3ca35a2c8f357e8d27",
     "HighTilt.h": "08bb893fc879f5f95990aae0529f83281e7310f8e7795f8bc8be091d3f85bbf6"
   },

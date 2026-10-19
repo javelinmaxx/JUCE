@@ -35,7 +35,8 @@ FIR pre-ringing before the displayed edge; the actual processing remains causal,
 The previous 2× filter implementation is preserved in
 `../baseline/transformer_before_phase.h`. Source hashes are recorded in
 `metrics.json`; `phase_response.csv` and `square_wave_measurements.npz` preserve
-the measured results. The original 1× compressor plots are unchanged.
+the measured results. The characteristic plots were also regenerated from the
+current DSP and retain the 1× data under `../baseline/` for comparison.
 
 Reproduce from the repository root with C++17, Python, NumPy and Matplotlib:
 

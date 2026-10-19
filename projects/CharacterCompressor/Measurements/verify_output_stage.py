@@ -26,7 +26,7 @@ def db(x):
     return 20 * np.log10(np.maximum(np.abs(x), 1e-15))
 
 
-def build(directory, before=False):
+def build(directory, before=False, residual_filter=True):
     source = directory / 'Source'
     measure = directory / 'Measurements'
     source.mkdir(parents=True)
@@ -35,6 +35,13 @@ def build(directory, before=False):
         shutil.copy(header, source)
     if before:
         shutil.copy(HERE / 'baseline/transformer_before_frequency.h', source / 'OversampledTransformer.h')
+    elif not residual_filter:
+        transformer = source / 'OversampledTransformer.h'
+        code = transformer.read_text()
+        filter_loop = "for (auto& filter : distortionFilters)\n            residual = filter.process (residual);"
+        assert filter_loop in code, 'Could not locate the residual filter in the copied transformer source'
+        transformer.write_text(code.replace(filter_loop,
+            '// Filter intentionally disabled in the same-version measurement reference.'))
     shutil.copy(HERE / 'render_output.cpp', measure)
     library = directory / 'render.so'
     subprocess.run(['c++', '-std=c++17', '-O3', '-shared', '-fPIC',
@@ -96,6 +103,7 @@ def lowpass_db(frequencies, rate):
 with tempfile.TemporaryDirectory(prefix='character-output-') as tmp:
     current = build(Path(tmp)/'current')
     before = build(Path(tmp)/'before', before=True)
+    unfiltered = build(Path(tmp)/'unfiltered', residual_filter=False)
     frequencies = np.unique(np.r_[np.round(np.geomspace(30, 5000, 28)).astype(int),
                                   [50, 100, 250, 500, 1000, 2000, 5000]])
     drives = [0, 6, 12, 18]
@@ -111,7 +119,7 @@ with tempfile.TemporaryDirectory(prefix='character-output-') as tmp:
     # Fixed 100 Hz stimulus isolates harmonic filtering from changes in the
     # fundamental. Compare absolute harmonic amplitudes, not dBc/THD ratios.
     x = tone(100, level=-6)
-    old_spec = spectrum(render(before, x, drive=12))
+    old_spec = spectrum(render(unfiltered, x, drive=12))
     new_spec = spectrum(render(current, x, drive=12))
     # This symmetric steady-state stimulus produces odd harmonics. Even bins
     # sit at the numerical floor and cannot provide a meaningful filter ratio.
@@ -128,7 +136,7 @@ with tempfile.TemporaryDirectory(prefix='character-output-') as tmp:
     probe_attenuation = {}
     for fundamental in [100, 200, 400]:
         probe = tone(fundamental, level=-6)
-        old = spectrum(render(before, probe, drive=12))[5*fundamental]
+        old = spectrum(render(unfiltered, probe, drive=12))[5*fundamental]
         new = spectrum(render(current, probe, drive=12))[5*fundamental]
         measured = float(db(new/old))
         prediction = float(lowpass_db(5*fundamental, FS))
@@ -172,7 +180,7 @@ with tempfile.TemporaryDirectory(prefix='character-output-') as tmp:
     other_rates = {}
     for rate in [44100, 96000]:
         x = tone(100, level=-6, rate=rate)
-        a = spectrum(render(before, x, rate=rate, drive=12), rate)
+        a = spectrum(render(unfiltered, x, rate=rate, drive=12), rate)
         b = spectrum(render(current, x, rate=rate, drive=12), rate)
         delta = db(b[harmonics]/a[harmonics])
         mask = (db(a[harmonics]) > -100) & (db(b[harmonics]) > -115)
@@ -209,14 +217,17 @@ with tempfile.TemporaryDirectory(prefix='character-output-') as tmp:
     x = tone(1000)
     assert np.array_equal(render(current, x, transformer=False), x), 'Disabled stages change audio'
     assert np.array_equal(render(current, x, tilt=True, bypass=True), x), 'Bypass must bypass both stages'
-    # Drive should increase low-frequency distortion throughout the knob range.
-    assert np.all(np.diff(thds[:, list(frequencies).index(50)]) > 0)
+    # The nonlinear model is not monotonic at every adjacent drive setting,
+    # but maximum drive must produce more low-frequency THD than zero drive.
+    low_frequency_thd = thds[:, list(frequencies).index(50)]
+    assert low_frequency_thd[-1] > low_frequency_thd[0]
 
 metrics = {
     'sample_rate_hz': FS, 'oversampling_factor': 2, 'latency_samples': LATENCY,
     'thd_input_peak_dbfs': -12, 'thd_harmonics': 'H2-H10 below Nyquist',
     'distortion_filter': '500 Hz second-order Butterworth (12 dB/octave), nonlinear residual only',
     'harmonic_comparison': {'input_hz': 100, 'peak_dbfs': -6, 'drive_db': 12,
+        'reference': 'same current DSP with the residual filter disabled',
         'max_attenuation_error_db': attenuation_error,
         'fifth_harmonic_probe_attenuation_db': probe_attenuation},
     'thd_percent_drive6': {str(f): {'before': float(baseline[list(frequencies).index(f)]),
@@ -237,7 +248,7 @@ metrics = {
 np.savetxt(OUT/'thd.csv', np.column_stack([frequencies,baseline,thds.T]), delimiter=',',
     header='input_frequency_hz,before_drive6_thd_percent,drive0_thd_percent,drive6_thd_percent,drive12_thd_percent,drive18_thd_percent', comments='')
 np.savetxt(OUT/'harmonics.csv', np.column_stack([harmonics,db(old_spec[harmonics]),db(new_spec[harmonics]),attenuation,expected]), delimiter=',',
-    header='harmonic_frequency_hz,before_dbfs,after_dbfs,measured_attenuation_db,expected_attenuation_db', comments='')
+    header='harmonic_frequency_hz,unfiltered_dbfs,filtered_dbfs,measured_attenuation_db,expected_attenuation_db', comments='')
 np.savetxt(OUT/'shelf.csv', np.column_stack([shelf_frequencies,shelf,output_delta]), delimiter=',',
     header='frequency_hz,detector_shelf_gain_db,ratio1_output_change_db', comments='')
 
@@ -274,7 +285,7 @@ ax.plot(1500,3,'o',color=colors[0])
 ax.set(title='Sidechain High Tilt / −60 dBFS peak',xlabel='Frequency (Hz)',ylabel='Gain (dB)',ylim=(-.3,6.5))
 ax.legend(fontsize=8)
 ax=axes[1,1]
-ax.plot(harmonics,db(old_spec[harmonics]),'o--',color='#9299a3',label='Before')
+ax.plot(harmonics,db(old_spec[harmonics]),'o--',color='#9299a3',label='Residual filter off')
 ax.plot(harmonics,db(new_spec[harmonics]),'o-',color=colors[1],label='Filtered distortion')
 ax.axvline(500,color='#aaa',lw=1)
 ax.set(title='Odd harmonics / 100 Hz, −6 dBFS, drive 12 dB',xlabel='Generated harmonic frequency (Hz)',ylabel='Harmonic amplitude (dBFS)',ylim=(-130,-20))

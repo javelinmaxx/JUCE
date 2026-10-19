@@ -3,18 +3,14 @@
 [Plots](output_stage.png) · [PDF](output_stage_report.pdf) · [SVG](output_stage.svg)
 · [Results and source hashes](metrics.json)
 
-These measurements describe an earlier DSP revision. At the time, generated
-transformer distortion above 500 Hz was filtered with a fourth-order
-Butterworth low-pass (24 dB/octave). The current implementation uses a
-second-order Butterworth low-pass (12 dB/octave), so the distortion attenuation
-numbers below are historical and should not be used to characterize the current
-slope. The signal path still subtracts the clean input from the saturation
-output, filters that nonlinear residual, and adds it back to the clean input.
-All of this runs at 2× before the transformer phase/bandwidth response and
-decimation. This historical filter had a 24 dB/octave roll-off with
-−3.01 dB at 500 Hz, not a brick-wall cutoff. The residual includes saturation's
-change to the fundamental as well as generated harmonics; its filtering can
-also affect the large-signal fundamental gain/phase around the corner.
+These measurements were regenerated from the current DSP. Generated
+transformer distortion passes through a second-order Butterworth low-pass at
+500 Hz (12 dB/octave); the clean signal is added back unfiltered. Processing
+runs at 2× before the transformer phase/bandwidth response and decimation. The
+filter has −3.01 dB attenuation at 500 Hz, not a brick-wall cutoff. The
+nonlinear residual includes saturation's change to the fundamental as well as
+generated harmonics, so filtering can also affect the large-signal fundamental
+around the corner.
 
 The user explicitly chose filtering generated harmonics, rather than limiting
 which input frequencies can drive the saturator. Higher-frequency inputs can
@@ -30,14 +26,14 @@ model is preserved in `../baseline/transformer_before_frequency.h`.
 
 At −12 dBFS peak input and 6 dB drive, measured THD (H2–H10 below Nyquist):
 
-| Input frequency | Previous THD | Revised THD |
+| Input frequency | Previous 2× THD | Current 2× THD |
 | --- | ---: | ---: |
-| 50 Hz | 2.4202% | 2.4113% |
-| 100 Hz | 2.1849% | 2.1422% |
-| 250 Hz | 2.0177% | 0.3710% |
-| 500 Hz | 1.9851% | 0.02209% |
-| 1 kHz | 1.9797% | 0.001420% |
-| 2 kHz | 1.9902% | 0.000137% |
+| 50 Hz | 2.5550% | 1.1674% |
+| 100 Hz | 2.2172% | 0.7381% |
+| 250 Hz | 2.0241% | 0.1864% |
+| 500 Hz | 1.9924% | 0.04207% |
+| 1 kHz | 2.0047% | 0.01102% |
+| 2 kHz | 2.0985% | 0.003070% |
 
 Thus distortion is frequency dependent. Low-frequency saturation remains,
 while higher generated harmonics are attenuated. Near the numerical floor,
@@ -50,12 +46,12 @@ absolute fifth-harmonic amplitudes before/after at −6 dBFS peak and 12 dB driv
 | Input tone | Generated harmonic | Measured attenuation |
 | --- | --- | ---: |
 | 100 Hz | 500 Hz | −3.0103 dB |
-| 200 Hz | 1 kHz | −24.1087 dB |
-| 400 Hz | 2 kHz | −48.2116 dB |
+| 200 Hz | 1 kHz | −12.3088 dB |
+| 400 Hz | 2 kHz | −24.1221 dB |
 
 A separate 100 Hz harmonic series agrees with the specified digital filter
-within 0.0037 dB at 48 kHz for bins above the measurement floor. Corresponding
-checks pass at 44.1 kHz (0.0065 dB maximum error) and 96 kHz (0.00013 dB).
+within 0.0484 dB at 48 kHz for bins above the measurement floor. Corresponding
+checks pass at 44.1 kHz (0.0446 dB maximum error) and 96 kHz (0.0036 dB).
 Even harmonics of this symmetric steady-state stimulus sit near the numerical
 floor, so the filter-ratio plot uses measurable odd harmonics.
 
@@ -111,9 +107,11 @@ python3 projects/CharacterCompressor/Measurements/verify_output_stage.py
 ```
 
 This regenerates the plots, PDF, `metrics.json`, and the THD/harmonic/shelf CSVs.
-Only focused output-stage verification ran. The prior phase report and 1×
-compression plots remain historical records; the full DSP/processor suites
-were not rerun. The Linux VST3 build and 23 focused processor checks passed,
+The harmonic attenuation reference compiles the current source with only the
+residual filter disabled, isolating the filter response from changes in the
+transformer model. Only focused output-stage verification ran; it does not run
+the full DSP/processor suites. The phase and characteristic reports were also
+regenerated from current source. The Linux VST3 build and 23 focused processor checks passed,
 covering the new parameter, automation, stereo matching, saved/legacy state,
 latency, dry-path transparency, additional HF compression, and editor rendering.
 Updated macOS builds need user listening checks.
