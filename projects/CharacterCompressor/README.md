@@ -77,7 +77,7 @@ Even harmonics, VariTransient, and SC High Tilt are appended. AU version hints
 sidechain, oversampling selector,
 automatic makeup gain, or preset browser yet.
 
-The 548 × 790 editor places Threshold, Knee, and Ratio in that order, with
+The 548 × 766 editor places Threshold, Knee, and Ratio in that order, with
 Upward in the Compressor section and VariTransient between Attack and Release.
 Knee and VariTransient use smaller knobs. The shortened right-hand GR display
 pairs a vertical 0–30 dB meter with a scrolling five-second history; Output,

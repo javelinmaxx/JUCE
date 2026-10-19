@@ -611,3 +611,13 @@ implementation, not a production-release claim.
   to the GR panel bottom and kept Transformer Stage level with Output.
 - Rebuilt the VST3 and preview target; all eight mode previews regenerated and
   passed the focused UI preview check. No full test suite was run.
+
+### 2026-10-19 — consistent lower-section spacing
+- Reduced the GR panel height and shortened Sidechain, Transformer Stage, and
+  Output to 116 px. Lower sections now use consistent 12 px gaps and share
+  aligned bottoms; reduced the overall editor height to keep the bottom margin
+  consistent as well.
+- Lowered the Compressor mode button and matched its text size to section
+  headers. Reduced lower-stage control heights to fit the shorter panels.
+- Updated preview dimensions and regenerated all eight UI previews. The VST3
+  and focused preview validation passed; no full test suite was run.

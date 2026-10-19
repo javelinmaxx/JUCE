@@ -130,7 +130,7 @@ int runTests (int argc, char** argv)
     if (argc > 1 && juce::String (argv[1]) == "--editor")
     {
         std::unique_ptr<juce::AudioProcessorEditor> editor (restored.createEditor());
-        check (editor && editor->getWidth() == 548 && editor->getHeight() == 790, "compact editor creates at expected size");
+        check (editor && editor->getWidth() == 548 && editor->getHeight() == 766, "compact editor creates at expected size");
         check (editor->getNumChildComponents() >= 25, "editor contains controls and meters");
         juce::Slider *threshold = nullptr, *knee = nullptr, *ratio = nullptr;
         juce::Slider *attack = nullptr, *release = nullptr, *output = nullptr, *mix = nullptr;
@@ -191,7 +191,7 @@ int runTests (int argc, char** argv)
                && attack->getX() == knee->getX() && release->getX() == variTransient->getX(),
                "Threshold/Ratio, Attack/Release, and Knee/VariTransient occupy successive rows");
         check (output->getY() == mix->getY() && mix->getY() == stereoLink->getY()
-               && output->getY() > 156 + 480,
+               && output->getY() > 156 + 464,
                "output, mix, and stereo link sit below the shortened GR section");
         check (transformer->getHeight() > transformer->getWidth()
                && upward->getWidth() > upward->getHeight()
@@ -460,12 +460,12 @@ int renderThemePreviews (const char* directory)
             const auto grLitPixel = gaugeTrack[index].interpolatedWith (meter[index], 0.50f);
             const auto meterPixel = image.getPixelAt (366, 250);
             const auto meterMatches = closeColour (meterPixel, grLitPixel, 20);
-            if (! meterMatches || image.getWidth() != 548 || image.getHeight() != 790)
+            if (! meterMatches || image.getWidth() != 548 || image.getHeight() != 766)
                 std::cerr << "Preview " << stage << " dimensions " << image.getWidth() << 'x' << image.getHeight()
                           << ", meter RGB " << meterPixel.toDisplayString (false).toStdString()
                           << ", expected " << grLitPixel.toDisplayString (false).toStdString() << '\n';
             succeeded = juce::PNGImageFormat().writeImageToStream (image, *stream)
-                     && image.getWidth() == 548 && image.getHeight() == 790 && meterMatches;
+                     && image.getWidth() == 548 && image.getHeight() == 766 && meterMatches;
         }
         ++stage;
         frame = 0;
