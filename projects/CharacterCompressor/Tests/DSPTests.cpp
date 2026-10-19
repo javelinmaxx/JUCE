@@ -47,14 +47,14 @@ float steadyGain (character::Model model, float ratio)
 
 float steadyUpwardOutput (character::Model model, float inputDb, float ratio,
                           double sampleRate = 48000, float mix = 1,
-                          bool bypass = false)
+                          bool bypass = false, float thresholdDb = -18)
 {
     using namespace character;
     Compressor dsp;
     dsp.prepare (sampleRate);
     Parameters p;
     p.model = model;
-    p.thresholdDb = -18;
+    p.thresholdDb = thresholdDb;
     p.ratio = ratio;
     p.kneeDb = 0;
     p.attackMs = 10;
@@ -142,7 +142,7 @@ int main()
 
     // Upward mode leaves signals above threshold at unity and raises signals
     // below threshold by the configured below-threshold ratio.
-    const auto quietDb = -30.0f, thresholdDb = -18.0f, ratio = 4.0f;
+    const auto quietDb = -30.0f, thresholdDb = -18.0f, ratio = 2.0f;
     const auto expectedBoostDb = (thresholdDb - quietDb) * (1 - 1 / ratio);
     for (int m = 0; m < 4; ++m)
     {
@@ -186,6 +186,15 @@ int main()
             check (std::isfinite (output) && Compressor::db (output) > -30 && Compressor::db (output) < -17,
                    "upward gain stays finite and below threshold at every sample rate");
         }
+    check (std::abs (Compressor::db (steadyUpwardOutput (Model::fet, -30, 20))
+                   - Compressor::db (steadyUpwardOutput (Model::fet, -30, 2))) < 0.02f,
+           "Yin limits ratios above 2:1 to the 2:1 curve");
+    for (int m = 0; m < 4; ++m)
+    {
+        const auto capped = steadyUpwardOutput (static_cast<Model> (m), -60, 20, 48000, 1, false, 0);
+        check (Compressor::db (capped) - (-60.0f) <= 12.05f,
+               "Yin gain is capped at 12 dB for every model");
+    }
 
     Compressor upwardStereo;
     upwardStereo.prepare (48000);

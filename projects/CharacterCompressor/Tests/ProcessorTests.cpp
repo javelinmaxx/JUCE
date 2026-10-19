@@ -108,9 +108,9 @@ int runTests (int argc, char** argv)
     }
     const auto quietOutputDb = 10 * std::log10 (quietOutputEnergy
         / (60.0 * buffer.getNumSamples()));
-    check (quietOutputDb > -22 && quietOutputDb < -20,
+    check (quietOutputDb > -25 && quietOutputDb < -23,
            "host processor boosts below-threshold audio toward threshold in Upward mode");
-    check (restored.reduction.load() > 8,
+    check (restored.reduction.load() > 5,
            "host processor reports upward gain on the GR meter");
 
     const auto loudInput = std::pow (10.0f, -6.0f / 20.0f);
@@ -130,7 +130,7 @@ int runTests (int argc, char** argv)
     if (argc > 1 && juce::String (argv[1]) == "--editor")
     {
         std::unique_ptr<juce::AudioProcessorEditor> editor (restored.createEditor());
-        check (editor && editor->getWidth() == 548 && editor->getHeight() == 756, "compact editor creates at expected size");
+        check (editor && editor->getWidth() == 548 && editor->getHeight() == 726, "compact editor creates at expected size");
         check (editor->getNumChildComponents() >= 25, "editor contains controls and meters");
         juce::Slider *threshold = nullptr, *knee = nullptr, *ratio = nullptr;
         juce::Slider *attack = nullptr, *release = nullptr, *output = nullptr, *mix = nullptr;
@@ -217,7 +217,7 @@ int runTests (int argc, char** argv)
                && input->getHeight() < attack->getHeight(),
                "upward mode and a compact input control are in the compressor header");
         check (thresholdLabel && ratioLabel && thresholdLabel->getY() >= upward->getBottom() + 4
-               && thresholdLabel->getY() == 191 && ratioLabel->getY() == thresholdLabel->getY(),
+               && thresholdLabel->getY() == 161 && ratioLabel->getY() == thresholdLabel->getY(),
                "main knob captions clear the Compressor header button");
         check (inputLabel && inputLabel->getY() + inputLabel->getHeight() / 2
                     == input->getY() + (input->getHeight() - input->getTextBoxHeight()) / 2
@@ -241,18 +241,21 @@ int runTests (int argc, char** argv)
                && std::abs ((transformer->getY() + 28) - (transformerDrive->getY() + (transformerDrive->getHeight() - 20) / 2)) <= 1
                && transformerDrive->getY() > midSide->getBottom(),
                "toggle pivots align with the centers of knobs in their sections");
+        check (std::abs (GainReductionHistory::duration - 3.0) < 1.0e-9
+               && std::abs (GainReductionHistory::maxReductionDb - 18.0f) < 1.0e-6f,
+               "GR history uses a three-second, 18 dB display window");
         GainReductionHistory history;
         for (int i = 0; i <= 360; ++i) history.push (i / 30.0, static_cast<float> (i % 31));
         int visible = 0;
         float previousX = -1;
         history.visit (12.0, [&] (float x, float gr, double time)
         {
-            check (x >= previousX && x >= 0 && x <= 1 && gr >= 0 && gr <= 30 && time >= 7,
-                   "wrapped history remains chronological within five seconds");
+            check (x >= previousX && x >= 0 && x <= 1 && gr >= 0 && gr <= 18 && time >= 9,
+                   "wrapped history remains chronological within three seconds and clamps to 18 dB");
             previousX = x;
             ++visible;
         });
-        check (visible >= 150 && visible <= 151, "history retains five seconds after ring wraps");
+        check (visible >= 90 && visible <= 91, "history retains three seconds after ring wraps");
         visible = 0;
         history.visit (18.0, [&] (float, float, double) { ++visible; });
         check (visible == 0, "history expires by elapsed time when UI timer stalls");
@@ -268,6 +271,7 @@ int runTests (int argc, char** argv)
         } capture;
         int frame = 0;
         bool clickUpdatedParameter = false, automationUpdatedSwitch = false, upwardUpdatedParameter = false;
+        bool yinRatioRange = false, yangRatioRange = false;
         capture.tick = [&]
         {
             ++frame;
@@ -287,6 +291,14 @@ int runTests (int argc, char** argv)
             if (frame == 28)
                 upwardUpdatedParameter = upward->getToggleState()
                     && exact (restored.parameters.getRawParameterValue ("upward")->load(), 1.0f);
+            if (frame == 30)
+                yinRatioRange = std::abs (ratio->getMinimum() - 1.0) < 1.0e-9
+                             && std::abs (ratio->getMaximum() - 2.0) < 1.0e-9;
+            if (frame == 40) upward->triggerClick();
+            if (frame == 50)
+                yangRatioRange = ! upward->getToggleState()
+                    && std::abs (ratio->getMinimum() - 1.0) < 1.0e-9
+                    && std::abs (ratio->getMaximum() - 20.0) < 1.0e-9;
             if (frame == 180) juce::MessageManager::getInstance()->stopDispatchLoop();
         };
         transformer->triggerClick();
@@ -296,6 +308,7 @@ int runTests (int argc, char** argv)
         check (clickUpdatedParameter, "animated switch click updates host parameter");
         check (automationUpdatedSwitch, "host automation updates animated switch");
         check (upwardUpdatedParameter, "upward switch updates new host parameter");
+        check (yinRatioRange && yangRatioRange, "ratio knob range switches between Yin 1:1–2:1 and Yang 1:1–20:1");
         // Exercise actual component rendering, not only construction.
         auto image = editor->createComponentSnapshot (editor->getLocalBounds());
         check (image.isValid(), "native editor renders to an image");

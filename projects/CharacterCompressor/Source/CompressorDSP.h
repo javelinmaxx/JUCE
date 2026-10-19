@@ -77,6 +77,8 @@ public:
         p.inputDb = safe (p.inputDb, -24, 24, 0);
         p.thresholdDb = safe (p.thresholdDb, -60, 0, -18);
         p.ratio = safe (p.ratio, 1, 20, 4);
+        if (p.upward)
+            p.ratio = std::min (p.ratio, 2.0f);
         p.attackMs = safe (p.attackMs, 0.05f, 100, 10);
         p.releaseMs = safe (p.releaseMs, 10, 2000, 150);
         p.kneeDb = safe (p.kneeDb, 0, 24, 6);
@@ -202,7 +204,8 @@ public:
                 // mean-square detector, converted back to RMS amplitude.
                 const auto level = db ((m == 2 || m == 3) ? std::sqrt (s.energy) : sensed);
                 const auto over = level - values[threshold];
-                float effectiveRatio = values[ratio];
+                const auto ratioMaximum = values[upward] > 0.0f ? 2.0f : 20.0f;
+                float effectiveRatio = std::clamp (values[ratio], 1.0f, ratioMaximum);
                 if (m == 2)
                 {
                     // Mu ratio rises from 1:1 toward its maximum on the active
@@ -222,14 +225,14 @@ public:
                 // gain and raises quieter levels toward threshold with a
                 // below-threshold slope of 1/R. Negative reduction is gain.
                 const auto upwardSlope = 1 - 1 / effectiveRatio;
-                const auto upwardGain = -upwardSlope * softKnee (-over, values[knee]);
+                const auto upwardGain = std::max (-12.0f, -upwardSlope * softKnee (-over, values[knee]));
                 const auto desired = downward * (1 - values[upward]) + upwardGain * values[upward];
                 auto attack = attacks[m];
                 // Keep the discrete feedback loop stable at high ratios / low rates.
                 if (m == 1 || m == 2)
                     // Bound the feedback attack coefficient for stability at
                     // high ratios, where a one-sample loop can otherwise ring.
-                    attack = std::max (attack, 1 - 0.5f / values[ratio]);
+                    attack = std::max (attack, 1 - 0.5f / effectiveRatio);
                 auto release = releases[m];
                 if (m == 2)
                     // Mu recovery gets slower as stored gain reduction deepens.

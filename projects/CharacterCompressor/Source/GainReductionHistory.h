@@ -3,16 +3,17 @@
 #include <algorithm>
 #include <cmath>
 
-// UI samples use monotonic timestamps: timer delays must not stretch five seconds.
+// UI samples use monotonic timestamps: timer delays must not stretch three seconds.
 class GainReductionHistory
 {
 public:
-    static constexpr double duration = 5.0;
+    static constexpr double duration = 3.0;
+    static constexpr float maxReductionDb = 18.0f;
     void clear() { next = count = 0; }
     void push (double time, float reduction)
     {
         if (! std::isfinite (time)) return;
-        samples[next] = { time, std::isfinite (reduction) ? std::clamp (reduction, 0.0f, 30.0f) : 0.0f };
+        samples[next] = { time, std::isfinite (reduction) ? std::clamp (reduction, 0.0f, maxReductionDb) : 0.0f };
         next = (next + 1) % samples.size();
         count = std::min (count + 1, samples.size());
     }

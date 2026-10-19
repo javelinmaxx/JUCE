@@ -18,7 +18,7 @@ CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcess
     bypassAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "bypass", bypass);
     upwardAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "upward", upward);
     midSideAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "midSide", midSide);
-    upward.setTooltip ("Boosts levels below threshold toward it; ratio sets the below-threshold slope.");
+    upward.setTooltip ("Yin boosts levels below threshold, capped at 12 dB. Its ratio range is 1:1 to 2:1.");
     upward.setStateCaptions ("YIN", "YANG");
 
     const std::array<const char*, 14> ids { "input", "threshold", "ratio", "attack", "release",
@@ -499,23 +499,23 @@ void CharacterCompressorEditor::paintMeter (juce::Graphics& g)
     const juce::Rectangle<float> bar (360, 202, 14, 310), plot (410, 202, 98, 310);
     g.setColour (theme.gaugeTrack);
     g.fillRoundedRectangle (bar, 4);
-    for (int db = 0; db <= 30; db += 6)
+    for (int db = 0; db <= static_cast<int> (GainReductionHistory::maxReductionDb); db += 6)
     {
-        const auto y = plot.getY() + plot.getHeight() * static_cast<float> (db) / 30.0f;
+        const auto y = plot.getY() + plot.getHeight() * static_cast<float> (db) / GainReductionHistory::maxReductionDb;
         g.setColour (theme.grid);
         g.drawLine (plot.getX(), y, plot.getRight(), y);
         g.setColour (juce::Colour (0xffb9c8c4));
         g.drawText (juce::String (db), 378, juce::roundToInt (y) - 8, 26, 16, juce::Justification::centred);
     }
-    for (int second = 0; second <= 5; ++second)
+    for (int second = 0; second <= static_cast<int> (GainReductionHistory::duration); ++second)
     {
-        const auto x = plot.getX() + plot.getWidth() * static_cast<float> (second) / 5.0f;
+        const auto x = plot.getX() + plot.getWidth() * static_cast<float> (second) / static_cast<float> (GainReductionHistory::duration);
         g.setColour (theme.grid.withAlpha (0.55f));
         g.drawLine (x, plot.getY(), x, plot.getBottom());
     }
     const auto meterAccent = theme.meter;
     const auto glow = std::clamp (0.22f + displayedReduction / 38.0f, 0.22f, 0.95f);
-    const auto fill = bar.withHeight (bar.getHeight() * std::clamp (displayedReduction / 30, 0.0f, 1.0f));
+    const auto fill = bar.withHeight (bar.getHeight() * std::clamp (displayedReduction / GainReductionHistory::maxReductionDb, 0.0f, 1.0f));
     if (fill.getHeight() > 0)
     {
         for (int layer = 5; layer >= 1; --layer)
@@ -536,7 +536,7 @@ void CharacterCompressorEditor::paintMeter (juce::Graphics& g)
     history.visit (now, [&] (float position, float reduction, double time)
     {
         const auto x = plot.getX() + plot.getWidth() * position;
-        const auto y = plot.getY() + plot.getHeight() * reduction / 30.0f;
+        const auto y = plot.getY() + plot.getHeight() * reduction / GainReductionHistory::maxReductionDb;
         if (! started || time - previous > 0.25) trace.startNewSubPath (x, y);
         else trace.lineTo (x, y);
         previous = time;
@@ -558,7 +558,7 @@ void CharacterCompressorEditor::paintMeter (juce::Graphics& g)
     g.strokePath (trace, juce::PathStrokeType (0.75f));
     g.restoreState();
     g.setColour (juce::Colour (0xffb9c8c4));
-    g.drawText ("-5 s", 408, 516, 44, 18, juce::Justification::centredLeft);
+    g.drawText ("-3 s", 408, 516, 44, 18, juce::Justification::centredLeft);
     g.drawText ("NOW", 466, 516, 44, 18, juce::Justification::centredRight);
     g.setColour (meterAccent);
     g.setFont (juce::FontOptions (24.0f));
@@ -637,6 +637,17 @@ void CharacterCompressorEditor::timerCallback()
     const auto modelIndex = std::clamp (model.getSelectedItemIndex(), 0, 3);
     if (upwardMode != lastUpwardMode || modelIndex != lastModelIndex)
     {
+        if (upwardMode != lastUpwardMode)
+        {
+            auto& ratio = sliders[2];
+            if (upwardMode && ratio.getValue() > 2.0)
+                ratio.setValue (2.0, juce::sendNotificationSync);
+            auto range = ratio.getNormalisableRange();
+            range.start = 1.0;
+            range.end = upwardMode ? 2.0 : 20.0;
+            ratio.setNormalisableRange (range);
+            ratio.setSkewFactorFromMidPoint (upwardMode ? 1.4 : 4.0);
+        }
         theme = themeFor (modelIndex, upwardMode);
         applyTheme();
         history.clear();
@@ -646,7 +657,7 @@ void CharacterCompressorEditor::timerCallback()
         repaint();
     }
     const auto raw = processor.reduction.load (std::memory_order_relaxed);
-    const auto gr = std::isfinite (raw) ? std::clamp (raw, 0.0f, 30.0f) : 0.0f;
+    const auto gr = std::isfinite (raw) ? std::clamp (raw, 0.0f, GainReductionHistory::maxReductionDb) : 0.0f;
     displayedReduction = std::max (gr, displayedReduction * std::exp (-elapsed / 0.25f));
     history.push (now, gr);
     repaint (meterBounds);

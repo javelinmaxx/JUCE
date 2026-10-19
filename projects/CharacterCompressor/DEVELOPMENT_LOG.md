@@ -710,3 +710,9 @@ implementation, not a production-release claim.
 - Added a bypassed round-trip DSP check. It caught an inverted side-channel
   polarity in the encoder; corrected the matrix so the inverse decode restores
   the original L/R channel order after the 64-sample latency.
+
+### 2026-10-19 — capped Yin gain and shortened the GR display
+- Capped upward gain at 12 dB and restricted the ratio knob/DSP to 1:1–2:1 in
+  Yin, restoring 1:1–20:1 in Yang. Reduced the GR display to 0–18 dB and its
+  timestamped history to three seconds. The 125 DSP checks and 205 focused
+  processor/editor checks passed; all eight previews were regenerated.
