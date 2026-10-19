@@ -1,0 +1,65 @@
+{
+  "sample_rate_hz": 48000,
+  "threshold_dbfs": -18,
+  "ratio_control": 4,
+  "attack_control_ms": 10,
+  "release_control_ms": 150,
+  "knee_db": 6,
+  "vari_transient_percent": [
+    0,
+    400
+  ],
+  "detector_hpf_hz": 0,
+  "oversampling_factor": 4,
+  "latency_samples_removed": 64,
+  "stimulus": "DC step -36 dBFS to -6 dBFS at 0.1 s, back to -36 dBFS at 1.1 s",
+  "dsp_sha256": {
+    "CompressorDSP.h": "67effc97cd104b512344ed5abd21e3893e89f20b7a3c0f2d50fdb8d4781dfa63",
+    "OversampledTransformer.h": "fde3175976d53788e30550ed75a323cc78357438c31f03d658d666aeab9bf678",
+    "TransformerResponse.h": "b8ab069e598442b7c5146849f62bcfb0ba777ed28f2b962c87b3b38800ce23c8",
+    "HighTilt.h": "08bb893fc879f5f95990aae0529f83281e7310f8e7795f8bc8be091d3f85bbf6"
+  },
+  "source_commit": "d84f227d0ba26f81747b93088431b789eb0ac0a1",
+  "metrics": {
+    "FET (feed-forward) / 0%": {
+      "steady_gr_db": 8.9999418258667,
+      "attack_to_90_percent_ms": 5.75,
+      "release_to_10_percent_ms": 241.8125
+    },
+    "FET (feed-forward) / 400%": {
+      "steady_gr_db": 8.999770164489746,
+      "attack_to_90_percent_ms": 17.708333333333332,
+      "release_to_10_percent_ms": 176.85416666666669
+    },
+    "VCA (feedback) / 0%": {
+      "steady_gr_db": 8.9999418258667,
+      "attack_to_90_percent_ms": 5.75,
+      "release_to_10_percent_ms": 345.39583333333337
+    },
+    "VCA (feedback) / 400%": {
+      "steady_gr_db": 8.999770164489746,
+      "attack_to_90_percent_ms": 17.708333333333332,
+      "release_to_10_percent_ms": 252.54166666666666
+    },
+    "Variable-mu / 0%": {
+      "steady_gr_db": 6.356102466583252,
+      "attack_to_90_percent_ms": 13.041666666666666,
+      "release_to_10_percent_ms": 639.7708333333333
+    },
+    "Variable-mu / 400%": {
+      "steady_gr_db": 6.355035781860352,
+      "attack_to_90_percent_ms": 22.645833333333332,
+      "release_to_10_percent_ms": 528.2708333333334
+    },
+    "Optical / 0%": {
+      "steady_gr_db": 8.9994478225708,
+      "attack_to_90_percent_ms": 53.64583333333333,
+      "release_to_10_percent_ms": 1145.8125
+    },
+    "Optical / 400%": {
+      "steady_gr_db": 8.998074531555176,
+      "attack_to_90_percent_ms": 148.89583333333334,
+      "release_to_10_percent_ms": 1050.7083333333333
+    }
+  }
+}

@@ -11,6 +11,7 @@ reports were also regenerated from the current source.
 
 - [Compression curves](plots/01_compression_curves.png): DC transfer and 1 kHz sine gain reduction.
 - [Attack and recovery](plots/02_attack_release.png): a controlled upward/downward level step.
+- [VariTransient attack/release](plots/06_vari_transient.png): direct 0% vs 400% comparison for all four compressor models, with the 3 dB trigger and 6 dB full-effect level marked.
 - [Transformer character](plots/03_transformer.png): waveforms, harmonics, small-signal response, and aliasing.
 - [Upward compression](plots/04_upward_compression.png): measured transfer and gain curves for all four models with upward mode enabled.
 - [Transformer Even harmonics](plots/05_transformer_even_harmonics.png): waveform asymmetry and even-order harmonics as simulated DC current increases.
@@ -50,6 +51,19 @@ and soft-knee behavior differ. FET and optical DC transfer curves overlap,
 but their sine response and dynamics differ. Variable-mu has a gentler,
 progressive steady-state curve and transient gain-reduction overshoot.
 
+The VariTransient figure uses the same DC step and compressor settings, with
+Upward disabled, and overlays the default 0% setting with the maximum 400%
+setting. The change starts above 3 dB GR and eases to full strength at 6 dB GR.
+Attack is measured to 90% of the final step reduction; recovery is measured to
+10% of the reduction at the downward step.
+
+| Model | Attack 0% | Attack 400% | Recovery 0% | Recovery 400% |
+| --- | ---: | ---: | ---: | ---: |
+| FET feed-forward | 5.75 ms | 17.71 ms | 241.81 ms | 176.85 ms |
+| VCA feedback | 5.75 ms | 17.71 ms | 345.40 ms | 252.54 ms |
+| Variable-mu | 13.04 ms | 22.65 ms | 639.77 ms | 528.27 ms |
+| Optical | 53.65 ms | 148.90 ms | 1145.81 ms | 1050.71 ms |
+
 Transformer measurements disable compression with a 1:1 ratio. The waveform
 and saturation-harmonic plots use a 100 Hz tone at −6 dBFS peak, with
 0/6/12/18 dB drive, keeping the measured odd harmonics below the 500 Hz
@@ -71,6 +85,7 @@ repository root:
 
 ```bash
 python3 projects/CharacterCompressor/Measurements/plot_characteristics.py
+python3 projects/CharacterCompressor/Measurements/plot_vari_transient.py
 python3 projects/CharacterCompressor/Measurements/plot_upward_compression.py
 python3 projects/CharacterCompressor/Measurements/plot_transformer_even_harmonics.py
 ```
@@ -87,6 +102,9 @@ against the current 4× output. Outputs go into `Measurements/plots/`:
   `upward_compression.json`: the dedicated upward-mode transfer report.
 - `05_transformer_even_harmonics.png` / `.svg`, `transformer_even_harmonics.csv`,
   and `transformer_even_harmonics.json`: the transformer DC-current demonstration.
+- `06_vari_transient.png` / `.svg`, `vari_transient.csv`, `vari_transient.npz`,
+  and `vari_transient.json`: attack/recovery traces and measured crossing times
+  with VariTransient off and at 400%.
 
 PNG, vector SVG, and multipage PDF figures are exported. The source commit and
 DSP hashes are recorded in `plots/metrics.json` for reproducibility.

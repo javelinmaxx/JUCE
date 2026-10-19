@@ -92,7 +92,8 @@ meter Upward Gain. The palette follows model automation and session recall.
 ## Measured characteristics
 
 See [the measurement report](Measurements/README.md) for current compression
-curves, attack/recovery plots, upward-compression curves, and transformer
+curves, attack/recovery plots, VariTransient envelope measurements,
+upward-compression curves, and transformer
 harmonic, frequency-response, and phase measurements. Figures are available as
 PNG, SVG, and PDF. Original 1× alias measurements remain preserved under
 `Measurements/baseline/` for comparison.
@@ -139,12 +140,13 @@ The editor check also exercises switch clicks, automation, and history expiry.
 It runs the message loop for six seconds with a synthetic GR signal to verify
 the animated display. Add an absolute PNG path after `--editor` to save a preview.
 Preview PNGs for all four models and their Upward reversals are in
-[`Previews`](Previews). To regenerate them after activating the local build
+[`Previews`](Previews); the current images include the Even harmonics and
+VariTransient controls. To regenerate them after activating the local build
 environment, run from the repository root:
 
 ```bash
 xvfb-run -a /workspace/juce-env/character-build/CharacterProcessorTests \
-    --preview-modes projects/CharacterCompressor/Previews
+    --preview-modes "$PWD/projects/CharacterCompressor/Previews"
 ```
 
 Linux artifact:

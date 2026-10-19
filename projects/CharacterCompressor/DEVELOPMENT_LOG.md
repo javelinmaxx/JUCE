@@ -417,3 +417,18 @@ implementation, not a production-release claim.
   compression); focused output-stage checks passed, and the editor rendered with
   the new knob visible (257 processor/editor checks passed). The Linux Debug
   VST3 target built and linked successfully.
+
+### 2026-10-19 — VariTransient plot and refreshed UI previews
+
+- Added a standalone measurement bridge and Python plotting script for attack
+  and release with VariTransient at 0% and 400%, across all four models. The
+  plot marks the 3 dB trigger and 6 dB full-effect level; PNG, SVG, CSV, NPZ,
+  and JSON metrics are saved under `Measurements/plots/`.
+- At 400%, measured FET attack to 90% increased from 5.75 ms to 17.71 ms and
+  recovery to 10% decreased from 241.81 ms to 176.85 ms. The other models show
+  the same slower-attack/faster-recovery direction; exact measurements are in
+  `Measurements/README.md` and `plots/vari_transient.json`.
+- Regenerated all eight model/Upward UI preview PNGs so each includes the
+  current secondary controls, including Even harmonics and VariTransient.
+- Measurement generation completed successfully and the preview renderer
+  validated all eight palettes and files.
