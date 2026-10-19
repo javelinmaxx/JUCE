@@ -178,7 +178,7 @@ int runTests (int argc, char** argv)
                && input && detectorHpf && scHighTilt && transformerDrive,
                "editor includes the complete knob and switch set");
         check (threshold->getHeight() > attack->getHeight() && ratio->getHeight() > release->getHeight()
-               && threshold->getHeight() == 120 && ratio->getHeight() == 120
+               && threshold->getHeight() == 108 && ratio->getHeight() == 108
                && knee->getHeight() == attack->getHeight()
                && variTransient->getHeight() == release->getHeight()
                && knee->getWidth() == attack->getWidth()
@@ -191,7 +191,7 @@ int runTests (int argc, char** argv)
                && attack->getX() == knee->getX() && release->getX() == variTransient->getX(),
                "Threshold/Ratio, Attack/Release, and Knee/VariTransient occupy successive rows");
         check (output->getY() == mix->getY() && mix->getY() == stereoLink->getY()
-               && output->getY() > 156 + 464,
+               && output->getY() > 150 + 470,
                "output, mix, and stereo link sit below the shortened GR section");
         check (transformer->getHeight() > transformer->getWidth()
                && upward->getWidth() > upward->getHeight()

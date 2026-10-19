@@ -30,6 +30,7 @@ CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcess
     for (size_t i = 0; i < sliders.size(); ++i)
     {
         auto& slider = sliders[i];
+        slider.setLookAndFeel (&look);
         slider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
         slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 100, 22);
         slider.setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
@@ -59,8 +60,6 @@ CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcess
     midSide.setStateCaptions ("M/S", "L/R");
     midSide.setFunctionLabelVisible (false);
     transformer.setFunctionLabelVisible (false);
-    modelDescription.setJustificationType (juce::Justification::centred);
-    addAndMakeVisible (modelDescription);
     transformer.snapToState();
     bypass.snapToState();
     upward.snapToState();
@@ -460,6 +459,22 @@ void CompressorLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
     }
 }
 
+juce::Label* CompressorLookAndFeel::createSliderTextBox (juce::Slider& slider)
+{
+    auto* valueDisplay = juce::LookAndFeel_V4::createSliderTextBox (slider);
+    const auto font = valueDisplay->getFont();
+    valueDisplay->setFont (font.withHeight (font.getHeight() * 0.85f));
+    return valueDisplay;
+}
+
+juce::Slider::SliderLayout CompressorLookAndFeel::getSliderLayout (juce::Slider& slider)
+{
+    auto layout = juce::LookAndFeel_V4::getSliderLayout (slider);
+    if (slider.getTextBoxPosition() == juce::Slider::TextBoxBelow)
+        layout.textBoxBounds.translate (0, -3);
+    return layout;
+}
+
 void CharacterCompressorEditor::paint (juce::Graphics& g)
 {
     g.setGradientFill (juce::ColourGradient (theme.background.brighter (0.035f), 0, 0,
@@ -584,8 +599,7 @@ void CharacterCompressorEditor::paintMeter (juce::Graphics& g)
 
 void CharacterCompressorEditor::resized()
 {
-    model.setBounds (24, 92, 500, 32);
-    modelDescription.setBounds (24, 128, 500, 20);
+    model.setBounds (24, 108, 500, 32);
     bypass.setBounds (450, 46, 74, 28);
     const auto place = [this] (size_t index, int x, int y, int width, int height)
     {
@@ -601,8 +615,10 @@ void CharacterCompressorEditor::resized()
             sliders[index].setTextBoxStyle (juce::Slider::TextBoxBelow, false, std::min (width, 100), 22);
         sliders[index].setBounds (x, y + 20, width, height);
     };
-    place (1, 22, 188, 144, 120);
-    place (2, 168, 188, 156, 120);
+    place (1, 22, 188, 144, 108);
+    place (2, 168, 188, 156, 108);
+    sliders[1].setBounds (22, 214, 144, 108);
+    sliders[2].setBounds (168, 214, 156, 108);
     place (3, 62, 330, 80, 58);
     place (4, 204, 330, 80, 58);
     place (5, 62, 410, 80, 58);
@@ -626,8 +642,8 @@ void CharacterCompressorEditor::resized()
     labels[11].setText ("DC BIAS", juce::dontSendNotification);
     labels[13].setText ("SC HIGH TILT", juce::dontSendNotification);
     upward.setBounds (32, 156, 112, 28);
-    midSide.setBounds (241, 545, 58, 56);
-    transformer.setBounds (241, 673, 58, 56);
+    midSide.setBounds (241, 545, 58, 64);
+    transformer.setBounds (241, 673, 58, 64);
 }
 
 void CharacterCompressorEditor::timerCallback()
@@ -651,15 +667,6 @@ void CharacterCompressorEditor::timerCallback()
         lastModelIndex = modelIndex;
         repaint();
     }
-    const std::array<const char*, 4> descriptions {
-        "Fast peak detection / feed-forward gain control",
-        "Output-sensing peak detector / feedback gain control",
-        "RMS feedback / progressive ratio / program-dependent recovery",
-        "RMS feed-forward / two-stage optical recovery" };
-    modelDescription.setFont (juce::FontOptions (12.0f));
-    modelDescription.setColour (juce::Label::textColourId, theme.secondary);
-    modelDescription.setText (descriptions[static_cast<size_t> (std::clamp (model.getSelectedItemIndex(), 0, 3))],
-                              juce::dontSendNotification);
     const auto raw = processor.reduction.load (std::memory_order_relaxed);
     const auto gr = std::isfinite (raw) ? std::clamp (raw, 0.0f, 30.0f) : 0.0f;
     displayedReduction = std::max (gr, displayedReduction * std::exp (-elapsed / 0.25f));

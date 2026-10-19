@@ -52,6 +52,8 @@ class CompressorLookAndFeel final : public juce::LookAndFeel_V4
 {
 public:
     void drawRotarySlider (juce::Graphics&, int, int, int, int, float, float, float, juce::Slider&) override;
+    juce::Label* createSliderTextBox (juce::Slider&) override;
+    juce::Slider::SliderLayout getSliderLayout (juce::Slider&) override;
     void setTheme (const CompressorTheme& theme)
     {
         accent = theme.control;
@@ -86,13 +88,12 @@ private:
     AnimatedSwitch midSide { "MID / SIDE MODE" };
     std::array<juce::Slider, 14> sliders;
     std::array<juce::Label, 14> labels;
-    juce::Label modelDescription;
     using State = juce::AudioProcessorValueTreeState;
     std::unique_ptr<State::ComboBoxAttachment> modelAttachment;
     std::array<std::unique_ptr<State::SliderAttachment>, 14> attachments;
     std::unique_ptr<State::ButtonAttachment> transformerAttachment, bypassAttachment, upwardAttachment, midSideAttachment;
     GainReductionHistory history;
-    juce::Rectangle<int> meterBounds { 344, 156, 180, 464 };
+    juce::Rectangle<int> meterBounds { 344, 150, 180, 470 };
     double lastTick = 0;
     float displayedReduction = 0;
     bool lastUpwardMode = false;

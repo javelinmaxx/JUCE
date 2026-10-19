@@ -621,3 +621,13 @@ implementation, not a production-release claim.
   headers. Reduced lower-stage control heights to fit the shorter panels.
 - Updated preview dimensions and regenerated all eight UI previews. The VST3
   and focused preview validation passed; no full test suite was run.
+
+### 2026-10-19 — compact model selector and value readouts
+- Removed the model-specific detector description and moved the model selector
+  down into the vacated space. Reduced the Threshold and Ratio controls by a
+  further 10% while preserving their parameter ranges and values.
+- Aligned the GR panel's top edge with the Compressor panel and verified that
+  Output and Transformer Stage share the same top edge. Reduced every slider
+  value display font by 15% and moved its readout 3 px closer to the control.
+- Rebuilt the VST3 and regenerated all eight mode previews. No full test suite
+  was run; focused editor checks passed (262 checks).
