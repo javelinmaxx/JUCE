@@ -77,15 +77,15 @@ Even harmonics, VariTransient, and SC High Tilt are appended. AU version hints
 sidechain, oversampling selector,
 automatic makeup gain, or preset browser yet.
 
-The 580 × 980 portrait editor places Threshold, Knee, and Ratio in that order,
-with Upward in the Compressor section and VariTransient between Attack and
-Release. Knee and VariTransient use smaller knobs. The shortened right-hand GR
-display pairs a vertical 0–30 dB meter with a scrolling five-second history;
-Output, Mix, and Stereo Link sit directly below it. Bypass is a button beside
-the plug-in name. Sidechain combines Detector HPF, SC High Tilt, and Mid/Side.
-Transformer enable, Iron Drive, and Even harmonics share a Transformer Stage
-section. The other section toggles are vertical. The history line runs oldest
-at left to current at right.
+The 548 × 790 editor places Threshold, Knee, and Ratio in that order, with
+Upward in the Compressor section and VariTransient between Attack and Release.
+Knee and VariTransient use smaller knobs. The shortened right-hand GR display
+pairs a vertical 0–30 dB meter with a scrolling five-second history; Output,
+Mix, and Stereo Link sit directly below it. Bypass is a button beside the
+plug-in name. Sidechain combines Detector HPF, SC High Tilt, and Mid/Side.
+Transformer enable, Core Drive, and DC Bias share a Transformer Stage section.
+The compact analog switches show ON/OFF or M/S/L/R at either end of the lever.
+The history line runs oldest at left to current at right.
 The display samples gain reduction at 30 Hz while the editor is open; timestamps
 keep the window at five seconds even if UI updates are delayed. Closing the
 editor clears its display history. Transformer, Upward, and Mid/Side use

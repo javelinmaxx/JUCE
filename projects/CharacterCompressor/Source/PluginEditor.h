@@ -23,6 +23,11 @@ public:
         offCaption = std::move (offText);
         repaint();
     }
+    void setFunctionLabelVisible (bool visible)
+    {
+        showFunctionLabel = visible;
+        repaint();
+    }
     void setTheme (const CompressorTheme& theme)
     {
         accent = theme.control;
@@ -37,6 +42,7 @@ private:
     bool horizontal = false;
     bool compact = false;
     bool labeledButton = false;
+    bool showFunctionLabel = true;
     juce::Colour accent { 0xff168aad };
     juce::Colour surface { 0xff202a34 }, foreground { 0xfff0ddbb }, secondary { 0xff92a0ad };
     juce::String onCaption { "ON" }, offCaption { "OFF" };
@@ -84,7 +90,7 @@ private:
     std::array<std::unique_ptr<State::SliderAttachment>, 14> attachments;
     std::unique_ptr<State::ButtonAttachment> transformerAttachment, bypassAttachment, upwardAttachment, midSideAttachment;
     GainReductionHistory history;
-    juce::Rectangle<int> meterBounds { 376, 156, 180, 480 };
+    juce::Rectangle<int> meterBounds { 344, 156, 180, 480 };
     double lastTick = 0;
     float displayedReduction = 0;
     bool lastUpwardMode = false;

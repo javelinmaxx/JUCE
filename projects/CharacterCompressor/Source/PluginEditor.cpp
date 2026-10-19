@@ -53,7 +53,9 @@ CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcess
     sliders[12].setTooltip ("GR-dependent attack and release: 0% has no effect; 400% reaches 4x attack and 1/4 release. Ramps through a 3 dB soft knee from 3 to 6 dB gain reduction. Disabled in upward mode.");
     sliders[13].setTooltip ("Sidechain high-shelf boost from 0 to 12 dB. The shelf midpoint is 1.5 kHz; it changes compression sensitivity only and does not EQ the output.");
     midSide.setTooltip ("Encode stereo to Mid and Side before compression, then decode back to Left and Right.");
-    midSide.setStateCaptions ("MS", "LR");
+    midSide.setStateCaptions ("M/S", "L/R");
+    midSide.setFunctionLabelVisible (false);
+    transformer.setFunctionLabelVisible (false);
     modelDescription.setJustificationType (juce::Justification::centred);
     addAndMakeVisible (modelDescription);
     transformer.snapToState();
@@ -61,7 +63,7 @@ CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcess
     upward.snapToState();
     midSide.snapToState();
     lastTick = juce::Time::getMillisecondCounterHiRes() * 0.001;
-    setSize (580, 790);
+    setSize (548, 790);
     timerCallback();
     startTimerHz (30);
 }
@@ -282,10 +284,14 @@ void AnimatedSwitch::paintButton (juce::Graphics& g, bool highlighted, bool down
         return;
     }
 
-    const auto title = getLocalBounds().reduced (2, 0).withHeight (std::min (26, getHeight() / 4));
-    g.setColour (getToggleState() ? foreground : (highlighted ? foreground.withAlpha (0.90f) : secondary));
-    g.setFont (juce::FontOptions (9.0f));
-    g.drawFittedText (getButtonText(), title, juce::Justification::centred, 2);
+    const auto titleHeight = showFunctionLabel ? std::min (26, getHeight() / 4) : 0;
+    const auto title = getLocalBounds().reduced (2, 0).withHeight (titleHeight);
+    if (showFunctionLabel)
+    {
+        g.setColour (getToggleState() ? foreground : (highlighted ? foreground.withAlpha (0.90f) : secondary));
+        g.setFont (juce::FontOptions (9.0f));
+        g.drawFittedText (getButtonText(), title, juce::Justification::centred, 2);
+    }
 
     // Side legend and hardware follow a standard bat-handle panel toggle.
     const auto cx = static_cast<float> (getWidth()) * 0.5f;
@@ -303,10 +309,10 @@ void AnimatedSwitch::paintButton (juce::Graphics& g, bool highlighted, bool down
     for (int corner = 0; corner < 6; ++corner)
     {
         const auto angle = juce::MathConstants<float>::twoPi * static_cast<float> (corner) / 6.0f;
-        const juce::Point<float> point (cx + std::cos (angle) * 17.0f,
-                                        pivot.y + std::sin (angle) * 14.5f);
-        const juce::Point<float> inset (cx + std::cos (angle) * 14.3f,
-                                        pivot.y + std::sin (angle) * 12.0f);
+        const juce::Point<float> point (cx + std::cos (angle) * 16.0f,
+                                        pivot.y + std::sin (angle) * 16.0f);
+        const juce::Point<float> inset (cx + std::cos (angle) * 13.2f,
+                                        pivot.y + std::sin (angle) * 13.2f);
         if (corner == 0)
         {
             nut.startNewSubPath (point);
@@ -436,26 +442,26 @@ void CharacterCompressorEditor::paint (juce::Graphics& g)
     g.fillAll();
     g.setColour (theme.background.getPerceivedBrightness() > 0.7f ? theme.text : theme.control);
     g.setFont (juce::FontOptions (12.0f));
-    g.drawText ("CHARACTER AUDIO  /  DYNAMICS", 24, 18, 532, 20, juce::Justification::centredLeft);
+    g.drawText ("CHARACTER AUDIO  /  DYNAMICS", 24, 18, 500, 20, juce::Justification::centredLeft);
     g.setColour (theme.text);
     g.setFont (juce::FontOptions (29.0f));
     g.drawText ("Character Compressor", 24, 40, 420, 38, juce::Justification::centredLeft);
-    drawBrushedMetalPanel (g, { 24, 150, 330, 270 }, 10, theme.card, theme.grid);
-    drawAnalogPanel (g, { 24, 434, 330, 128 }, 10, theme.card, theme.grid);
-    drawAnalogPanel (g, { 24, 580, 330, 192 }, 10, theme.card, theme.grid);
+    drawBrushedMetalPanel (g, { 24, 150, 300, 270 }, 10, theme.card, theme.grid);
+    drawAnalogPanel (g, { 24, 434, 300, 128 }, 10, theme.card, theme.grid);
+    drawAnalogPanel (g, { 24, 580, 300, 192 }, 10, theme.card, theme.grid);
     g.setColour (theme.text);
     g.setFont (juce::FontOptions (13.0f).withStyle ("bold"));
-    g.drawText ("COMPRESSOR", 38, 158, 122, 20, juce::Justification::centredLeft);
-    g.drawText ("SIDECHAIN", 38, 442, 280, 18, juce::Justification::centredLeft);
-    g.drawText ("TRANSFORMER STAGE", 38, 588, 300, 20, juce::Justification::centredLeft);
-    drawAnalogPanel (g, { 376, 644, 180, 128 }, 10, theme.card, theme.grid);
+    g.drawText ("COMPRESSOR", 38, 158, 104, 20, juce::Justification::centredLeft);
+    g.drawText ("SIDECHAIN", 38, 442, 250, 18, juce::Justification::centredLeft);
+    g.drawText ("TRANSFORMER STAGE", 38, 588, 270, 20, juce::Justification::centredLeft);
+    drawAnalogPanel (g, { 344, 644, 180, 128 }, 10, theme.card, theme.grid);
     g.setColour (theme.secondary);
     g.setFont (juce::FontOptions (10.0f).withStyle ("bold"));
-    g.drawText ("OUTPUT  /  MIX  /  STEREO LINK", 382, 646, 168, 16, juce::Justification::centred);
+    g.drawText ("OUTPUT  /  MIX  /  STEREO LINK", 350, 646, 168, 16, juce::Justification::centred);
     for (const auto y : { 428, 568 })
     {
         g.setColour (theme.grid);
-        g.drawHorizontalLine (y, 24, 354);
+        g.drawHorizontalLine (y, 24, 324);
     }
     paintMeter (g);
 }
@@ -466,8 +472,8 @@ void CharacterCompressorEditor::paintMeter (juce::Graphics& g)
     g.setColour (juce::Colour (0xffb9c8c4));
     g.setFont (juce::FontOptions (11.0f));
     g.drawText (upward.getToggleState() ? "UPWARD GAIN" : "GAIN REDUCTION",
-                388, 168, 156, 20, juce::Justification::centred);
-    const juce::Rectangle<float> bar (392, 212, 14, 326), plot (442, 212, 98, 326);
+                356, 168, 156, 20, juce::Justification::centred);
+    const juce::Rectangle<float> bar (360, 212, 14, 326), plot (410, 212, 98, 326);
     g.setColour (theme.gaugeTrack);
     g.fillRoundedRectangle (bar, 4);
     for (int db = 0; db <= 30; db += 6)
@@ -476,7 +482,7 @@ void CharacterCompressorEditor::paintMeter (juce::Graphics& g)
         g.setColour (theme.grid);
         g.drawLine (plot.getX(), y, plot.getRight(), y);
         g.setColour (juce::Colour (0xffb9c8c4));
-        g.drawText (juce::String (db), 410, juce::roundToInt (y) - 8, 26, 16, juce::Justification::centred);
+        g.drawText (juce::String (db), 378, juce::roundToInt (y) - 8, 26, 16, juce::Justification::centred);
     }
     for (int second = 0; second <= 5; ++second)
     {
@@ -529,23 +535,23 @@ void CharacterCompressorEditor::paintMeter (juce::Graphics& g)
     g.strokePath (trace, juce::PathStrokeType (0.75f));
     g.restoreState();
     g.setColour (juce::Colour (0xffb9c8c4));
-    g.drawText ("-5 s", 440, 542, 44, 18, juce::Justification::centredLeft);
-    g.drawText ("NOW", 498, 542, 44, 18, juce::Justification::centredRight);
+    g.drawText ("-5 s", 408, 542, 44, 18, juce::Justification::centredLeft);
+    g.drawText ("NOW", 466, 542, 44, 18, juce::Justification::centredRight);
     g.setColour (meterAccent);
     g.setFont (juce::FontOptions (24.0f));
     g.setColour (meterAccent.withAlpha (glow * 0.22f));
-    g.drawText (juce::String (displayedReduction, 1) + " dB", 387, 567, 158, 34, juce::Justification::centred);
+    g.drawText (juce::String (displayedReduction, 1) + " dB", 355, 567, 158, 34, juce::Justification::centred);
     g.setColour (meterAccent.withAlpha (glow * 0.30f));
-    g.drawText (juce::String (displayedReduction, 1) + " dB", 388, 568, 156, 32, juce::Justification::centred);
+    g.drawText (juce::String (displayedReduction, 1) + " dB", 356, 568, 156, 32, juce::Justification::centred);
     g.setColour (juce::Colour (0xfff2f1eb));
-    g.drawText (juce::String (displayedReduction, 1) + " dB", 388, 568, 156, 32, juce::Justification::centred);
+    g.drawText (juce::String (displayedReduction, 1) + " dB", 356, 568, 156, 32, juce::Justification::centred);
 }
 
 void CharacterCompressorEditor::resized()
 {
-    model.setBounds (24, 92, 532, 32);
-    modelDescription.setBounds (24, 128, 532, 20);
-    bypass.setBounds (482, 46, 74, 28);
+    model.setBounds (24, 92, 500, 32);
+    modelDescription.setBounds (24, 128, 500, 20);
+    bypass.setBounds (450, 46, 74, 28);
     const auto place = [this] (size_t index, int x, int y, int width, int height)
     {
         labels[index].setBounds (x, y, width, 20);
@@ -558,32 +564,32 @@ void CharacterCompressorEditor::resized()
             sliders[index].setTextBoxStyle (juce::Slider::TextBoxBelow, false, std::min (width, 100), 22);
         sliders[index].setBounds (x, y + 20, width, height);
     };
-    place (1, 24, 207, 104, 82);
-    place (5, 134, 207, 104, 56);
-    place (2, 244, 207, 104, 82);
-    place (3, 44, 316, 78, 66);
-    place (12, 134, 316, 78, 56);
-    place (4, 224, 316, 78, 66);
-    place (8, 28, 460, 90, 78);
-    place (13, 126, 460, 90, 78);
-    place (9, 34, 612, 84, 104);
-    place (11, 124, 612, 84, 104);
-    place (6, 376, 662, 60, 72);
-    place (7, 436, 662, 60, 72);
-    place (10, 496, 662, 60, 72);
-    labels[0].setBounds (256, 168, 40, 14);
+    place (1, 24, 207, 92, 82);
+    place (5, 122, 207, 92, 56);
+    place (2, 220, 207, 92, 82);
+    place (3, 34, 316, 72, 66);
+    place (12, 124, 316, 72, 56);
+    place (4, 214, 316, 72, 66);
+    place (8, 28, 460, 80, 78);
+    place (13, 116, 460, 80, 78);
+    place (9, 34, 612, 74, 104);
+    place (11, 116, 612, 74, 104);
+    place (6, 344, 662, 60, 72);
+    place (7, 404, 662, 60, 72);
+    place (10, 464, 662, 60, 72);
+    labels[0].setBounds (222, 168, 40, 14);
     labels[0].setFont (juce::FontOptions (8.0f).withStyle ("bold"));
     labels[0].setJustificationType (juce::Justification::centredRight);
     sliders[0].setTextBoxStyle (juce::Slider::TextBoxBelow, false, 53, 14);
-    sliders[0].setBounds (299, 150, 53, 54);
+    sliders[0].setBounds (265, 150, 53, 54);
     labels[6].setText ("OUTPUT", juce::dontSendNotification);
     labels[10].setText ("ST LINK", juce::dontSendNotification);
     labels[9].setText ("CORE DRIVE", juce::dontSendNotification);
     labels[11].setText ("DC BIAS", juce::dontSendNotification);
     labels[13].setText ("SC HIGH TILT", juce::dontSendNotification);
-    upward.setBounds (168, 156, 76, 20);
-    midSide.setBounds (258, 452, 72, 104);
-    transformer.setBounds (254, 618, 76, 110);
+    upward.setBounds (146, 156, 76, 20);
+    midSide.setBounds (234, 452, 72, 104);
+    transformer.setBounds (238, 618, 76, 110);
 }
 
 void CharacterCompressorEditor::timerCallback()

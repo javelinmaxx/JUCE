@@ -445,6 +445,15 @@ implementation, not a production-release claim.
   previews were rendered for all eight model/Upward palette combinations; the
   preview renderer verified each image's palette colors and saved all files.
 
+### 2026-10-19 — head-on nut and narrower control layout
+- Changed the retaining nut to a regular, head-on hexagon and relabeled the
+  Mid/Side switch positions M/S and L/R. Hid the redundant function headers on
+  the Transformer and Mid/Side switches.
+- Narrowed the editor from 580 to 548 pixels, tightened the left control panels,
+  and moved the meter and output section inward. Updated preview sizing and its
+  meter sample point. Rebuilt the VST3 and rendered all eight previews; no full
+  test suite was run.
+
 ### 2026-10-19 — clean switch nut and updated control legends
 - Removed the protruding faux screw heads that made the toggle retaining nut
   read like a winged plate; made the inset hex face opaque for a clean hex and

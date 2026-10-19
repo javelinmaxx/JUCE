@@ -130,7 +130,7 @@ int runTests (int argc, char** argv)
     if (argc > 1 && juce::String (argv[1]) == "--editor")
     {
         std::unique_ptr<juce::AudioProcessorEditor> editor (restored.createEditor());
-        check (editor && editor->getWidth() == 580 && editor->getHeight() == 790, "compact editor creates at expected size");
+        check (editor && editor->getWidth() == 548 && editor->getHeight() == 790, "compact editor creates at expected size");
         check (editor->getNumChildComponents() >= 25, "editor contains controls and meters");
         juce::Slider *threshold = nullptr, *knee = nullptr, *ratio = nullptr;
         juce::Slider *attack = nullptr, *release = nullptr, *output = nullptr, *mix = nullptr;
@@ -154,9 +154,9 @@ int runTests (int argc, char** argv)
                 if (slider->getName() == "INPUT") input = slider;
                 if (slider->getName() == "DETECTOR HPF") detectorHpf = slider;
                 if (slider->getName() == "SC HIGH TILT") scHighTilt = slider;
-                if (slider->getName() == "TRANSFORMER DRIVE") transformerDrive = slider;
+                if (slider->getName() == "CORE DRIVE") transformerDrive = slider;
                 if (slider->getName() == "STEREO LINK") stereoLink = slider;
-                if (slider->getName() == "EVEN HARMONICS") evenHarmonics = slider;
+                if (slider->getName() == "DC BIAS") evenHarmonics = slider;
                 if (slider->getName() == "VARITRANSIENT") variTransient = slider;
             }
             if (auto* button = dynamic_cast<AnimatedSwitch*> (child))
@@ -186,9 +186,9 @@ int runTests (int argc, char** argv)
                "output, mix, and stereo link sit below the shortened GR section");
         check (transformer->getHeight() > transformer->getWidth()
                && upward->getWidth() > upward->getHeight()
-               && upward->getY() < 180 && upward->getX() >= 160
+               && upward->getY() < 180 && upward->getX() >= 140
                && bypass->getWidth() > bypass->getHeight()
-               && bypass->getY() < 80 && bypass->getX() > 450
+               && bypass->getY() < 80 && bypass->getX() >= 450
                && midSide->getHeight() > midSide->getWidth(),
                "section toggles are vertical and bypass sits beside the title");
         check (detectorHpf->getY() == scHighTilt->getY()
@@ -201,7 +201,7 @@ int runTests (int argc, char** argv)
         check (transformerDrive->getY() == evenHarmonics->getY()
                && transformer->getY() < transformerDrive->getY()
                && transformerDrive->getY() > midSide->getBottom(),
-               "transformer enable, Iron Drive, and Even harmonics share their section");
+               "transformer enable, Core Drive, and DC Bias share their section");
         GainReductionHistory history;
         for (int i = 0; i <= 360; ++i) history.push (i / 30.0, static_cast<float> (i % 31));
         int visible = 0;
@@ -431,14 +431,18 @@ int renderThemePreviews (const char* directory)
         {
             const auto index = static_cast<size_t> (stage);
             const auto grLitPixel = gaugeTrack[index].interpolatedWith (meter[index], 0.50f);
-            const auto meterPixel = image.getPixelAt (398, 250);
+            const auto meterPixel = image.getPixelAt (366, 250);
             const auto meterMatches = closeColour (meterPixel, grLitPixel, 20);
+            if (! meterMatches || image.getWidth() != 548 || image.getHeight() != 790)
+                std::cerr << "Preview " << stage << " dimensions " << image.getWidth() << 'x' << image.getHeight()
+                          << ", meter RGB " << meterPixel.toDisplayString (false).toStdString()
+                          << ", expected " << grLitPixel.toDisplayString (false).toStdString() << '\n';
             succeeded = juce::PNGImageFormat().writeImageToStream (image, *stream)
-                     && image.getWidth() == 580 && image.getHeight() == 790 && meterMatches;
+                     && image.getWidth() == 548 && image.getHeight() == 790 && meterMatches;
         }
         ++stage;
         frame = 0;
-        if (stage == 8)
+        if (! succeeded || stage == 8)
         {
             juce::MessageManager::getInstance()->stopDispatchLoop();
             return;
