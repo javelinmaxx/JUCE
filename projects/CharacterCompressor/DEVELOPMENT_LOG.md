@@ -445,6 +445,12 @@ implementation, not a production-release claim.
   previews were rendered for all eight model/Upward palette combinations; the
   preview renderer verified each image's palette colors and saved all files.
 
+### 2026-10-19 — round toggle bezel
+- Changed the switch hardware from an oval plate to a circular bezel and washer,
+  nested in a compact hex retaining nut to match the supplied reference image.
+- Rebuilt the VST3 and regenerated all eight previews with the focused UI
+  renderer. No full test suite was run.
+
 ### 2026-10-19 — panel toggle with two-sided ON/OFF legend
 - Reworked the vertical switches around a metal bat-handle toggle reference:
   layered mounting washer, visible pivot hardware, steel lever, and rounded cap.

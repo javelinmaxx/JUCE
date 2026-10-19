@@ -298,18 +298,49 @@ void AnimatedSwitch::paintButton (juce::Graphics& g, bool highlighted, bool down
                 juce::Justification::centred);
 
     const auto pivot = juce::Point<float> (cx, pivotY);
-    const auto flange = juce::Rectangle<float> (cx - 15.0f, pivot.y - 8.0f, 30.0f, 16.0f);
+    juce::Path nut, innerNut;
+    for (int corner = 0; corner < 6; ++corner)
+    {
+        const auto angle = juce::MathConstants<float>::twoPi * static_cast<float> (corner) / 6.0f;
+        const juce::Point<float> point (cx + std::cos (angle) * 17.0f,
+                                        pivot.y + std::sin (angle) * 14.5f);
+        const juce::Point<float> inset (cx + std::cos (angle) * 14.3f,
+                                        pivot.y + std::sin (angle) * 12.0f);
+        if (corner == 0)
+        {
+            nut.startNewSubPath (point);
+            innerNut.startNewSubPath (inset);
+        }
+        else
+        {
+            nut.lineTo (point);
+            innerNut.lineTo (inset);
+        }
+    }
+    nut.closeSubPath();
+    innerNut.closeSubPath();
+    g.setColour (juce::Colours::black.withAlpha (0.30f));
+    g.fillPath (nut, juce::AffineTransform::translation (0.0f, 1.5f));
+    g.setGradientFill (juce::ColourGradient (secondary.brighter (0.16f), cx - 12.0f, pivot.y - 13.0f,
+                                             secondary.darker (0.34f), cx + 10.0f, pivot.y + 13.0f, false));
+    g.fillPath (nut);
+    g.setColour (secondary.darker (0.15f));
+    g.strokePath (nut, juce::PathStrokeType (0.8f));
+    g.setColour (surface.withAlpha (0.62f));
+    g.fillPath (innerNut);
+
+    const auto flange = juce::Rectangle<float> (cx - 12.0f, pivot.y - 12.0f, 24.0f, 24.0f);
     g.setColour (surface.darker (0.42f));
     g.fillEllipse (flange.expanded (1.0f));
     g.setGradientFill (juce::ColourGradient (secondary.brighter (0.18f), flange.getTopLeft(),
                                              secondary.darker (0.28f), flange.getBottomLeft(), false));
     g.fillEllipse (flange);
     g.setColour (surface.darker (0.35f));
-    g.fillEllipse (flange.reduced (3.0f, 2.0f));
+    g.fillEllipse (flange.reduced (3.0f));
     g.setColour (secondary.brighter (0.12f).withAlpha (0.85f));
     g.drawEllipse (flange, 0.7f);
 
-    for (const auto screwX : { cx - 10.0f, cx + 10.0f })
+    for (const auto screwX : { cx - 14.0f, cx + 14.0f })
     {
         g.setColour (surface.darker (0.42f));
         g.fillEllipse (screwX - 1.8f, pivot.y - 1.8f, 3.6f, 3.6f);
