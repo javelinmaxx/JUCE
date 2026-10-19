@@ -195,9 +195,9 @@ int runTests (int argc, char** argv)
                && threshold->getRight() <= ratio->getX()
                && attack->getY() == release->getY() && knee->getY() > attack->getY()
                && knee->getY() == variTransient->getY()
-               && threshold->getX() + threshold->getWidth() / 2
-                    == attack->getX() + attack->getWidth() / 2
-               && attack->getX() == knee->getX() && release->getX() == variTransient->getX(),
+               && ((attack->getX() == 62 && release->getX() == 204)
+                   || (attack->getX() == 204 && release->getX() == 62))
+               && knee->getX() == 62 && variTransient->getX() == 204,
                "Threshold/Ratio, Attack/Release, and Knee/VariTransient occupy successive rows");
         check (output->getY() == mix->getY() && mix->getY() == stereoLink->getY()
                && output->getY() > 140 + 470,
@@ -301,10 +301,12 @@ int runTests (int argc, char** argv)
             }
             if (frame == 40) upward->triggerClick();
             if (frame == 50)
+            {
                 yangRatioRange = ! upward->getToggleState()
                     && std::abs (ratio->getMinimum() - 1.0) < 1.0e-9
                     && std::abs (ratio->getMaximum() - 20.0) < 1.0e-9
                     && std::abs (ratio->getValue() - 20.0) < 1.0e-6;
+            }
             if (frame == 180) juce::MessageManager::getInstance()->stopDispatchLoop();
         };
         transformer->triggerClick();

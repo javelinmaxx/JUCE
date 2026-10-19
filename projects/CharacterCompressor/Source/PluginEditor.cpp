@@ -492,20 +492,30 @@ void CharacterCompressorEditor::paint (juce::Graphics& g)
 void CharacterCompressorEditor::paintMeter (juce::Graphics& g)
 {
     drawAnalogPanel (g, meterBounds.toFloat(), 10, theme.meterPanel, theme.grid);
+    const auto yinMode = upward.getToggleState();
     g.setColour (juce::Colour (0xffb9c8c4));
     g.setFont (juce::FontOptions (11.0f));
-    g.drawText (upward.getToggleState() ? "YIN GAIN" : "YANG GAIN REDUCTION",
+    g.drawText (yinMode ? "YIN GAIN" : "YANG GAIN REDUCTION",
                 356, 158, 156, 20, juce::Justification::centred);
     const juce::Rectangle<float> bar (360, 202, 14, 310), plot (410, 202, 98, 310);
     g.setColour (theme.gaugeTrack);
     g.fillRoundedRectangle (bar, 4);
-    for (int db = 0; db <= static_cast<int> (GainReductionHistory::maxReductionDb); db += 6)
+    const auto meterY = [&] (float db)
     {
-        const auto y = plot.getY() + plot.getHeight() * static_cast<float> (db) / GainReductionHistory::maxReductionDb;
+        return yinMode
+            ? plot.getY() + plot.getHeight() * (12.0f - db) / 24.0f
+            : plot.getY() + plot.getHeight() * db / GainReductionHistory::maxReductionDb;
+    };
+    const auto tickStart = yinMode ? -12 : 0;
+    const auto tickEnd = yinMode ? 12 : static_cast<int> (GainReductionHistory::maxReductionDb);
+    for (int db = tickStart; db <= tickEnd; db += 6)
+    {
+        const auto y = meterY (static_cast<float> (db));
         g.setColour (theme.grid);
         g.drawLine (plot.getX(), y, plot.getRight(), y);
         g.setColour (juce::Colour (0xffb9c8c4));
-        g.drawText (juce::String (db), 378, juce::roundToInt (y) - 8, 26, 16, juce::Justification::centred);
+        const auto caption = yinMode && db > 0 ? "+" + juce::String (db) : juce::String (db);
+        g.drawText (caption, 378, juce::roundToInt (y) - 8, 26, 16, juce::Justification::centred);
     }
     for (int second = 0; second <= static_cast<int> (GainReductionHistory::duration); ++second)
     {
@@ -514,20 +524,25 @@ void CharacterCompressorEditor::paintMeter (juce::Graphics& g)
         g.drawLine (x, plot.getY(), x, plot.getBottom());
     }
     const auto meterAccent = theme.meter;
-    const auto glow = std::clamp (0.22f + displayedReduction / 38.0f, 0.22f, 0.95f);
-    const auto fill = bar.withHeight (bar.getHeight() * std::clamp (displayedReduction / GainReductionHistory::maxReductionDb, 0.0f, 1.0f));
-    if (fill.getHeight() > 0)
+    const auto meterMaximum = yinMode ? 12.0f : GainReductionHistory::maxReductionDb;
+    const auto glow = std::clamp (0.22f + displayedReduction / (meterMaximum * 2.1f), 0.22f, 0.95f);
+    const auto fillAmount = std::clamp (displayedReduction / meterMaximum, 0.0f, 1.0f);
+    const auto fill = yinMode
+        ? juce::Rectangle<float> (bar.getX(), bar.getY(), bar.getWidth(), bar.getHeight() * fillAmount * 0.5f)
+        : bar.withHeight (bar.getHeight() * fillAmount);
+    const auto visibleFill = yinMode ? fill.withY (bar.getCentreY() - fill.getHeight()) : fill.withY (bar.getBottom() - fill.getHeight());
+    if (visibleFill.getHeight() > 0)
     {
         for (int layer = 5; layer >= 1; --layer)
         {
             const auto spread = static_cast<float> (layer) * 1.8f;
             g.setColour (meterAccent.withAlpha (glow * (0.10f / static_cast<float> (layer))));
-            g.fillRoundedRectangle (fill.expanded (spread, 0), 4 + spread);
+            g.fillRoundedRectangle (visibleFill.expanded (spread, 0), 4 + spread);
         }
         g.setColour (meterAccent.withAlpha (glow * 0.62f));
-        g.fillRoundedRectangle (fill, 3);
+        g.fillRoundedRectangle (visibleFill, 3);
         g.setColour (juce::Colours::white.withAlpha (glow * 0.52f));
-        g.drawVerticalLine (juce::roundToInt (fill.getCentreX()), fill.getY() + 2, fill.getBottom() - 2);
+        g.drawVerticalLine (juce::roundToInt (visibleFill.getCentreX()), visibleFill.getY() + 2, visibleFill.getBottom() - 2);
     }
     const auto now = juce::Time::getMillisecondCounterHiRes() * 0.001;
     juce::Path trace;
@@ -536,7 +551,7 @@ void CharacterCompressorEditor::paintMeter (juce::Graphics& g)
     history.visit (now, [&] (float position, float reduction, double time)
     {
         const auto x = plot.getX() + plot.getWidth() * position;
-        const auto y = plot.getY() + plot.getHeight() * reduction / GainReductionHistory::maxReductionDb;
+        const auto y = meterY (yinMode ? std::clamp (reduction, 0.0f, 12.0f) : reduction);
         if (! started || time - previous > 0.25) trace.startNewSubPath (x, y);
         else trace.lineTo (x, y);
         previous = time;
@@ -563,11 +578,12 @@ void CharacterCompressorEditor::paintMeter (juce::Graphics& g)
     g.setColour (meterAccent);
     g.setFont (juce::FontOptions (24.0f));
     g.setColour (meterAccent.withAlpha (glow * 0.22f));
-    g.drawText (juce::String (displayedReduction, 1) + " dB", 355, 541, 158, 34, juce::Justification::centred);
+    const auto valueText = (yinMode ? "+" : "") + juce::String (displayedReduction, 1) + " dB";
+    g.drawText (valueText, 355, 541, 158, 34, juce::Justification::centred);
     g.setColour (meterAccent.withAlpha (glow * 0.30f));
-    g.drawText (juce::String (displayedReduction, 1) + " dB", 356, 542, 156, 32, juce::Justification::centred);
+    g.drawText (valueText, 356, 542, 156, 32, juce::Justification::centred);
     g.setColour (juce::Colour (0xfff2f1eb));
-    g.drawText (juce::String (displayedReduction, 1) + " dB", 356, 542, 156, 32, juce::Justification::centred);
+    g.drawText (valueText, 356, 542, 156, 32, juce::Justification::centred);
 }
 
 void CharacterCompressorEditor::resized()
@@ -664,7 +680,8 @@ void CharacterCompressorEditor::timerCallback()
         repaint();
     }
     const auto raw = processor.reduction.load (std::memory_order_relaxed);
-    const auto gr = std::isfinite (raw) ? std::clamp (raw, 0.0f, GainReductionHistory::maxReductionDb) : 0.0f;
+    const auto maxGain = upwardMode ? 12.0f : GainReductionHistory::maxReductionDb;
+    const auto gr = std::isfinite (raw) ? std::clamp (raw, 0.0f, maxGain) : 0.0f;
     displayedReduction = std::max (gr, displayedReduction * std::exp (-elapsed / 0.25f));
     history.push (now, gr);
     repaint (meterBounds);

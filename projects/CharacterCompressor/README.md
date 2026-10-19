@@ -82,8 +82,10 @@ Upward in the Compressor section and VariTransient between Attack and Release.
 Knee and VariTransient use smaller knobs. Yin caps gain at 12 dB and limits
 Ratio to 1:1–2:1; Yang retains its 1:1–20:1 range. Ratio changes in 0.01
 increments, and switching modes scales the knob position so Yin 2:1 maps to
-Yang 20:1. The shortened right-hand GR
-display pairs a vertical 0–18 dB meter with a scrolling three-second history; Output,
+Yang 20:1. Yin internally swaps the Attack and Release time values while keeping
+their labels and automation controls unchanged. The shortened
+right-hand meter shows upward gain on a -12 to +12 dB scale in Yin, and 0–18 dB
+gain reduction in Yang, alongside a scrolling three-second history. Output,
 Mix, and Stereo Link sit directly below it. Bypass is a button beside the
 plug-in name. Sidechain combines Detector HPF, SC High Tilt, and Mid/Side.
 Transformer enable, Core Drive, and DC Bias share a Transformer Stage section.

@@ -722,3 +722,9 @@ implementation, not a production-release claim.
   normalized position across their ranges, so Yin 2:1 maps to Yang 20:1.
 - Added focused checks for the parameter increment and the Yin-to-Yang endpoint
   mapping.
+
+### 2026-10-20 — Yin gain meter and time-control allocation
+- Flipped the Yin meter to rise from its 0 dB center line, with a -12 to +12 dB
+  scale and a +12 dB ceiling. Yang retains its downward 0–18 dB GR scale.
+- Swapped the internal Attack and Release time values in Yin while keeping the
+  slider attachments, captions, and host automation assignments unchanged.

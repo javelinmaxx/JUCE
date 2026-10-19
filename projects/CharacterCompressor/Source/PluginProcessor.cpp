@@ -79,6 +79,8 @@ character::Parameters CharacterCompressorProcessor::readParameters() const noexc
     p.transformer = value (11) >= 0.5f; p.bypass = value (12) >= 0.5f;
     p.highTiltDb = value (19);
     p.upward = value (14) >= 0.5f;
+    if (p.upward)
+        std::swap (p.attackMs, p.releaseMs);
     p.stereoLink = value (15);
     p.midSide = value (16) >= 0.5f;
     p.evenHarmonics = value (17);
