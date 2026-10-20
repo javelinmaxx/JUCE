@@ -34,3 +34,7 @@
 ### 2026-10-20 — title and frame spacing refinement
 - Shifted the interface panels, meter, and controls up another 20 px to tighten
   the title gap and increase the lower frame margin.
+
+### 2026-10-20 — switch alignment
+- Vertically centered the Detector and Attenuator flip switches against their
+  respective knob rows and refreshed the editor preview.

@@ -547,8 +547,8 @@ void ShunDeEssEditor::resized()
     place (8, 350, 682, 54, 56);
     place (9, 410, 682, 54, 56);
     place (10, 470, 682, 54, 56);
-    listen.setBounds (230, up (550), 68, 76);
-    modeSwitch.setBounds (230, up (682), 68, 76);
+    listen.setBounds (230, up (550) + 11, 68, 76);
+    modeSwitch.setBounds (230, up (682) + 11, 68, 76);
 }
 
 void ShunDeEssEditor::timerCallback()
