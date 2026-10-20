@@ -131,3 +131,8 @@
   broadband input.
 - The test asserts detector activity, Smart broadband attenuation, and better
   high-frequency detail retention than Wideband.
+
+### 2026-10-20 — vertical Smart mode switch travel
+- Changed the Wide / Split / Smart switch handle to stay vertical and travel
+  along the centerline between the three labeled positions.
+- Refreshed the full-editor preview.

@@ -200,13 +200,13 @@ void ThreeWayModeToggle::paintButton (juce::Graphics& g, bool highlighted, bool 
     g.setColour (surface.darker (0.5f)); g.fillEllipse (cx - 6.0f, cy - 6.0f, 12.0f, 12.0f);
     g.setColour (secondary.darker (0.18f)); g.drawEllipse (cx - 5.3f, cy - 5.3f, 10.6f, 10.6f, 1.0f);
 
-    const auto theta = (position - 1.0f) * 0.42f;
-    // Keep the three lever throws close to the centre line of the switch.
-    const juce::Point<float> tip (cx + std::sin (theta) * 18.0f, cy - std::cos (theta) * 18.0f);
+    const auto handleY = cy + (position - 1.0f) * 11.0f;
+    const juce::Point<float> handleBase (cx, handleY + 5.0f);
+    const juce::Point<float> tip (cx, handleY - 5.0f);
     g.setColour (juce::Colours::black.withAlpha (0.38f));
-    g.drawLine (cx + 1.0f, cy + 1.0f, tip.x + 1.0f, tip.y + 1.0f, 5.6f);
-    g.setColour (juce::Colour (0xffc6cbd0)); g.drawLine (cx, cy, tip.x, tip.y, 4.8f);
-    g.setColour (juce::Colour (0xff8e969d)); g.drawLine (cx - 0.8f, cy, tip.x - 0.8f, tip.y, 1.0f);
+    g.drawLine (handleBase.x + 1.0f, handleBase.y + 1.0f, tip.x + 1.0f, tip.y + 1.0f, 5.6f);
+    g.setColour (juce::Colour (0xffc6cbd0)); g.drawLine (handleBase.x, handleBase.y, tip.x, tip.y, 4.8f);
+    g.setColour (juce::Colour (0xff8e969d)); g.drawLine (handleBase.x - 0.8f, handleBase.y, tip.x - 0.8f, tip.y, 1.0f);
     const auto cap = juce::Rectangle<float> (tip.x - 4.4f, tip.y - 4.4f, 8.8f, 8.8f);
     g.setGradientFill (juce::ColourGradient (juce::Colour (0xffe0e3e5), cap.getTopLeft(),
                                               juce::Colour (0xff777f86), cap.getBottomRight(), false));
