@@ -83,55 +83,7 @@ void drawBrushedMetalPanel (juce::Graphics& g, juce::Rectangle<float> bounds, fl
     g.restoreState();
 }
 
-CompressorTheme themeFor (int model, bool upward)
-{
-    const auto colour = [] (juce::uint32 argb) { return juce::Colour (argb); };
-    switch (model)
-    {
-        case 0: // FET: charcoal panel and dark-purple reduction.
-            if (upward)
-                return { colour (0xff1a1d21), colour (0xff242a30), colour (0xff101316),
-                         colour (0xffffffff), colour (0xffffffff), colour (0xff78578f),
-                         colour (0xff694881), colour (0xff302b35), colour (0xff343a40),
-                         colour (0xff302d35), colour (0xff8b789a), colour (0xff40364a) };
-            return { colour (0xff252b31), colour (0xff303840), colour (0xff151a1e),
-                     colour (0xfff0f1ee), colour (0xffb7c0c6), colour (0xffa9b1b9),
-                     colour (0xff80549b), colour (0xff35404a), colour (0xff414b53),
-                     colour (0xff354048), colour (0xffb8c2ca), colour (0xff586875) };
-        case 1: // VCA: white normal panels and white Yin knobs.
-            if (upward)
-                return { colour (0xff0e1e2a), colour (0xff192f40), colour (0xff09151f),
-                         colour (0xfff7fbff), colour (0xff93aebd), colour (0xff3b82a8),
-                         colour (0xff93b4c8), colour (0xff1d3443), colour (0xff304654),
-                         colour (0xff293f4e), colour (0xfff4f8fa), colour (0xffbdcbd2) };
-            return { colour (0xffe7ecef), colour (0xfff8fafb), colour (0xff0d1d2b),
-                     colour (0xff25343c), colour (0xff586b74), colour (0xff4389b3),
-                     colour (0xfff7fbff), colour (0xffe1e8ec), colour (0xff3c5262),
-                     colour (0xffcbd5da), colour (0xff6d8999), colour (0xff36566c) };
-        case 2: // Variable-mu: light green panel and white reduction.
-            if (upward)
-                return { colour (0xff355a46), colour (0xff406b52), colour (0xff182e25),
-                         colour (0xfff8fff7), colour (0xff91a990), colour (0xff5e8b5e),
-                         colour (0xff8dbd8c), colour (0xff354c3c), colour (0xff3b5140),
-                         colour (0xff354b3a), colour (0xff6f8f6d), colour (0xff314b38) };
-            return { colour (0xffe4f0df), colour (0xffd1e5c9), colour (0xff1d392b),
-                     colour (0xff253b29), colour (0xff526b52), colour (0xff70a963),
-                     colour (0xfff8fff7), colour (0xffd1e1ce), colour (0xff526b59),
-                     colour (0xff49624f), colour (0xff456b4b), colour (0xff203c2b) };
-        default: // Optical: white panel and red reduction.
-            if (upward)
-                return { colour (0xff281a1e), colour (0xff382126), colour (0xff151518),
-                         colour (0xfffff7f6), colour (0xffbda6a9), colour (0xff9d3d48),
-                         colour (0xffa83e49), colour (0xff3e272c), colour (0xff42383d),
-                         colour (0xff403238), colour (0xffa67e83), colour (0xff52373d) };
-            return { colour (0xfff5f7f6), colour (0xffe8edeb), colour (0xff252a30),
-                     colour (0xff283138), colour (0xff56646b), colour (0xfff8faf9),
-                     colour (0xffdc4a55), colour (0xffd6dedb), colour (0xff56616a),
-                     colour (0xff525d64), colour (0xff9caab0), colour (0xff4a555c) };
-    }
-}
-
-CompressorTheme brilliantTheme()
+CompressorTheme ebonyTheme()
 {
     return { juce::Colour (0xff100e12), juce::Colour (0xff1c1920), juce::Colour (0xff09080c),
         juce::Colour (0xffeee9e2), juce::Colour (0xffaaa0a0), juce::Colour (0xffb77b45),
@@ -386,7 +338,7 @@ juce::Slider::SliderLayout CompressorLookAndFeel::getSliderLayout (juce::Slider&
 
 ShunDeEssEditor::ShunDeEssEditor (ShunDeEssProcessor& p)
     : AudioProcessorEditor (&p), processor (p),
-      theme (p.parameters.getRawParameterValue ("smart")->load() >= 0.5f ? brilliantTheme() : themeFor (0, false))
+      theme (ebonyTheme())
 {
     setOpaque (true);
     setLookAndFeel (&look);
@@ -405,7 +357,7 @@ ShunDeEssEditor::ShunDeEssEditor (ShunDeEssProcessor& p)
     algorithm.setTitle ("De-esser mode");
     algorithm.textFromValueFunction = [] (double value)
     {
-        constexpr std::array<const char*, 4> names { "WIDE", "SPLIT", "BRILLIANT", "SMOOTH" };
+        constexpr std::array<const char*, 4> names { "WIDEBAND", "SPLIT", "BRILLIANT", "SMOOTH" };
         return juce::String (names[static_cast<size_t> (std::clamp (juce::roundToInt (value), 0, 3))]);
     };
     algorithm.valueFromTextFunction = [] (const juce::String& text)
@@ -428,6 +380,8 @@ ShunDeEssEditor::ShunDeEssEditor (ShunDeEssProcessor& p)
         spectral->setValueNotifyingHost (selected >= 2 ? 1.0f : 0.0f);
         spectral->endChangeGesture();
         split->endChangeGesture();
+        lastSplitMode = selected == 1 || selected == 3;
+        lastSpectralMode = selected >= 2;
         repaint (24, 340, 300, 125);
     };
     algorithmLabel.setText ("MODE", juce::dontSendNotification);
@@ -703,12 +657,6 @@ void ShunDeEssEditor::timerCallback()
     listen.advance (elapsed);
     const auto spectral = processor.parameters.getRawParameterValue ("smart")->load() >= 0.5f;
     const auto split = processor.parameters.getRawParameterValue ("mode")->load() >= 0.5f;
-    if (spectral != lastSpectralMode)
-    {
-        theme = spectral ? brilliantTheme() : themeFor (0, false);
-        applyTheme();
-        repaint();
-    }
     if (spectral != lastSpectralMode || split != lastSplitMode)
     {
         algorithm.setValue (spectral ? (split ? 3 : 2) : (split ? 1 : 0), juce::dontSendNotification);

@@ -759,8 +759,23 @@ int main (int argc, char** argv)
                 check (splitSelected == (mode % 2 == 1) && spectral == (mode >= 2),
                        "rotary mode position updates the compatible host parameters");
             }
-            check (modeKnob->getTextFromValue (3) == "SMOOTH" && modeKnob->getTextFromValue (2) == "BRILLIANT",
-                   "rotary mode positions display the new names");
+            check (modeKnob->getTextFromValue (0) == "WIDEBAND"
+                   && modeKnob->getTextFromValue (1) == "SPLIT"
+                   && modeKnob->getTextFromValue (2) == "BRILLIANT"
+                   && modeKnob->getTextFromValue (3) == "SMOOTH",
+                   "rotary mode positions display their full names");
+            modeKnob->setValue (0, juce::sendNotificationSync);
+            const auto ebonySample = editor->createComponentSnapshot (editor->getLocalBounds());
+            for (int mode = 1; mode < 4; ++mode)
+            {
+                modeKnob->setValue (mode, juce::sendNotificationSync);
+                juce::Timer::callPendingTimersSynchronously();
+                const auto sample = editor->createComponentSnapshot (editor->getLocalBounds());
+                check (ebonySample.getPixelAt (10, 10) == sample.getPixelAt (10, 10)
+                       && ebonySample.getPixelAt (34, 130) == sample.getPixelAt (34, 130)
+                       && ebonySample.getPixelAt (350, 300) == sample.getPixelAt (350, 300),
+                       "all modes share the Ebony background, panel, and meter palette");
+            }
             modeKnob->setValue (0, juce::sendNotificationSync);
             editorProcessor.parameters.getParameter ("mode")->setValueNotifyingHost (1.0f);
             editorProcessor.parameters.getParameter ("smart")->setValueNotifyingHost (1.0f);
