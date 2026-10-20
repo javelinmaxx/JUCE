@@ -2,6 +2,7 @@
 #include <cmath>
 #include <cstring>
 #include <iostream>
+#include <random>
 #include <stdexcept>
 
 namespace
@@ -65,12 +66,14 @@ void generateResponsePreviews (const juce::File& directory)
     {
         const char* file;
         float mode, detectorFrequency, detectorQ, attenuationFrequency, attenuationQ, depth;
+        bool smart;
     };
-    constexpr std::array<Example, 4> examples {{
-        { "wideband-default.png", 0, 6500, 1.4f, 6500, 1.2f, 8 },
-        { "wideband-high-shelf.png", 0, 9500, 2.4f, 9000, 3.0f, 14 },
-        { "split-tight-bell.png", 1, 8000, 2.6f, 7500, 3.2f, 16 },
-        { "split-wide-bell.png", 1, 5000, 0.8f, 5500, 0.7f, 10 }
+    constexpr std::array<Example, 5> examples {{
+        { "wideband-default.png", 0, 6500, 1.4f, 6500, 1.2f, 8, false },
+        { "wideband-high-shelf.png", 0, 9500, 2.4f, 9000, 3.0f, 14, false },
+        { "split-tight-bell.png", 1, 8000, 2.6f, 7500, 3.2f, 16, false },
+        { "split-wide-bell.png", 1, 5000, 0.8f, 5500, 0.7f, 10, false },
+        { "smart-spectral.png", 0, 8500, 2.8f, 7500, 2.6f, 12, true }
     }};
 
     if (! directory.createDirectory())
@@ -92,6 +95,7 @@ void generateResponsePreviews (const juce::File& directory)
         setParameter ("attenuationFrequency", example.attenuationFrequency);
         setParameter ("attenuationQ", example.attenuationQ);
         setParameter ("depth", example.depth);
+        setParameter ("smart", example.smart ? 1.0f : 0.0f);
 
         std::unique_ptr<juce::AudioProcessorEditor> editor (processor.createEditor());
         if (editor == nullptr)
@@ -113,11 +117,11 @@ int main (int argc, char** argv)
         if (argc > 2 && juce::String (argv[1]) == "--response-previews")
         {
             generateResponsePreviews (juce::File (argv[2]));
-            std::cout << "4 SHUN response previews generated\n";
+            std::cout << "5 SHUN response previews generated\n";
             return 0;
         }
         ShunDeEssProcessor processor;
-        check (processor.getParameters().size() == 13, "all de-esser parameters are registered");
+        check (processor.getParameters().size() == 14, "all de-esser parameters are registered");
         check (processor.getName() == "SHUN DE-ESS", "plug-in identity is SHUN DE-ESS");
         processor.prepareToPlay (48000, 256);
         set (processor, "threshold", -42);
@@ -187,6 +191,28 @@ int main (int argc, char** argv)
             identical = identical && std::memcmp (bypassed.getReadPointer (ch), original.getReadPointer (ch),
                 static_cast<size_t> (bypassed.getNumSamples()) * sizeof (float)) == 0;
         check (identical, "bypass preserves the input samples");
+
+        ShunDeEssProcessor smart;
+        smart.prepareToPlay (48000, 256);
+        set (smart, "smart", 1);
+        set (smart, "threshold", -48);
+        set (smart, "depth", 8);
+        juce::AudioBuffer<float> spectralNoise (2, 8192);
+        std::mt19937 random (0x51a7u);
+        std::uniform_real_distribution<float> noise (-0.2f, 0.2f);
+        for (int i = 0; i < spectralNoise.getNumSamples(); ++i)
+            for (int ch = 0; ch < spectralNoise.getNumChannels(); ++ch)
+                spectralNoise.setSample (ch, i, noise (random));
+        const auto noiseRmsBefore = measureRms (spectralNoise);
+        smart.processBlock (spectralNoise, midi);
+        bool finiteSmart = true;
+        for (int ch = 0; ch < spectralNoise.getNumChannels(); ++ch)
+            for (int i = 0; i < spectralNoise.getNumSamples(); ++i)
+                finiteSmart = finiteSmart && std::isfinite (spectralNoise.getSample (ch, i));
+        check (finiteSmart, "Smart FFT detector and zero-latency filterbank remain finite on broadband input");
+        check (measureRms (spectralNoise) < noiseRmsBefore * 0.99f,
+               "Smart mode attenuates spectrally flat broadband content");
+        check (smart.getLatencySamples() == 0, "Smart mode preserves zero reported latency");
 
         if (argc > 1 && juce::String (argv[1]) == "--editor")
         {

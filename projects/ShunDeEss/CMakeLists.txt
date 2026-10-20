@@ -15,7 +15,7 @@ juce_add_plugin(ShunDeEss
     PLUGIN_CODE ShDe
     FORMATS ${plugin_formats}
     PRODUCT_NAME "SHUN DE-ESS"
-    DESCRIPTION "Wideband and split-band de-esser"
+    DESCRIPTION "Wideband, split-band, and Smart spectral de-esser"
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
     NEEDS_MIDI_OUTPUT FALSE
@@ -27,7 +27,7 @@ target_sources(ShunDeEss PRIVATE Source/PluginProcessor.cpp Source/PluginEditor.
 target_compile_features(ShunDeEss PUBLIC cxx_std_17)
 target_compile_definitions(ShunDeEss PUBLIC
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
-target_link_libraries(ShunDeEss PRIVATE juce::juce_audio_utils
+target_link_libraries(ShunDeEss PRIVATE juce::juce_audio_utils juce::juce_dsp
     PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
 
 option(SHUN_BUILD_TESTS "Build SHUN DE-ESS processor tests" ON)

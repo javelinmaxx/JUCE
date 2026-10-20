@@ -99,3 +99,15 @@
 ### 2026-10-20 — GR panel alignment
 - Extended the GR panel background down 20 px to align its bottom edge with the
   Detector section.
+
+### 2026-10-20 — Smart spectral mode
+- Added a Wideband / Split-band / Smart selector in the Attenuator panel. Smart
+  uses an ebony palette while retaining the existing Detector and Attenuator
+  frequency/Q controls.
+- Added a rolling 1024-point FFT over 2–16 kHz. Detector Frequency weights the
+  analysis band; Detector Q sets temporal spectrum smoothing. The difference
+  between the current and smoothed spectra identifies narrow peaks, which are
+  restored with narrow filter bands after broadband attenuation.
+- Smart analysis updates every 256 samples and controls the existing audio
+  filterbank, keeping the plug-in's reported latency at zero. Added a focused
+  broadband-noise stability check.

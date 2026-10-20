@@ -130,6 +130,14 @@ CompressorTheme themeFor (int model, bool upward)
                      colour (0xff525d64), colour (0xff9caab0), colour (0xff4a555c) };
     }
 }
+
+CompressorTheme smartTheme()
+{
+    return { juce::Colour (0xff100e12), juce::Colour (0xff1c1920), juce::Colour (0xff09080c),
+        juce::Colour (0xffeee9e2), juce::Colour (0xffaaa0a0), juce::Colour (0xffb77b45),
+        juce::Colour (0xffe3a45b), juce::Colour (0xff211b20), juce::Colour (0xff33262a),
+        juce::Colour (0xff30262c), juce::Colour (0xff65504a), juce::Colour (0xff30252a) };
+}
 }
 
 void AnimatedSwitch::advance (float elapsed)
@@ -376,17 +384,35 @@ juce::Slider::SliderLayout CompressorLookAndFeel::getSliderLayout (juce::Slider&
 }
 
 ShunDeEssEditor::ShunDeEssEditor (ShunDeEssProcessor& p)
-    : AudioProcessorEditor (&p), processor (p), theme (themeFor (0, false))
+    : AudioProcessorEditor (&p), processor (p),
+      theme (p.parameters.getRawParameterValue ("smart")->load() >= 0.5f ? smartTheme() : themeFor (0, false))
 {
     setOpaque (true);
     setLookAndFeel (&look);
     modeSwitch.setTitle ("Attenuation mode");
     modeSwitch.setStateCaptions ("SPLIT", "WIDE");
     modeSwitch.setFunctionLabelVisible (false);
-    addAndMakeVisible (modeSwitch);
+    addAndMakeVisible (algorithm);
+    algorithm.addItemList ({ "WIDEBAND", "SPLIT-BAND", "SMART" }, 1);
+    algorithm.setTitle ("De-esser mode");
+    algorithm.setAccessible (true);
     addAndMakeVisible (bypass);
     addAndMakeVisible (listen);
     modeAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "mode", modeSwitch);
+    const auto smartInitial = p.parameters.getRawParameterValue ("smart")->load() >= 0.5f;
+    lastSmartMode = smartInitial;
+    lastSplitMode = p.parameters.getRawParameterValue ("mode")->load() >= 0.5f;
+    algorithm.setSelectedId (smartInitial ? 3 : (p.parameters.getRawParameterValue ("mode")->load() >= 0.5f ? 2 : 1),
+                             juce::dontSendNotification);
+    algorithm.onChange = [this]
+    {
+        const auto selected = algorithm.getSelectedId();
+        auto* split = processor.parameters.getParameter ("mode");
+        auto* smart = processor.parameters.getParameter ("smart");
+        split->setValueNotifyingHost (selected == 2 ? 1.0f : 0.0f);
+        smart->setValueNotifyingHost (selected == 3 ? 1.0f : 0.0f);
+        repaint (24, 340, 300, 125);
+    };
     bypassAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "bypass", bypass);
     listenAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "listen", listen);
 
@@ -642,7 +668,7 @@ void ShunDeEssEditor::resized()
     place (8, 358, 702, 76, 64);
     place (9, 434, 702, 76, 64);
     listen.setBounds (230, up (570) + 14, 68, 76);
-    modeSwitch.setBounds (230, up (702) + 14, 68, 76);
+    algorithm.setBounds (208, up (702) + 23, 100, 28);
 }
 
 void ShunDeEssEditor::timerCallback()
@@ -653,6 +679,23 @@ void ShunDeEssEditor::timerCallback()
     bypass.advance (elapsed);
     listen.advance (elapsed);
     modeSwitch.advance (elapsed);
+    const auto smart = processor.parameters.getRawParameterValue ("smart")->load() >= 0.5f;
+    const auto split = processor.parameters.getRawParameterValue ("mode")->load() >= 0.5f;
+    if (smart != lastSmartMode)
+    {
+        theme = smart ? smartTheme() : themeFor (0, false);
+        applyTheme();
+        algorithm.setSelectedId (smart ? 3 : (processor.parameters.getRawParameterValue ("mode")->load() >= 0.5f ? 2 : 1),
+                                 juce::dontSendNotification);
+        lastSmartMode = smart;
+        lastSplitMode = split;
+        repaint();
+    }
+    else if (split != lastSplitMode)
+    {
+        if (! smart) algorithm.setSelectedId (split ? 2 : 1, juce::dontSendNotification);
+        lastSplitMode = split;
+    }
     const auto rawValue = processor.reduction.load (std::memory_order_relaxed);
     const auto reduction = std::isfinite (rawValue) ? std::clamp (rawValue, 0.0f, 18.0f) : 0.0f;
     displayedReduction = std::max (reduction, displayedReduction * std::exp (-elapsed / 0.25f));
@@ -676,4 +719,12 @@ void ShunDeEssEditor::applyTheme()
     bypass.setTheme (theme);
     listen.setTheme (theme);
     modeSwitch.setTheme (theme);
+    algorithm.setColour (juce::ComboBox::backgroundColourId, theme.card);
+    algorithm.setColour (juce::ComboBox::outlineColourId, theme.grid);
+    algorithm.setColour (juce::ComboBox::textColourId, theme.text);
+    algorithm.setColour (juce::ComboBox::arrowColourId, theme.text);
+    look.setColour (juce::PopupMenu::backgroundColourId, theme.card);
+    look.setColour (juce::PopupMenu::textColourId, theme.text);
+    look.setColour (juce::PopupMenu::highlightedBackgroundColourId, theme.control);
+    look.setColour (juce::PopupMenu::highlightedTextColourId, theme.text);
 }

@@ -69,11 +69,13 @@ private:
     ShunDeEssProcessor& processor;
     CompressorLookAndFeel look;
     AnimatedSwitch bypass { "BYPASS", true, false, true }, listen { "LISTEN" }, modeSwitch { "MODE" };
+    juce::ComboBox algorithm;
     std::array<juce::Slider, 10> sliders;
     std::array<juce::Label, 10> labels;
     using State = juce::AudioProcessorValueTreeState;
     std::array<std::unique_ptr<State::SliderAttachment>, 10> attachments;
     std::unique_ptr<State::ButtonAttachment> bypassAttachment, listenAttachment, modeAttachment;
+    bool lastSmartMode = false, lastSplitMode = false;
     GainReductionHistory history;
     juce::Rectangle<int> meterBounds { 344, 140, 180, 490 };
     double lastTick = 0;

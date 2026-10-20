@@ -1,5 +1,6 @@
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_dsp/juce_dsp.h>
 
 class ShunDeEssProcessor final : public juce::AudioProcessor
 {
@@ -40,10 +41,21 @@ private:
     struct BiquadCoefficients { float b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0; };
     struct BiquadState { float x1 = 0, x2 = 0, y1 = 0, y2 = 0; };
     static float filterSample (float, BiquadState&, const BiquadCoefficients&) noexcept;
-    std::array<std::atomic<float>*, 13> raw {};
+    void analyseSmartSpectrum (float detectorFrequency, float detectorQ, float attenuationQ) noexcept;
+    std::array<std::atomic<float>*, 14> raw {};
     std::array<BiquadState, 2> detectorState {}, shelfState {}, bellState {};
     std::array<float, 2> envelopes {};
     BiquadCoefficients detectorFilter, shelfFilter, bellFilter;
+    juce::dsp::FFT spectralFft { 10 };
+    std::array<float, 2048> fftData {};
+    std::array<float, 1024> analysisRing {};
+    std::array<float, 513> meanSpectrum {};
+    std::array<std::array<BiquadState, 4>, 2> sparkleStates {};
+    std::array<BiquadCoefficients, 4> sparkleFilters {};
+    std::array<float, 4> sparkleWeights {};
+    int analysisPosition = 0, hopCounter = 0;
+    float smartFlatness = 0, smartAttenuation = 0;
+    bool smartMode = false;
     float sampleRate = 44100;
     float lastDetectorFrequency = -1, lastDetectorQ = -1;
     float lastAttenuationFrequency = -1, lastAttenuationQ = -1, lastDepth = -1;

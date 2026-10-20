@@ -3,8 +3,8 @@
 
 namespace
 {
-constexpr std::array<const char*, 13> parameterIds { "mode", "frequency", "q", "attenuationFrequency",
-    "attenuationQ", "threshold", "depth", "attack", "release", "output", "stereoLink", "bypass", "listen" };
+constexpr std::array<const char*, 14> parameterIds { "mode", "frequency", "q", "attenuationFrequency",
+    "attenuationQ", "threshold", "depth", "attack", "release", "output", "stereoLink", "bypass", "listen", "smart" };
 constexpr float pi = 3.14159265358979323846f;
 }
 
@@ -34,6 +34,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout ShunDeEssProcessor::createPa
     addFloat ("stereoLink", "Stereo link", 0, 100, 1, 100, 50, "%");
     layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "bypass", 1 }, "Bypass", false));
     layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "listen", 1 }, "Listen", false));
+    layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "smart", 1 }, "Smart spectral mode", false));
     return layout;
 }
 
@@ -53,8 +54,78 @@ void ShunDeEssProcessor::prepareToPlay (double rate, int)
     shelfState = {};
     bellState = {};
     envelopes = {};
+    analysisRing = {}; meanSpectrum = {}; sparkleStates = {}; sparkleWeights = {};
+    analysisPosition = hopCounter = 0; smartFlatness = smartAttenuation = 0;
     lastDetectorFrequency = lastDetectorQ = lastAttenuationFrequency = lastAttenuationQ = lastDepth = -1;
     reduction.store (0, std::memory_order_relaxed);
+}
+
+void ShunDeEssProcessor::analyseSmartSpectrum (float detectorFrequency, float detectorQ,
+                                                float attenuationQ) noexcept
+{
+    constexpr int fftSize = 1024;
+    for (int i = 0; i < fftSize; ++i)
+    {
+        const auto source = analysisRing[static_cast<size_t> ((analysisPosition + i) % fftSize)];
+        const auto window = 0.5f - 0.5f * std::cos (2.0f * pi * static_cast<float> (i) / (fftSize - 1));
+        fftData[static_cast<size_t> (i)] = source * window;
+    }
+    spectralFft.performFrequencyOnlyForwardTransform (fftData.data());
+    const auto smoothing = std::clamp (0.92f - (detectorQ - 0.5f) * 0.15f, 0.35f, 0.92f);
+    float arithmetic = 0, logarithmic = 0, weightSum = 0;
+    std::array<float, 513> magnitudes {};
+    for (int bin = 1; bin <= 512; ++bin)
+    {
+        const auto hz = static_cast<float> (bin) * sampleRate / fftSize;
+        const auto magnitude = fftData[static_cast<size_t> (bin)];
+        magnitudes[static_cast<size_t> (bin)] = magnitude;
+        const auto previous = meanSpectrum[static_cast<size_t> (bin)];
+        const auto mean = previous + (magnitude - previous) * (1.0f - smoothing);
+        meanSpectrum[static_cast<size_t> (bin)] = mean;
+        if (hz >= 2000.0f && hz <= 16000.0f)
+        {
+            const auto octave = std::log2 (std::max (hz, 1.0f) / detectorFrequency);
+            const auto weight = std::exp (-0.5f * octave * octave / 1.5f);
+            arithmetic += mean * weight;
+            logarithmic += std::log (std::max (mean, 1.0e-9f)) * weight;
+            weightSum += weight;
+        }
+    }
+    const auto meanLevel = arithmetic / std::max (weightSum, 1.0f);
+    smartFlatness = std::clamp (std::exp (logarithmic / std::max (weightSum, 1.0f))
+                              / std::max (meanLevel, 1.0e-9f), 0.0f, 1.0f);
+    smartAttenuation = std::clamp (smartFlatness * 1.8f, 0.0f, 1.0f);
+    // Subtract the smoothed spectrogram from the current spectrum. The strongest
+    // positive residuals identify narrow peaks to restore after broad attenuation.
+    sparkleWeights.fill (0.0f);
+    std::array<int, 4> chosenBins { 0, 0, 0, 0 };
+    for (int pick = 0; pick < 4; ++pick)
+    {
+        float best = 0; int bestBin = 0;
+        for (int bin = 1; bin <= 512; ++bin)
+        {
+            const auto hz = static_cast<float> (bin) * sampleRate / fftSize;
+            if (hz < 2000 || hz > 16000) continue;
+            bool nearChosen = false;
+            for (auto selected : chosenBins)
+                nearChosen = nearChosen || (selected != 0 && std::abs (selected - bin) < 5);
+            if (nearChosen) continue;
+            const auto residual = magnitudes[static_cast<size_t> (bin)] - meanSpectrum[static_cast<size_t> (bin)];
+            const auto weight = std::exp (-0.5f * std::pow (std::log2 (hz / detectorFrequency), 2.0f) / 1.5f);
+            const auto score = residual * weight;
+            if (score > best) { best = score; bestBin = bin; }
+        }
+        if (bestBin == 0 || best < meanLevel * 0.45f) break;
+        chosenBins[static_cast<size_t> (pick)] = bestBin;
+        const auto hz = static_cast<float> (bestBin) * sampleRate / fftSize;
+        const auto omega = 2.0f * pi * hz / sampleRate;
+        const auto alpha = std::sin (omega) / (2.0f * std::clamp (attenuationQ, 0.5f, 4.0f));
+        auto& f = sparkleFilters[static_cast<size_t> (pick)];
+        f = { alpha, 0.0f, -alpha, -2.0f * std::cos (omega), 1.0f - alpha };
+        const auto inv = 1.0f / (1.0f + alpha);
+        f.b0 *= inv; f.b1 *= inv; f.b2 *= inv; f.a1 *= inv; f.a2 *= inv;
+        sparkleWeights[static_cast<size_t> (pick)] = std::clamp (best / std::max (meanLevel, 1.0e-9f), 0.0f, 1.0f) * 0.28f;
+    }
 }
 
 void ShunDeEssProcessor::releaseResources()
@@ -178,6 +249,7 @@ void ShunDeEssProcessor::process (juce::AudioBuffer<float>& buffer, bool hostByp
     const auto stereoLink = value (10) * 0.01f;
     const auto bypass = hostBypassed || value (11) >= 0.5f;
     const auto listen = value (12) >= 0.5f;
+    smartMode = value (13) >= 0.5f;
     if (std::abs (detectorFrequency - lastDetectorFrequency) > 0.1f
         || std::abs (detectorQ - lastDetectorQ) > 0.001f
         || std::abs (attenuationFrequency - lastAttenuationFrequency) > 0.1f
@@ -196,6 +268,15 @@ void ShunDeEssProcessor::process (juce::AudioBuffer<float>& buffer, bool hostByp
             const auto c = static_cast<size_t> (ch);
             const auto input = buffer.getSample (ch, i);
             dry[c] = std::isfinite (input) ? input : 0.0f;
+            if (smartMode && ch == 0)
+            {
+                analysisRing[static_cast<size_t> (analysisPosition)] = dry[c];
+                if (++hopCounter >= 256)
+                {
+                    hopCounter = 0;
+                    analyseSmartSpectrum (detectorFrequency, detectorQ, attenuationQ);
+                }
+            }
             detected[c] = filterSample (dry[c], detectorState[c], detectorFilter);
             const auto magnitude = std::abs (detected[c]);
             auto& envelope = envelopes[c];
@@ -214,9 +295,18 @@ void ShunDeEssProcessor::process (juce::AudioBuffer<float>& buffer, bool hostByp
             const auto shelfOutput = filterSample (dry[c], shelfState[c], shelfFilter);
             const auto bellOutput = filterSample (dry[c], bellState[c], bellFilter);
             const auto shaped = splitBand ? bellOutput : shelfOutput;
-            const auto wet = listen ? detected[c] : dry[c] + amount * (shaped - dry[c]);
+            auto wet = listen ? detected[c] : dry[c] + amount * (shaped - dry[c]);
+            if (smartMode && ! listen)
+            {
+                const auto smartAmount = amount * smartAttenuation;
+                wet = dry[c] + smartAmount * (shelfOutput - dry[c]);
+                for (size_t peak = 0; peak < sparkleWeights.size(); ++peak)
+                    wet += filterSample (dry[c], sparkleStates[c][peak], sparkleFilters[peak])
+                         * smartAmount * sparkleWeights[peak];
+            }
             buffer.setSample (ch, i, bypass ? dry[c] : wet * outputGain);
         }
+        analysisPosition = (analysisPosition + 1) % 1024;
     }
     reduction.store (bypass ? 0.0f : blockReduction, std::memory_order_relaxed);
 }
