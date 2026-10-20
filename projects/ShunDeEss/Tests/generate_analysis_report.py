@@ -61,7 +61,7 @@ def shelf_filter(center=7200.0, q=2.8, depth=12.0, sample_rate=48000.0):
     omega = 2.0 * np.pi * center / sample_rate
     sine, cosine = np.sin(omega), np.cos(omega)
     gain = 10.0 ** (-depth / 40.0)
-    slope = np.clip(1.0 / q, 0.25, 2.0)
+    slope = np.clip(1.0 / q, 0.25, 1.0)
     radicand = max(0.0, (gain + 1.0 / gain) * (1.0 / slope - 1.0) + 2.0)
     alpha = sine * 0.5 * np.sqrt(radicand)
     beta = 2.0 * np.sqrt(gain) * alpha
@@ -80,10 +80,13 @@ def render(source, png_path, pdf_path):
     results, rejection_db, qresults = read_results(source)
     spectrum_path = Path(source).with_name("smart-spectral-spectrum.csv")
     spectrum = np.genfromtxt(spectrum_path, delimiter=",", names=True)
-    rolling_path = Path(source).with_name("smart-rolling-spectrogram.csv")
-    rolling = np.genfromtxt(rolling_path, delimiter=",", names=True)
-    rolling = rolling[np.isfinite(rolling["time_s"]) & np.isfinite(rolling["frequency_hz"])
-                      & np.isfinite(rolling["output_dbfs"])]
+    rolling_sets = {}
+    for q in (0.5, 1.2, 2.8, 4.0):
+        rolling_path = Path(source).with_name(f"smart-rolling-q-{q:.1f}.csv")
+        rolling = np.genfromtxt(rolling_path, delimiter=",", names=True)
+        rolling = rolling[np.isfinite(rolling["time_s"]) & np.isfinite(rolling["frequency_hz"])
+                          & np.isfinite(rolling["output_dbfs"]) & np.isfinite(rolling["change_db"])]
+        rolling_sets[q] = rolling
     measured = (spectrum["frequency_hz"] >= 2000.0) & (spectrum["frequency_hz"] <= 16000.0)
     if not np.any(measured):
         raise ValueError(f"No 2–16 kHz Smart spectrum samples in {spectrum_path}")
@@ -97,7 +100,7 @@ def render(source, png_path, pdf_path):
         "xtick.color": "#aebbc5",
         "ytick.color": "#aebbc5",
     })
-    fig = plt.figure(figsize=(13, 15), facecolor="#182128")
+    fig = plt.figure(figsize=(13, 16), facecolor="#182128")
     grid = fig.add_gridspec(4, 2, height_ratios=[1, 1, 0.9, 1.45], left=0.09, right=0.90,
                             top=0.83, bottom=0.17, hspace=0.48, wspace=0.28)
     axes = np.array([[fig.add_subplot(grid[0, 0]), fig.add_subplot(grid[0, 1])],
@@ -147,7 +150,22 @@ def render(source, png_path, pdf_path):
             label="Split-band bell")
     ax.axhline(0, color="#91a0aa", linewidth=0.8, alpha=0.6)
     ax.set_ylim(-15, 2)
-    ax.legend(frameon=False, labelcolor="#dce5eb", loc="lower left")
+    # The shelf is minimum-phase. Plot its phase too because the Smart path
+    # mixes this filtered signal with dry audio, which can affect the measured
+    # magnitude around a moving narrow tone.
+    omega = 2.0 * np.pi * frequencies / 48000.0
+    z1 = np.exp(-1j * omega)
+    phase_ax = ax.twinx()
+    for q, color, style in ((0.5, "#f0c77e", "--"), (2.8, "#91d2aa", ":"), (4.0, "#f08f84", "-.") ):
+        b_shelf, a_shelf = shelf_filter(q=q)
+        shelf_h = (b_shelf[0] + b_shelf[1] * z1 + b_shelf[2] * z1 * z1) / (1.0 + a_shelf[0] * z1 + a_shelf[1] * z1 * z1)
+        phase_ax.plot(frequencies, np.angle(shelf_h, deg=True), color=color, linewidth=1.4,
+                      linestyle=style, label=f"Wideband phase (Q {q:g})")
+    phase_ax.set_ylabel("Phase (degrees)", color="#f0c77e")
+    phase_ax.tick_params(axis="y", colors="#f0c77e")
+    phase_ax.set_ylim(-90, 90)
+    lines = [line for line in ax.get_lines() + phase_ax.get_lines() if not line.get_label().startswith("_")]
+    ax.legend(lines, [line.get_label() for line in lines], frameon=False, labelcolor="#dce5eb", loc="lower left", fontsize=8)
 
     x = np.arange(len(modes))
     ax = axes[1, 0]
@@ -193,27 +211,34 @@ def render(source, png_path, pdf_path):
     for spine in ax.spines.values(): spine.set_color("#52616c")
     ax.legend(frameon=False, labelcolor="#dce5eb", loc="lower right")
 
-    ax = fig.add_subplot(grid[3, :])
-    ax.set_facecolor("#202c34")
-    ax.set_title("Smart rolling attenuator shape · measured gain change during sweep", color="#eef2f5", loc="left",
-                 fontsize=12, fontweight="bold", pad=10)
-    # JUCE stream writes can repeat newline-terminated rows on some platforms;
-    # collapse repeated time/frequency cells before arranging FFT frames.
-    cells = np.rec.fromarrays([rolling["time_s"], rolling["frequency_hz"]], names="time,frequency")
-    _, first = np.unique(cells, return_index=True)
-    rolling = rolling[np.sort(first)]
-    times = np.unique(rolling["time_s"]); freqs = np.unique(rolling["frequency_hz"])
-    ti = np.searchsorted(times, rolling["time_s"]); fi = np.searchsorted(freqs, rolling["frequency_hz"])
-    change = np.full((len(times), len(freqs)), np.nan)
-    change[ti, fi] = rolling["change_db"]
-    if np.isnan(change).any():
-        change = np.where(np.isnan(change), np.nanmedian(change), change)
+    heatmap_grid = grid[3, :].subgridspec(2, 2, hspace=0.28, wspace=0.18)
+    fig.text(0.09, 0.355, "Rolling attenuator shape · measured output − input during the sweep",
+             color="#eef2f5", fontsize=12, fontweight="bold")
+    heat_axes = []
     norm = TwoSlopeNorm(vmin=-18, vcenter=0, vmax=6)
-    mesh = ax.pcolormesh(times, freqs, change.T, shading="auto", cmap="RdBu_r", norm=norm)
-    ax.set_ylim(2000, 16000); ax.set_xlabel("Time (s)"); ax.set_ylabel("Frequency (Hz)")
-    ax.set_yticks([2000, 4000, 6000, 8000, 10000, 12000, 14000, 16000], ["2k", "4k", "6k", "8k", "10k", "12k", "14k", "16k"])
-    cb = fig.colorbar(mesh, ax=ax, pad=0.012); cb.set_label("Measured output − input (dB)", color="#c6d0d8"); cb.ax.tick_params(colors="#aebbc5")
-    for spine in ax.spines.values(): spine.set_color("#52616c")
+    for index, q in enumerate((0.5, 1.2, 2.8, 4.0)):
+        ax = fig.add_subplot(heatmap_grid[index // 2, index % 2])
+        heat_axes.append(ax)
+        ax.set_facecolor("#202c34")
+        rolling = rolling_sets[q]
+        cells = np.rec.fromarrays([rolling["time_s"], rolling["frequency_hz"]], names="time,frequency")
+        _, first = np.unique(cells, return_index=True)
+        rolling = rolling[np.sort(first)]
+        times = np.unique(rolling["time_s"]); freqs = np.unique(rolling["frequency_hz"])
+        ti = np.searchsorted(times, rolling["time_s"]); fi = np.searchsorted(freqs, rolling["frequency_hz"])
+        change = np.full((len(times), len(freqs)), np.nan)
+        change[ti, fi] = rolling["change_db"]
+        if np.isnan(change).any():
+            change = np.where(np.isnan(change), np.nanmedian(change), change)
+        mesh = ax.pcolormesh(times, freqs, change.T, shading="auto", cmap="RdBu_r", norm=norm)
+        mesh.set_rasterized(True)
+        ax.set_title(f"Attenuator Q {q:.1f}", color="#eef2f5", loc="left", fontsize=9, pad=4)
+        ax.set_ylim(2000, 16000); ax.set_xlabel("Time (s)"); ax.set_ylabel("Frequency (Hz)")
+        ax.set_yticks([2000, 6000, 10000, 14000], ["2k", "6k", "10k", "14k"])
+        ax.tick_params(labelsize=8)
+        for spine in ax.spines.values(): spine.set_color("#52616c")
+    cb = fig.colorbar(mesh, ax=heat_axes, pad=0.012, fraction=0.025)
+    cb.set_label("Measured output − input (dB)", color="#c6d0d8"); cb.ax.tick_params(colors="#aebbc5")
 
     smart_detail = results["Smart"][3]
     wide_detail = results["Wideband"][3]
@@ -223,7 +248,7 @@ def render(source, png_path, pdf_path):
              f"(+{delta:.1f} points).",
              color="#e7ad5b", fontsize=11, fontweight="bold")
     fig.text(0.08, 0.065,
-             f"It retains {results['Smart'][2]:.1f}% of the 500 Hz body. Bottom panel maps measured Smart gain change over frequency and time: cuts below 0 dB, restored detail above 0 dB.",
+             f"It retains {results['Smart'][2]:.1f}% of the 500 Hz body. Heatmaps compare measured gain change at Q 0.5, 1.2, 2.8, and 4.0; blue is attenuation, red is gain restoration.",
              color="#c4d0d8", fontsize=9.5)
 
     for path in (png_path, pdf_path):

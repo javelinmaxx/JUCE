@@ -171,3 +171,11 @@
 - Changed the rolling panel to map measured output-minus-input gain per FFT
   frame, using a zero-centered diverging scale so attenuation cuts and restored
   detail are visually distinct as the swept tone moves through the band.
+- Added Q 0.5, 1.2, 2.8, and 4.0 processor runs to compare the moving shape.
+- Phase inspection traced the low-Q positive ridge to the RBJ high-shelf slope
+  exceeding its unity-safe range. Capped the slope at 1.0 and added a regression
+  check that low-Q wideband attenuation does not boost its passband.
+- The Smart restoration path also added a phase-rotated raw band-pass signal to
+  dry audio, creating a comb-like ridge around detected detail. Replaced it with
+  a controlled +6 dB peaking EQ blended by the existing peak-confidence weight.
+- Added wideband shelf phase curves to the report for low, nominal, and high Q.
