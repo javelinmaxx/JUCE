@@ -240,7 +240,9 @@ void generateAnalysisReport (const juce::File& destination)
         + "Detector controls: 7.8 kHz center, Q 2.2, −48 dB threshold. Attenuator controls: 7.2 kHz center, Q 2.8, "
           "12 dB maximum depth. The retained-detail column is a sine/cosine projection of the final 8192 samples; "
           "it shows how much of the isolated 7.8 kHz tone survives broadband attenuation. Smart is expected to "
-          "retain more of that tone than Wideband while still reducing the broadband mock input.\n";
+          "retain more of that tone than Wideband while still reducing the broadband mock input.\n\n"
+          "Plotted report: [PNG](detector-attenuator-mock-report.png) · "
+          "[PDF](detector-attenuator-mock-report.pdf). Regenerate with `Tests/generate_analysis_report.py`.\n";
 
     if (! destination.getParentDirectory().createDirectory() || ! destination.replaceWithText (report))
         throw std::runtime_error ("could not write detector/attenuator mock-signal report");

@@ -62,6 +62,13 @@ build-shun-deess/ShunDeEssTests --analysis-report projects/ShunDeEss/Tests/Repor
 
 The committed example report is at
 [Tests/Reports/detector-attenuator-mock-report.md](Tests/Reports/detector-attenuator-mock-report.md).
+Its plotted versions are available as [PNG](Tests/Reports/detector-attenuator-mock-report.png)
+and [PDF](Tests/Reports/detector-attenuator-mock-report.pdf). Regenerate both from
+the report data with:
+
+```bash
+python3 projects/ShunDeEss/Tests/generate_analysis_report.py
+```
 
 JUCE is provided by the parent repository. For system requirements, see the
 root [README](../../README.md).
