@@ -43,3 +43,6 @@
 - Removed the wet/dry Mix control and parameter; de-essing now always applies
   the detector-controlled attenuation, with output gain and bypass retained.
 - Recentered Output and Stereo Link in the output section.
+
+### 2026-10-20 — output control sizing
+- Increased the Output and Stereo Link knobs to match the Detector knob bounds.
