@@ -69,12 +69,13 @@ void generateResponsePreviews (const juce::File& directory)
         float mode, detectorFrequency, detectorQ, attenuationFrequency, attenuationQ, depth;
         bool smart;
     };
-    constexpr std::array<Example, 5> examples {{
+    constexpr std::array<Example, 6> examples {{
         { "wideband-default.png", 0, 6500, 1.4f, 6500, 1.2f, 8, false },
         { "wideband-high-shelf.png", 0, 9500, 2.4f, 9000, 3.0f, 14, false },
         { "split-tight-bell.png", 1, 8000, 2.6f, 7500, 3.2f, 16, false },
         { "split-wide-bell.png", 1, 5000, 0.8f, 5500, 0.7f, 10, false },
-        { "smart-spectral.png", 0, 8500, 2.8f, 7500, 2.6f, 12, true }
+        { "brilliant-spectral.png", 0, 8500, 2.8f, 7500, 2.6f, 12, true },
+        { "smooth-spectral.png", 1, 8500, 2.8f, 7500, 2.6f, 12, true }
     }};
 
     if (! directory.createDirectory())
@@ -208,12 +209,12 @@ ModeReport runMockMode (int mode, bool smartMode, float attenuationQ = 2.8f)
              std::move (smartInputSamples), std::move (smartOutputSamples) };
 }
 
-void writeSmartSpectrumCsv (const juce::File& destination, const ModeReport& smart)
+void writeBrilliantSpectrumCsv (const juce::File& destination, const ModeReport& smart)
 {
     constexpr int fftSize = 8192;
     constexpr double pi = 3.14159265358979323846;
     if (smart.smartInputSamples.size() != fftSize || smart.smartOutputSamples.size() != fftSize)
-        throw std::runtime_error ("Smart mock signal is missing samples for its measured spectrum");
+        throw std::runtime_error ("Brilliant mock signal is missing samples for its measured spectrum");
 
     juce::dsp::FFT fft (13);
     std::vector<float> inputSpectrum (static_cast<size_t> (fftSize * 2), 0.0f);
@@ -232,7 +233,7 @@ void writeSmartSpectrumCsv (const juce::File& destination, const ModeReport& sma
     destination.deleteFile();
     juce::FileOutputStream stream (destination);
     if (! stream.openedOk() || ! stream.writeText ("frequency_hz,input_dbfs,output_dbfs,change_db\n", false, false, "\n"))
-        throw std::runtime_error ("could not create Smart spectral measurement CSV");
+        throw std::runtime_error ("could not create Brilliant spectral measurement CSV");
     for (int bin = 1; bin <= fftSize / 2; ++bin)
     {
         const auto frequency = static_cast<float> (bin) * 48000.0f / fftSize;
@@ -243,7 +244,7 @@ void writeSmartSpectrumCsv (const juce::File& destination, const ModeReport& sma
         const auto row = juce::String (frequency, 2) + "," + juce::String (inputDb, 4) + ","
                        + juce::String (outputDb, 4) + "," + juce::String (outputDb - inputDb, 4) + "\n";
         if (! stream.writeText (row, false, false, "\n"))
-            throw std::runtime_error ("could not write Smart spectral measurement CSV");
+            throw std::runtime_error ("could not write Brilliant spectral measurement CSV");
     }
 }
 
@@ -370,7 +371,7 @@ RollingMeasurements writeRollingModeSpectrogram (const juce::File& destination, 
             }
             const auto row = juce::String (time, 3) + "," + juce::String (f, 1) + ","
                 + juce::String (inDb, 2) + "," + juce::String (outDb, 2) + "," + juce::String (outDb - inDb, 2) + "\n";
-            if (!stream.writeText (row, false, false, "\n")) throw std::runtime_error ("could not write rolling Smart spectrogram CSV");
+            if (!stream.writeText (row, false, false, "\n")) throw std::runtime_error ("could not write rolling Brilliant spectrogram CSV");
         }
     }
     return { static_cast<float> (detailChangeSum / std::max (detailChangeCount, 1)),
@@ -383,6 +384,7 @@ void generateAnalysisReport (const juce::File& destination)
     const auto wide = runMockMode (0, false);
     const auto split = runMockMode (1, false);
     const auto smart = runMockMode (0, true);
+    const auto smooth = runMockMode (1, true);
     constexpr std::array<float, 4> smartQValues { 0.5f, 1.2f, 2.8f, 4.0f };
     std::array<ModeReport, smartQValues.size()> qReports;
     for (size_t i = 0; i < smartQValues.size(); ++i)
@@ -423,15 +425,20 @@ void generateAnalysisReport (const juce::File& destination)
         + juce::String (100.0f * (1.0f - split.outputRms / std::max (split.inputRms, 1.0e-9f)), 1)
         + "% | " + juce::String (split.lowToneGain * 100.0f, 1)
         + "% | " + juce::String (split.detailToneGain * 100.0f, 1) + "% |\n"
-        + "| Smart | " + juce::String (smart.grDb, 2) + " | "
+        + "| Brilliant | " + juce::String (smart.grDb, 2) + " | "
         + juce::String (100.0f * (1.0f - smart.outputRms / std::max (smart.inputRms, 1.0e-9f)), 1)
         + "% | " + juce::String (smart.lowToneGain * 100.0f, 1)
-        + "% | " + juce::String (smart.detailToneGain * 100.0f, 1) + "% |\n\n"
+        + "% | " + juce::String (smart.detailToneGain * 100.0f, 1) + "% |\n"
+        + "| Smooth | " + juce::String (smooth.grDb, 2) + " | "
+        + juce::String (100.0f * (1.0f - smooth.outputRms / std::max (smooth.inputRms, 1.0e-9f)), 1)
+        + "% | " + juce::String (smooth.lowToneGain * 100.0f, 1)
+        + "% | " + juce::String (smooth.detailToneGain * 100.0f, 1) + "% |\n\n"
         + "Detector controls: 7.8 kHz center, Q 2.2, −48 dB threshold. Attenuator controls: 7.2 kHz center, Q 2.8, "
           "12 dB maximum depth. The retained-detail column is a sine/cosine projection of the final 8192 samples; "
-          "it shows how much of the isolated 7.8 kHz tone survives broadband attenuation. Smart is expected to "
-          "retain more of that tone than Wideband while still reducing the broadband mock input.\n\n"
-          "### Smart attenuator-Q detail check\n\n"
+          "it shows how much of the isolated 7.8 kHz tone survives broadband attenuation. Brilliant is expected to "
+          "retain more of that tone than Wideband while still reducing the broadband mock input. "
+          "Smooth reverses Brilliant's narrow-band restoration for additional detail suppression.\n\n"
+          "### Brilliant attenuator-Q detail check\n\n"
           "| Attenuator Q | Broadband RMS reduction | 7.8 kHz detail retained |\n"
           "|---:|---:|---:|\n"
         + [&]
@@ -448,7 +455,7 @@ void generateAnalysisReport (const juce::File& destination)
             "affects detail retention: the narrower high-Q restoration retains more of this tone, while higher Q "
             "increases broadband attenuation. The phase plot shows the shelf's minimum-phase rotation; at low Q, "
             "the original RBJ slope setting allowed passband peaking. The shelf slope is now capped at 1.0, and a "
-            "processor test verifies that Q 0.5 does not boost the shelf passband. The Smart restoration retains "
+            "processor test verifies that Q 0.5 does not boost the shelf passband. The Brilliant restoration retains "
             "its additive band-pass path, whose phase response is plotted alongside the shelf phase. Four rolling "
             "heatmaps compare Q 0.5, 1.2, 2.8, and 4.0 using distinct measured runs. The rolling input is a "
             "four-second time-varying mock with two gated 4.5 kHz high-pass noise pulses to mimic sibilant "
@@ -464,7 +471,7 @@ void generateAnalysisReport (const juce::File& destination)
     const auto rollingCsv = destination.getSiblingFile ("smart-rolling-spectrogram.csv");
     if (! destination.getParentDirectory().createDirectory())
         throw std::runtime_error ("could not create detector/attenuator report directory");
-    writeSmartSpectrumCsv (spectrumCsv, smart);
+    writeBrilliantSpectrumCsv (spectrumCsv, smart);
     constexpr std::array<float, 4> heatmapQValues { 0.5f, 1.2f, 2.8f, 4.0f };
     std::array<RollingMeasurements, heatmapQValues.size()> heatmapMeasurements {};
     for (size_t i = 0; i < heatmapQValues.size(); ++i)
@@ -486,22 +493,23 @@ void generateAnalysisReport (const juce::File& destination)
     report += "\nNegative values indicate attenuation. The blue shaded regions in the rolling heatmaps "
               "mark these two noise pulses; the measured band energy should stay below 0 dB for every Q.\n\n";
     report += "### Time-varying pulse test across all modes\n\n"
-              "The same seeded input and Q sweep were processed in Wideband, Split-band, and Smart. The "
+              "The same seeded input and Q sweep were processed in all four modes. The "
               "detector threshold is −30 dB; the swept detail tone is kept below it so the quiet baseline releases to "
               "unity, while the gated noise bursts cross threshold. Values are integrated output − input "
               "energy from 4.5–12 kHz during pulse centers and quiet intervals.\n\n"
               "| Mode | Q 0.5 (pulse / quiet) | Q 1.2 (pulse / quiet) | Q 2.8 (pulse / quiet) | Q 4.0 (pulse / quiet) |\n"
               "|---|---:|---:|---:|---:|\n";
-    std::array<std::array<RollingMeasurements, heatmapQValues.size()>, 3> pulseModeMeasurements {};
-    const std::array<const char*, 3> pulseModeNames { "Wideband", "Split-band", "Smart" };
+    std::array<std::array<RollingMeasurements, heatmapQValues.size()>, 4> pulseModeMeasurements {};
+    const std::array<const char*, 4> pulseModeNames { "Wideband", "Split-band", "Brilliant", "Smooth" };
     for (size_t modeIndex = 0; modeIndex < pulseModeNames.size(); ++modeIndex)
     {
-        const auto mode = modeIndex == 1 ? 1 : 0;
-        const auto smartMode = modeIndex == 2;
+        const auto mode = modeIndex == 1 || modeIndex == 3 ? 1 : 0;
+        const auto smartMode = modeIndex >= 2;
         report += "| " + juce::String (pulseModeNames[modeIndex]) + " |";
         for (size_t qIndex = 0; qIndex < heatmapQValues.size(); ++qIndex)
         {
-            const auto stem = modeIndex == 0 ? "wideband" : modeIndex == 1 ? "splitband" : "smart-pulse";
+            const auto stem = modeIndex == 0 ? "wideband" : modeIndex == 1 ? "splitband"
+                            : modeIndex == 2 ? "smart-pulse" : "smooth-pulse";
             const auto file = destination.getSiblingFile (juce::String (stem) + "-rolling-q-"
                 + juce::String (heatmapQValues[qIndex], 1) + ".csv");
             pulseModeMeasurements[modeIndex][qIndex] = writeRollingModeSpectrogram (
@@ -512,8 +520,8 @@ void generateAnalysisReport (const juce::File& destination)
         }
         report += "\n";
     }
-    report += "\n### Smart detector-Q time-response test\n\n"
-              "Smart pulse-focused runs hold Attenuator Q at 2.8 and vary Detector Q. Values are integrated "
+    report += "\n### Brilliant detector-Q time-response test\n\n"
+              "Brilliant pulse-focused runs hold Attenuator Q at 2.8 and vary Detector Q. Values are integrated "
               "4.5–12 kHz output − input during pulse centers and quiet intervals.\n\n"
               "| Detector Q | Pulse change | Quiet change |\n"
               "|---:|---:|---:|\n";
@@ -527,22 +535,24 @@ void generateAnalysisReport (const juce::File& destination)
             + juce::String (detectorQMeasurements[i].sibilanceChangeDb, 2) + " dB | "
             + juce::String (detectorQMeasurements[i].idleChangeDb, 2) + " dB |\n";
     }
-    report += "\n[Smart detector-Q pulse response plots](smart-detector-q-report.png) · "
+    report += "\n[Brilliant detector-Q pulse response plots](smart-detector-q-report.png) · "
               "[PDF](smart-detector-q-report.pdf).\n\n";
     report += "\nPulse values should be more negative than quiet-baseline values, showing detector-linked "
               "attenuation that follows the bursts. "
-              "[Wideband/Split-band/Smart pulse plots](wide-split-pulse-test-report.png) · "
+              "[Four-mode pulse plots](wide-split-pulse-test-report.png) · "
               "[PDF](wide-split-pulse-test-report.pdf).\n\n";
-    if (! destination.replaceWithText (report))
+    if (! destination.replaceWithText (report.trimEnd() + "\n", false, false, "\n"))
         throw std::runtime_error ("could not write detector/attenuator mock-signal report");
-    check (wide.grDb > 0.0f && split.grDb > 0.0f && smart.grDb > 0.0f,
+    check (wide.grDb > 0.0f && split.grDb > 0.0f && smart.grDb > 0.0f && smooth.grDb > 0.0f,
            "all detector modes report gain reduction on the mock sibilance input");
+    check (smooth.detailToneGain < smart.detailToneGain,
+           "Smooth suppresses more narrow-band detail than Brilliant");
     check (detectorRejectionDb > 10.0f, "detector Listen path favors its selected frequency over out-of-band audio");
-    check (smart.outputRms < smart.inputRms * 0.90f, "Smart attenuates the broadband mock input");
+    check (smart.outputRms < smart.inputRms * 0.90f, "Brilliant attenuates the broadband mock input");
     check (smart.detailToneGain > wide.detailToneGain * 1.05f,
-           "Smart retains more isolated high-frequency detail than Wideband");
+           "Brilliant retains more isolated high-frequency detail than Wideband");
     check (qReports.back().detailToneGain > qReports.front().detailToneGain + 0.02f,
-           "Smart attenuator Q measurably affects retained detail");
+           "Brilliant attenuator Q measurably affects retained detail");
     std::array<float, heatmapQValues.size()> heatmapDetailChanges {};
     std::array<float, heatmapQValues.size()> sibilanceChanges {};
     for (size_t i = 0; i < heatmapMeasurements.size(); ++i)
@@ -552,9 +562,9 @@ void generateAnalysisReport (const juce::File& destination)
     }
     const auto heatmapMinMax = std::minmax_element (heatmapDetailChanges.begin(), heatmapDetailChanges.end());
     check (*heatmapMinMax.second - *heatmapMinMax.first > 0.1f,
-           "rolling heatmap changes with Smart attenuator Q");
+           "rolling heatmap changes with Brilliant attenuator Q");
     check (std::all_of (sibilanceChanges.begin(), sibilanceChanges.end(), [] (float change) { return change < 0.0f; }),
-           "Smart attenuates the gated sibilance noise pulses at every tested Q");
+           "Brilliant attenuates the gated sibilance noise pulses at every tested Q");
     for (size_t modeIndex = 0; modeIndex < pulseModeNames.size(); ++modeIndex)
     {
         const auto modeAttenuatesEveryPulse = std::all_of (
@@ -567,15 +577,16 @@ void generateAnalysisReport (const juce::File& destination)
         check (modeAttenuatesEveryPulse, modeIndex == 0
             ? "Wideband attenuates the gated sibilance pulses at every tested Q"
             : modeIndex == 1 ? "Split-band attenuates the gated sibilance pulses at every tested Q"
-                             : "Smart attenuates the gated sibilance pulses above its quiet baseline at every tested Q");
+            : modeIndex == 2 ? "Brilliant attenuates the gated sibilance pulses above its quiet baseline at every tested Q"
+                             : "Smooth attenuates the gated sibilance pulses above its quiet baseline at every tested Q");
     }
     const auto detectorPulseExtrema = std::minmax_element (detectorQMeasurements.begin(), detectorQMeasurements.end(),
         [] (const auto& a, const auto& b) { return a.sibilanceChangeDb < b.sibilanceChangeDb; });
     check (std::all_of (detectorQMeasurements.begin(), detectorQMeasurements.end(), [] (const auto& measurements)
           { return measurements.sibilanceChangeDb < measurements.idleChangeDb - 0.5f; }),
-          "Smart detector Q settings all attenuate pulses above their quiet baseline");
+          "Brilliant detector Q settings all attenuate pulses above their quiet baseline");
     check (detectorPulseExtrema.second->sibilanceChangeDb - detectorPulseExtrema.first->sibilanceChangeDb > 0.05f,
-           "Smart detector Q changes measured pulse response");
+           "Brilliant detector Q changes measured pulse response");
 }
 }
 
@@ -587,7 +598,7 @@ int main (int argc, char** argv)
         if (argc > 2 && juce::String (argv[1]) == "--response-previews")
         {
             generateResponsePreviews (juce::File (argv[2]));
-            std::cout << "5 SHUN response previews generated\n";
+            std::cout << "6 SHUN response previews generated\n";
             return 0;
         }
         if (argc > 2 && juce::String (argv[1]) == "--analysis-report")
@@ -599,6 +610,19 @@ int main (int argc, char** argv)
         ShunDeEssProcessor processor;
         check (processor.getParameters().size() == 14, "all de-esser parameters are registered");
         check (processor.getName() == "SHUN DE-ESS", "plug-in identity is SHUN DE-ESS");
+        for (int mode = 0; mode < 4; ++mode)
+        {
+            ShunDeEssProcessor saved;
+            set (saved, "mode", static_cast<float> (mode % 2));
+            set (saved, "smart", mode >= 2 ? 1.0f : 0.0f);
+            juce::MemoryBlock state;
+            saved.getStateInformation (state);
+            ShunDeEssProcessor restored;
+            restored.setStateInformation (state.getData(), static_cast<int> (state.getSize()));
+            check ((restored.parameters.getRawParameterValue ("mode")->load() >= 0.5f) == (mode % 2 == 1)
+                   && (restored.parameters.getRawParameterValue ("smart")->load() >= 0.5f) == (mode >= 2),
+                   "all four modes survive a session state round trip");
+        }
         processor.prepareToPlay (48000, 256);
         set (processor, "threshold", -42);
         set (processor, "depth", 12);
@@ -695,14 +719,24 @@ int main (int argc, char** argv)
                 spectralNoise.setSample (ch, i, noise (random));
         const auto noiseRmsBefore = measureRms (spectralNoise);
         smart.processBlock (spectralNoise, midi);
-        bool finiteSmart = true;
+        bool finiteBrilliant = true;
         for (int ch = 0; ch < spectralNoise.getNumChannels(); ++ch)
             for (int i = 0; i < spectralNoise.getNumSamples(); ++i)
-                finiteSmart = finiteSmart && std::isfinite (spectralNoise.getSample (ch, i));
-        check (finiteSmart, "Smart FFT detector and zero-latency filterbank remain finite on broadband input");
+                finiteBrilliant = finiteBrilliant && std::isfinite (spectralNoise.getSample (ch, i));
+        check (finiteBrilliant, "Brilliant FFT detector and zero-latency filterbank remain finite on broadband input");
         check (measureRms (spectralNoise) < noiseRmsBefore * 0.99f,
-               "Smart mode attenuates spectrally flat broadband content");
-        check (smart.getLatencySamples() == 0, "Smart mode preserves zero reported latency");
+               "Brilliant mode attenuates spectrally flat broadband content");
+        check (smart.getLatencySamples() == 0, "Brilliant mode preserves zero reported latency");
+
+        const auto brilliantReport = runMockMode (0, true);
+        const auto smoothReport = runMockMode (1, true);
+        check (smoothReport.grDb > 0.0f, "Smooth uses the spectral detector");
+        check (smoothReport.outputRms < smoothReport.inputRms,
+               "Smooth attenuates the same processed band as Brilliant");
+        check (smoothReport.detailToneGain < brilliantReport.detailToneGain,
+               "Smooth reverses Brilliant's narrow-band detail restoration");
+        check (std::abs (smoothReport.lowToneGain - brilliantReport.lowToneGain) < 0.03f,
+               "Smooth preserves the same low-frequency body as Brilliant");
 
         if (argc > 1 && juce::String (argv[1]) == "--editor")
         {
@@ -711,6 +745,42 @@ int main (int argc, char** argv)
             check (editor && editor->getWidth() == 548 && editor->getHeight() == 741,
                    "editor matches the YinYang compressor layout dimensions");
             check (editor->getNumChildComponents() >= 20, "editor contains all de-esser controls");
+            juce::Slider* modeKnob = nullptr;
+            for (auto* child : editor->getChildren())
+                if (auto* slider = dynamic_cast<juce::Slider*> (child); slider && slider->getName() == "MODE")
+                    modeKnob = slider;
+            check (modeKnob != nullptr && modeKnob->getSliderStyle() == juce::Slider::RotaryHorizontalVerticalDrag,
+                   "four-mode selector is a rotary knob");
+            for (int mode = 0; mode < 4; ++mode)
+            {
+                modeKnob->setValue (mode, juce::sendNotificationSync);
+                const auto splitSelected = editorProcessor.parameters.getRawParameterValue ("mode")->load() >= 0.5f;
+                const auto spectral = editorProcessor.parameters.getRawParameterValue ("smart")->load() >= 0.5f;
+                check (splitSelected == (mode % 2 == 1) && spectral == (mode >= 2),
+                       "rotary mode position updates the compatible host parameters");
+            }
+            check (modeKnob->getTextFromValue (3) == "SMOOTH" && modeKnob->getTextFromValue (2) == "BRILLIANT",
+                   "rotary mode positions display the new names");
+            modeKnob->setValue (0, juce::sendNotificationSync);
+            editorProcessor.parameters.getParameter ("mode")->setValueNotifyingHost (1.0f);
+            editorProcessor.parameters.getParameter ("smart")->setValueNotifyingHost (1.0f);
+            const auto waitForMode = [&] (int expected)
+            {
+                for (int attempt = 0; attempt < 10 && juce::roundToInt (modeKnob->getValue()) != expected; ++attempt)
+                {
+                    juce::Thread::sleep (20);
+                    juce::Timer::callPendingTimersSynchronously();
+                }
+            };
+            waitForMode (3);
+            check (juce::roundToInt (modeKnob->getValue()) == 3,
+                   "the rotary mode selector follows host automation");
+            modeKnob->setValue (0, juce::sendNotificationSync);
+            waitForMode (0);
+            check (juce::roundToInt (modeKnob->getValue()) == 0
+                   && editorProcessor.parameters.getRawParameterValue ("mode")->load() < 0.5f
+                   && editorProcessor.parameters.getRawParameterValue ("smart")->load() < 0.5f,
+                   "the rotary mode selector returns to Wideband after host automation");
             for (auto* child : editor->getChildren())
                 check (editor->getLocalBounds().contains (child->getBounds()), "editor control fits the shared layout");
             const auto image = editor->createComponentSnapshot (editor->getLocalBounds());

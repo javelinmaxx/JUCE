@@ -7,8 +7,10 @@ identity independent.
 
 The first build provides:
 
-- Wideband, Split-band, and Smart modes. Smart analyzes a rolling 2–16 kHz FFT,
-  attenuates spectrally flat content, and restores detected peaks with narrow bands.
+- Four modes on a rotary selector: Wideband, Split-band, Brilliant, and Smooth.
+  Brilliant and Smooth analyze a rolling 2–16 kHz FFT and attenuate spectrally
+  flat content. Brilliant restores detected detail peaks with narrow bands;
+  Smooth reverses that restoration to suppress those peaks further.
 - Independent detector frequency/bandwidth and attenuation frequency/Q controls,
   plus threshold and maximum reduction (0–18 dB).
 - Attack, release, output, stereo linking, detector listen, and bypass controls.
@@ -16,19 +18,21 @@ The first build provides:
 - VST3 and Standalone targets; AU is also enabled when built on macOS.
 
 The band-pass detector is normalized to unity at its selected center frequency.
-Listen auditions its detector signal. In Smart mode, Detector Frequency weights
-the FFT analysis region and Detector Q controls temporal spectrum smoothing;
-higher Q smooths less. Attenuator Frequency sets the broad cut center, while
-Attenuator Q controls the width of the narrow peak-restoration bands. The FFT
-updates in overlapping windows and drives the zero-latency filterbank.
+Listen auditions its detector signal. In Brilliant and Smooth, Detector Frequency
+weights the FFT analysis region and Detector Q controls temporal spectrum
+smoothing; higher Q smooths less. Attenuator Frequency sets the broad cut center,
+while Attenuator Q controls the width of the narrow detail bands. The FFT updates
+in overlapping windows and drives the zero-latency filterbank. Existing sessions
+retain their Wideband, Split-band, or former Smart (now Brilliant) setting.
 
 An editor preview is available at [Previews/shun-de-ess.png](Previews/shun-de-ess.png).
-Four examples show the live response plot with different detector/attenuator
+Six examples show the live response plot with different detector/attenuator
 settings: [Wideband default](Previews/ResponseExamples/wideband-default.png),
 [Wideband high shelf](Previews/ResponseExamples/wideband-high-shelf.png),
 [Split tight bell](Previews/ResponseExamples/split-tight-bell.png), and
 [Split wide bell](Previews/ResponseExamples/split-wide-bell.png), plus
-[Smart spectral](Previews/ResponseExamples/smart-spectral.png).
+[Brilliant spectral](Previews/ResponseExamples/brilliant-spectral.png) and
+[Smooth spectral](Previews/ResponseExamples/smooth-spectral.png).
 
 ## Build
 
@@ -54,7 +58,7 @@ build-shun-deess/ShunDeEssTests --response-previews projects/ShunDeEss/Previews/
 ```
 
 Run the deterministic detector/attenuator mock-signal test and write its
-Markdown report, measured Smart attenuator-Q and detector-Q sweeps, phase plot,
+Markdown report, measured Brilliant attenuator-Q and detector-Q sweeps, phase plot,
 and rolling attenuator-shape heatmaps at Q 0.5, 1.2, 2.8, and 4.0. The rolling
 signal includes gated high-pass noise pulses to mimic sibilant consonants and
 compares pulse attenuation with the quiet baseline:

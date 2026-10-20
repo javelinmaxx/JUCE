@@ -15,7 +15,7 @@ juce_add_plugin(ShunDeEss
     PLUGIN_CODE ShDe
     FORMATS ${plugin_formats}
     PRODUCT_NAME "SHUN DE-ESS"
-    DESCRIPTION "Wideband, split-band, and Smart spectral de-esser"
+    DESCRIPTION "Wideband, Split-band, Brilliant, and Smooth spectral de-esser"
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
     NEEDS_MIDI_OUTPUT FALSE

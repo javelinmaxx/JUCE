@@ -131,107 +131,13 @@ CompressorTheme themeFor (int model, bool upward)
     }
 }
 
-CompressorTheme smartTheme()
+CompressorTheme brilliantTheme()
 {
     return { juce::Colour (0xff100e12), juce::Colour (0xff1c1920), juce::Colour (0xff09080c),
         juce::Colour (0xffeee9e2), juce::Colour (0xffaaa0a0), juce::Colour (0xffb77b45),
         juce::Colour (0xffe3a45b), juce::Colour (0xff211b20), juce::Colour (0xff33262a),
         juce::Colour (0xff30262c), juce::Colour (0xff65504a), juce::Colour (0xff30252a) };
 }
-}
-
-void ThreeWayModeToggle::setMode (int value, bool notify)
-{
-    mode = std::clamp (value, 0, 2);
-    if (notify && onModeChange) onModeChange (mode);
-    repaint();
-}
-
-void ThreeWayModeToggle::clicked()
-{
-    setMode ((mode + 1) % 3, true);
-}
-
-void ThreeWayModeToggle::advance (float elapsed)
-{
-    const auto target = static_cast<float> (mode);
-    position += (target - position) * (1.0f - std::exp (-elapsed / 0.07f));
-    if (std::abs (target - position) < 0.001f) position = target;
-    repaint();
-}
-
-void ThreeWayModeToggle::setTheme (const CompressorTheme& t)
-{
-    accent = t.control; surface = t.switchSurface; foreground = t.text; secondary = t.secondary;
-    repaint();
-}
-
-void ThreeWayModeToggle::paintButton (juce::Graphics& g, bool highlighted, bool down)
-{
-    const auto bounds = getLocalBounds().toFloat().reduced (1.0f);
-    const auto cx = bounds.getX() + 31.0f;
-    const auto cy = bounds.getCentreY();
-    juce::Path nut, innerNut;
-    for (int corner = 0; corner < 6; ++corner)
-    {
-        const auto angle = juce::MathConstants<float>::twoPi * static_cast<float> (corner) / 6.0f;
-        const auto point = juce::Point<float> (cx + std::cos (angle) * 16.0f, cy + std::sin (angle) * 16.0f);
-        const auto inset = juce::Point<float> (cx + std::cos (angle) * 13.2f, cy + std::sin (angle) * 13.2f);
-        if (corner == 0) { nut.startNewSubPath (point); innerNut.startNewSubPath (inset); }
-        else { nut.lineTo (point); innerNut.lineTo (inset); }
-    }
-    nut.closeSubPath(); innerNut.closeSubPath();
-    g.setColour (juce::Colours::black.withAlpha (0.32f));
-    g.fillPath (nut, juce::AffineTransform::translation (0.0f, 1.5f));
-    g.setGradientFill (juce::ColourGradient (secondary.brighter (0.16f), cx - 12.0f, cy - 13.0f,
-                                              secondary.darker (0.34f), cx + 10.0f, cy + 13.0f, false));
-    g.fillPath (nut);
-    g.setColour (secondary.darker (0.16f)); g.strokePath (nut, juce::PathStrokeType (0.8f));
-    g.setColour (secondary.darker (0.22f)); g.fillPath (innerNut);
-    g.setColour (secondary.darker (0.36f).withAlpha (0.8f)); g.strokePath (innerNut, juce::PathStrokeType (0.65f));
-
-    const auto flange = juce::Rectangle<float> (cx - 12.0f, cy - 12.0f, 24.0f, 24.0f);
-    g.setColour (surface.darker (0.42f)); g.fillEllipse (flange.expanded (1.0f));
-    g.setGradientFill (juce::ColourGradient (secondary.brighter (0.18f), flange.getTopLeft(),
-                                              secondary.darker (0.28f), flange.getBottomLeft(), false));
-    g.fillEllipse (flange);
-    g.setColour (surface.darker (0.35f)); g.fillEllipse (flange.reduced (3.0f));
-    g.setColour (secondary.brighter (0.12f).withAlpha (0.85f)); g.drawEllipse (flange, 0.7f);
-    g.setColour (surface.darker (0.5f)); g.fillEllipse (cx - 6.0f, cy - 6.0f, 12.0f, 12.0f);
-    g.setColour (secondary.darker (0.18f)); g.drawEllipse (cx - 5.3f, cy - 5.3f, 10.6f, 10.6f, 1.0f);
-
-    const auto leverLength = 17.0f;
-    const auto tipY = cy + (position - 1.0f) * leverLength;
-    const juce::Point<float> tip (cx, tipY);
-    g.setColour (juce::Colours::black.withAlpha (0.35f));
-    g.drawLine (cx + 1.0f, cy + 1.0f, tip.x + 1.0f, tip.y + 1.0f, 5.6f);
-    g.setColour (juce::Colour (0xffc6cbd0));
-    g.drawLine (cx, cy, tip.x, tip.y, 4.8f);
-    g.setColour (juce::Colour (0xff8e969d));
-    g.drawLine (cx - 0.8f, cy, tip.x - 0.8f, tip.y, 1.0f);
-    const auto cap = juce::Rectangle<float> (tip.x - 4.4f, tip.y - 4.4f, 8.8f, 8.8f);
-    g.setGradientFill (juce::ColourGradient (juce::Colour (0xffe0e3e5), cap.getTopLeft(),
-                                              juce::Colour (0xff777f86), cap.getBottomRight(), false));
-    g.fillEllipse (cap);
-    g.setColour (juce::Colour (0xff515a61)); g.drawEllipse (cap, 0.8f);
-
-    const std::array<const char*, 3> labels { "WIDE", "SPLIT", "SMART" };
-    g.setFont (juce::FontOptions (9.0f).withStyle ("bold"));
-    for (int i = 0; i < 3; ++i)
-    {
-        const auto y = cy - 25.5f + static_cast<float> (i) * 17.0f;
-        g.setColour (i == mode ? accent.brighter (highlighted ? 0.12f : 0.0f)
-                               : secondary.withAlpha (0.78f));
-        g.drawText (labels[static_cast<size_t> (i)], juce::roundToInt (cx + 24.0f),
-                    juce::roundToInt (y), juce::roundToInt (bounds.getRight() - cx - 24.0f), 17,
-                    juce::Justification::centredLeft);
-    }
-    if (hasKeyboardFocus (true))
-    {
-        g.setColour (accent);
-        g.drawEllipse (flange.expanded (3.0f, 4.0f), 1.0f);
-    }
-    if (down) { g.setColour (juce::Colours::black.withAlpha (0.08f)); g.fillRoundedRectangle (bounds, 4); }
 }
 
 void AnimatedSwitch::advance (float elapsed)
@@ -420,10 +326,11 @@ void CompressorLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, i
     const auto centre = bounds.getCentre();
     auto dial = juce::Rectangle<float> (radius * 2, radius * 2).withCentre (centre);
     const auto outerRadius = radius + 1.5f;
-    for (int tick = 0; tick <= 10; ++tick)
+    const auto ticks = slider.getName() == "MODE" ? 3 : 10;
+    for (int tick = 0; tick <= ticks; ++tick)
     {
-        const auto tickAngle = start + (end - start) * static_cast<float> (tick) / 10.0f;
-        const auto major = tick % 5 == 0;
+        const auto tickAngle = start + (end - start) * static_cast<float> (tick) / static_cast<float> (ticks);
+        const auto major = ticks == 3 || tick % 5 == 0;
         const auto outer = outerRadius;
         const auto inner = outer - (major ? 5.0f : 2.5f);
         g.setColour (ring.withAlpha (major ? 0.62f : 0.34f));
@@ -479,25 +386,53 @@ juce::Slider::SliderLayout CompressorLookAndFeel::getSliderLayout (juce::Slider&
 
 ShunDeEssEditor::ShunDeEssEditor (ShunDeEssProcessor& p)
     : AudioProcessorEditor (&p), processor (p),
-      theme (p.parameters.getRawParameterValue ("smart")->load() >= 0.5f ? smartTheme() : themeFor (0, false))
+      theme (p.parameters.getRawParameterValue ("smart")->load() >= 0.5f ? brilliantTheme() : themeFor (0, false))
 {
     setOpaque (true);
     setLookAndFeel (&look);
     addAndMakeVisible (algorithm);
+    addAndMakeVisible (algorithmLabel);
     addAndMakeVisible (bypass);
     addAndMakeVisible (listen);
-    const auto smartInitial = p.parameters.getRawParameterValue ("smart")->load() >= 0.5f;
-    lastSmartMode = smartInitial;
+    lastSpectralMode = p.parameters.getRawParameterValue ("smart")->load() >= 0.5f;
     lastSplitMode = p.parameters.getRawParameterValue ("mode")->load() >= 0.5f;
-    algorithm.setMode (smartInitial ? 2 : (lastSplitMode ? 1 : 0));
-    algorithm.onModeChange = [this] (int selected)
+    algorithm.setLookAndFeel (&look);
+    algorithm.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
+    algorithm.setRange (0.0, 3.0, 1.0);
+    algorithm.setTextBoxStyle (juce::Slider::TextBoxBelow, true, 100, 18);
+    algorithm.setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
+    algorithm.setName ("MODE");
+    algorithm.setTitle ("De-esser mode");
+    algorithm.textFromValueFunction = [] (double value)
     {
+        constexpr std::array<const char*, 4> names { "WIDE", "SPLIT", "BRILLIANT", "SMOOTH" };
+        return juce::String (names[static_cast<size_t> (std::clamp (juce::roundToInt (value), 0, 3))]);
+    };
+    algorithm.valueFromTextFunction = [] (const juce::String& text)
+    {
+        if (text.equalsIgnoreCase ("SPLIT")) return 1.0;
+        if (text.equalsIgnoreCase ("BRILLIANT")) return 2.0;
+        if (text.equalsIgnoreCase ("SMOOTH")) return 3.0;
+        return 0.0;
+    };
+    algorithm.setValue (lastSpectralMode ? (lastSplitMode ? 3 : 2) : (lastSplitMode ? 1 : 0),
+                        juce::dontSendNotification);
+    algorithm.onValueChange = [this]
+    {
+        const auto selected = juce::roundToInt (algorithm.getValue());
         auto* split = processor.parameters.getParameter ("mode");
-        auto* smart = processor.parameters.getParameter ("smart");
-        split->setValueNotifyingHost (selected == 1 ? 1.0f : 0.0f);
-        smart->setValueNotifyingHost (selected == 2 ? 1.0f : 0.0f);
+        auto* spectral = processor.parameters.getParameter ("smart");
+        split->beginChangeGesture();
+        spectral->beginChangeGesture();
+        split->setValueNotifyingHost (selected == 1 || selected == 3 ? 1.0f : 0.0f);
+        spectral->setValueNotifyingHost (selected >= 2 ? 1.0f : 0.0f);
+        spectral->endChangeGesture();
+        split->endChangeGesture();
         repaint (24, 340, 300, 125);
     };
+    algorithmLabel.setText ("MODE", juce::dontSendNotification);
+    algorithmLabel.setJustificationType (juce::Justification::centred);
+    algorithmLabel.setFont (juce::FontOptions (10.0f));
     bypassAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "bypass", bypass);
     listenAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "listen", listen);
 
@@ -572,7 +507,7 @@ void ShunDeEssEditor::paintResponseDisplay (juce::Graphics& g)
     const auto attenuationFrequency = static_cast<float> (sliders[2].getValue());
     const auto attenuationQ = static_cast<float> (sliders[3].getValue());
     const auto maximumCut = static_cast<float> (sliders[5].getValue());
-    const auto splitBand = algorithm.getMode() == 1;
+    const auto splitBand = juce::roundToInt (algorithm.getValue()) == 1;
     const auto xForFrequency = [&] (float frequency)
     {
         const auto octaves = std::log2 (std::clamp (frequency, 2000.0f, 16000.0f) / 2000.0f);
@@ -654,8 +589,10 @@ void ShunDeEssEditor::paintResponseDisplay (juce::Graphics& g)
     g.setColour (theme.secondary);
     g.drawText ("DETECTOR", 38, 480, 72, 12, juce::Justification::centredLeft);
     g.setColour (theme.meter);
-    const auto modeCaption = algorithm.getMode() == 2 ? "ATTENUATOR / SMART"
-                            : (splitBand ? "ATTENUATOR / SPLIT" : "ATTENUATOR / WIDE");
+    const auto mode = juce::roundToInt (algorithm.getValue());
+    const auto modeCaption = mode == 3 ? "ATTENUATOR / SMOOTH"
+                            : mode == 2 ? "ATTENUATOR / BRILLIANT"
+                            : splitBand ? "ATTENUATOR / SPLIT" : "ATTENUATOR / WIDE";
     g.drawText (modeCaption,
                 208, 480, 108, 12, juce::Justification::centredRight);
 }
@@ -753,7 +690,8 @@ void ShunDeEssEditor::resized()
     place (8, 358, 702, 76, 64);
     place (9, 434, 702, 76, 64);
     listen.setBounds (230, up (570) + 14, 68, 76);
-    algorithm.setBounds (205, up (702) + 5, 112, 78);
+    algorithmLabel.setBounds (205, up (702) + 3, 112, 16);
+    algorithm.setBounds (205, up (702) + 19, 112, 65);
 }
 
 void ShunDeEssEditor::timerCallback()
@@ -763,22 +701,20 @@ void ShunDeEssEditor::timerCallback()
     lastTick = now;
     bypass.advance (elapsed);
     listen.advance (elapsed);
-    algorithm.advance (elapsed);
-    const auto smart = processor.parameters.getRawParameterValue ("smart")->load() >= 0.5f;
+    const auto spectral = processor.parameters.getRawParameterValue ("smart")->load() >= 0.5f;
     const auto split = processor.parameters.getRawParameterValue ("mode")->load() >= 0.5f;
-    if (smart != lastSmartMode)
+    if (spectral != lastSpectralMode)
     {
-        theme = smart ? smartTheme() : themeFor (0, false);
+        theme = spectral ? brilliantTheme() : themeFor (0, false);
         applyTheme();
-        algorithm.setMode (smart ? 2 : (split ? 1 : 0));
-        lastSmartMode = smart;
-        lastSplitMode = split;
         repaint();
     }
-    else if (split != lastSplitMode)
+    if (spectral != lastSpectralMode || split != lastSplitMode)
     {
-        if (! smart) algorithm.setMode (split ? 1 : 0);
+        algorithm.setValue (spectral ? (split ? 3 : 2) : (split ? 1 : 0), juce::dontSendNotification);
+        lastSpectralMode = spectral;
         lastSplitMode = split;
+        repaint (24, 340, 300, 125);
     }
     const auto rawValue = processor.reduction.load (std::memory_order_relaxed);
     const auto reduction = std::isfinite (rawValue) ? std::clamp (rawValue, 0.0f, 18.0f) : 0.0f;
@@ -802,5 +738,7 @@ void ShunDeEssEditor::applyTheme()
         label.setColour (juce::Label::textColourId, theme.text);
     bypass.setTheme (theme);
     listen.setTheme (theme);
-    algorithm.setTheme (theme);
+    algorithm.setColour (juce::Slider::textBoxTextColourId, theme.text);
+    algorithmLabel.setColour (juce::Label::textColourId, theme.text);
+    algorithm.repaint();
 }

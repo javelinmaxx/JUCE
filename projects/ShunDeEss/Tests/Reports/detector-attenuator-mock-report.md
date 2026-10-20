@@ -8,11 +8,12 @@ The detector Listen path was also measured with equal-level 500 Hz and 7.8 kHz t
 |---|---:|---:|---:|---:|
 | Wideband | 12.00 | 28.0% | 98.7% | 48.3% |
 | Split-band | 12.00 | 19.0% | 100.0% | 35.4% |
-| Smart | 12.00 | 26.5% | 98.7% | 52.5% |
+| Brilliant | 12.00 | 26.5% | 98.7% | 52.5% |
+| Smooth | 12.00 | 28.6% | 98.8% | 44.3% |
 
-Detector controls: 7.8 kHz center, Q 2.2, −48 dB threshold. Attenuator controls: 7.2 kHz center, Q 2.8, 12 dB maximum depth. The retained-detail column is a sine/cosine projection of the final 8192 samples; it shows how much of the isolated 7.8 kHz tone survives broadband attenuation. Smart is expected to retain more of that tone than Wideband while still reducing the broadband mock input.
+Detector controls: 7.8 kHz center, Q 2.2, −48 dB threshold. Attenuator controls: 7.2 kHz center, Q 2.8, 12 dB maximum depth. The retained-detail column is a sine/cosine projection of the final 8192 samples; it shows how much of the isolated 7.8 kHz tone survives broadband attenuation. Brilliant is expected to retain more of that tone than Wideband while still reducing the broadband mock input. Smooth reverses Brilliant's narrow-band restoration for additional detail suppression.
 
-### Smart attenuator-Q detail check
+### Brilliant attenuator-Q detail check
 
 | Attenuator Q | Broadband RMS reduction | 7.8 kHz detail retained |
 |---:|---:|---:|
@@ -21,7 +22,7 @@ Detector controls: 7.8 kHz center, Q 2.2, −48 dB threshold. Attenuator control
 | 2.8 | 26.5% | 52.5% |
 | 4.0 | 27.0% | 53.0% |
 
-This sweeps Attenuator Q while holding the mock signal fixed. The measured change confirms that Q affects detail retention: the narrower high-Q restoration retains more of this tone, while higher Q increases broadband attenuation. The phase plot shows the shelf's minimum-phase rotation; at low Q, the original RBJ slope setting allowed passband peaking. The shelf slope is now capped at 1.0, and a processor test verifies that Q 0.5 does not boost the shelf passband. The Smart restoration retains its additive band-pass path, whose phase response is plotted alongside the shelf phase. Four rolling heatmaps compare Q 0.5, 1.2, 2.8, and 4.0 using distinct measured runs. The rolling input is a four-second time-varying mock with two gated 4.5 kHz high-pass noise pulses to mimic sibilant consonants. The swept detail tone is gated out during the pulses so their attenuation reads clearly; the signal combines a 4.3–11.2 kHz swept detail tone, two high-pass noise pulses, broadband noise, and a 500 Hz body. The test verifies that integrated 4.5–12 kHz output energy is lower during each pulse at all four Q settings. Source data files are `smart-rolling-q-*.csv`; `smart-rolling-spectrogram.csv` is the Q 2.8 run.
+This sweeps Attenuator Q while holding the mock signal fixed. The measured change confirms that Q affects detail retention: the narrower high-Q restoration retains more of this tone, while higher Q increases broadband attenuation. The phase plot shows the shelf's minimum-phase rotation; at low Q, the original RBJ slope setting allowed passband peaking. The shelf slope is now capped at 1.0, and a processor test verifies that Q 0.5 does not boost the shelf passband. The Brilliant restoration retains its additive band-pass path, whose phase response is plotted alongside the shelf phase. Four rolling heatmaps compare Q 0.5, 1.2, 2.8, and 4.0 using distinct measured runs. The rolling input is a four-second time-varying mock with two gated 4.5 kHz high-pass noise pulses to mimic sibilant consonants. The swept detail tone is gated out during the pulses so their attenuation reads clearly; the signal combines a 4.3–11.2 kHz swept detail tone, two high-pass noise pulses, broadband noise, and a 500 Hz body. The test verifies that integrated 4.5–12 kHz output energy is lower during each pulse at all four Q settings. Source data files are `smart-rolling-q-*.csv`; `smart-rolling-spectrogram.csv` is the Q 2.8 run.
 
 Plotted report: [PNG](detector-attenuator-mock-report.png) · [PDF](detector-attenuator-mock-report.pdf). Regenerate with `Tests/generate_analysis_report.py`.
 
@@ -38,17 +39,18 @@ Negative values indicate attenuation. The blue shaded regions in the rolling hea
 
 ### Time-varying pulse test across all modes
 
-The same seeded input and Q sweep were processed in Wideband, Split-band, and Smart. The detector threshold is −30 dB; the swept detail tone is kept below it so the quiet baseline releases to unity, while the gated noise bursts cross threshold. Values are integrated output − input energy from 4.5–12 kHz during pulse centers and quiet intervals.
+The same seeded input and Q sweep were processed in all four modes. The detector threshold is −30 dB; the swept detail tone is kept below it so the quiet baseline releases to unity, while the gated noise bursts cross threshold. Values are integrated output − input energy from 4.5–12 kHz during pulse centers and quiet intervals.
 
 | Mode | Q 0.5 (pulse / quiet) | Q 1.2 (pulse / quiet) | Q 2.8 (pulse / quiet) | Q 4.0 (pulse / quiet) |
 |---|---:|---:|---:|---:|
 | Wideband | -1.07 / 0.00 dB | -1.24 / 0.00 dB | -1.81 / 0.00 dB | -1.96 / 0.00 dB |
 | Split-band | -3.31 / 0.00 dB | -2.07 / 0.00 dB | -0.90 / 0.00 dB | -0.57 / 0.00 dB |
-| Smart | -1.01 / 0.00 dB | -1.23 / 0.00 dB | -1.80 / 0.00 dB | -1.95 / 0.00 dB |
+| Brilliant | -1.01 / 0.00 dB | -1.23 / 0.00 dB | -1.80 / 0.00 dB | -1.95 / 0.00 dB |
+| Smooth | -1.10 / 0.00 dB | -1.24 / 0.00 dB | -1.81 / 0.00 dB | -1.97 / 0.00 dB |
 
-### Smart detector-Q time-response test
+### Brilliant detector-Q time-response test
 
-Smart pulse-focused runs hold Attenuator Q at 2.8 and vary Detector Q. Values are integrated 4.5–12 kHz output − input during pulse centers and quiet intervals.
+Brilliant pulse-focused runs hold Attenuator Q at 2.8 and vary Detector Q. Values are integrated 4.5–12 kHz output − input during pulse centers and quiet intervals.
 
 | Detector Q | Pulse change | Quiet change |
 |---:|---:|---:|
@@ -57,7 +59,7 @@ Smart pulse-focused runs hold Attenuator Q at 2.8 and vary Detector Q. Values ar
 | 2.8 | -1.56 dB | 0.00 dB |
 | 4.0 | -1.20 dB | 0.00 dB |
 
-[Smart detector-Q pulse response plots](smart-detector-q-report.png) · [PDF](smart-detector-q-report.pdf).
+[Brilliant detector-Q pulse response plots](smart-detector-q-report.png) · [PDF](smart-detector-q-report.pdf).
 
 
-Pulse values should be more negative than quiet-baseline values, showing detector-linked attenuation that follows the bursts. [Wideband/Split-band/Smart pulse plots](wide-split-pulse-test-report.png) · [PDF](wide-split-pulse-test-report.pdf).
+Pulse values should be more negative than quiet-baseline values, showing detector-linked attenuation that follows the bursts. [Four-mode pulse plots](wide-split-pulse-test-report.png) · [PDF](wide-split-pulse-test-report.pdf).

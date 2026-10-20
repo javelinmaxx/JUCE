@@ -13,20 +13,24 @@ import numpy as np
 def read_results(path):
     text = Path(path).read_text(encoding="utf-8")
     rows = {}
-    for mode in ("Wideband", "Split-band", "Smart"):
+    for mode in ("Wideband", "Split-band", "Brilliant", "Smooth"):
+        report_name = "Smart" if mode == "Brilliant" and "| Brilliant |" not in text else mode
         match = re.search(
-            rf"\| {re.escape(mode)} \| ([\d.]+) \| ([\d.]+)% \| ([\d.]+)% \| ([\d.]+)% \|",
+            rf"\| {re.escape(report_name)} \| ([\d.]+) \| ([\d.]+)% \| ([\d.]+)% \| ([\d.]+)% \|",
             text,
         )
         if not match:
+            if mode == "Smooth":
+                continue  # Historical reports have only three modes.
             raise ValueError(f"Could not find {mode} data in {path}")
         rows[mode] = tuple(float(value) for value in match.groups())
     detector = re.search(r"in-band tone is ([\d.]+) dB", text)
     if not detector:
         raise ValueError(f"Could not find detector selectivity in {path}")
-    qrows = re.findall(r"\| ([\d.]+) \| ([\d.]+)% \| ([\d.]+)% \|", text[text.find("### Smart attenuator-Q"):])
+    q_heading = "### Brilliant attenuator-Q" if "### Brilliant attenuator-Q" in text else "### Smart attenuator-Q"
+    qrows = re.findall(r"\| ([\d.]+) \| ([\d.]+)% \| ([\d.]+)% \|", text[text.find(q_heading):])
     if len(qrows) < 2:
-        raise ValueError("Could not find Smart attenuator-Q sweep")
+        raise ValueError("Could not find Brilliant attenuator-Q sweep")
     pulse_section = text.split("### Sibilance pulse attenuation", 1)[-1].split("\n###", 1)[0]
     pulse_rows = re.findall(r"\| ([\d.]+) \| (-?[\d.]+) dB \|", pulse_section)
     if len(pulse_rows) != 4:
@@ -93,9 +97,10 @@ def render(source, png_path, pdf_path):
         rolling_sets[q] = rolling
     measured = (spectrum["frequency_hz"] >= 2000.0) & (spectrum["frequency_hz"] <= 16000.0)
     if not np.any(measured):
-        raise ValueError(f"No 2–16 kHz Smart spectrum samples in {spectrum_path}")
-    modes = ("Wideband", "Split-band", "Smart")
-    colors = {"Wideband": "#54c2d8", "Split-band": "#bd91ed", "Smart": "#e7ad5b"}
+        raise ValueError(f"No 2–16 kHz Brilliant spectrum samples in {spectrum_path}")
+    modes = tuple(results)
+    colors = {"Wideband": "#54c2d8", "Split-band": "#bd91ed",
+              "Brilliant": "#e7ad5b", "Smooth": "#80bfae"}
     plt.rcParams.update({
         "font.family": "DejaVu Sans",
         "font.size": 10,
@@ -154,7 +159,7 @@ def render(source, png_path, pdf_path):
             label="Split-band bell")
     ax.axhline(0, color="#91a0aa", linewidth=0.8, alpha=0.6)
     ax.set_ylim(-15, 2)
-    # The shelf is minimum-phase. Plot its phase too because the Smart path
+    # The shelf is minimum-phase. Plot its phase too because the Brilliant path
     # mixes this filtered signal with dry audio, which can affect the measured
     # magnitude around a moving narrow tone.
     omega = 2.0 * np.pi * frequencies / 48000.0
@@ -212,7 +217,7 @@ def render(source, png_path, pdf_path):
 
     ax = fig.add_subplot(grid[2, :])
     ax.set_facecolor("#202c34")
-    ax.set_title("Smart detail retention vs attenuator Q", color="#eef2f5", loc="left", fontsize=12, fontweight="bold", pad=10)
+    ax.set_title("Brilliant detail retention vs attenuator Q", color="#eef2f5", loc="left", fontsize=12, fontweight="bold", pad=10)
     ax.plot(qresults[:, 0], qresults[:, 2], marker="o", color="#e7ad5b", linewidth=2.2, label="7.8 kHz detail tone")
     ax.set_xlabel("Attenuator Q"); ax.set_ylabel("Detail tone retained (%)")
     ax.grid(True, color="#52616c", alpha=0.35, linewidth=0.7)
@@ -251,11 +256,11 @@ def render(source, png_path, pdf_path):
     cb = fig.colorbar(mesh, ax=heat_axes, pad=0.012, fraction=0.025)
     cb.set_label("Measured output − input (dB)", color="#c6d0d8"); cb.ax.tick_params(colors="#aebbc5")
 
-    smart_detail = results["Smart"][3]
+    smart_detail = results["Brilliant"][3]
     wide_detail = results["Wideband"][3]
     delta = smart_detail - wide_detail
     fig.text(0.08, 0.105,
-             f"Smart keeps {smart_detail:.1f}% of the 7.8 kHz detail tone vs {wide_detail:.1f}% in Wideband "
+             f"Brilliant keeps {smart_detail:.1f}% of the 7.8 kHz detail tone vs {wide_detail:.1f}% in Wideband "
              f"(+{delta:.1f} points).",
              color="#e7ad5b", fontsize=11, fontweight="bold")
     fig.text(0.08, 0.065,
@@ -277,23 +282,28 @@ def render_wide_split_comparison(source):
     report_text = source.read_text(encoding="utf-8")
     pulse_text = report_text.split("### Time-varying pulse test across all modes", 1)[-1]
     mode_rows = {}
-    for mode in ("Wideband", "Split-band", "Smart"):
-        match = re.search(rf"\| {re.escape(mode)} \| ([^\n]+)\|", pulse_text)
+    all_modes = (("Wideband", "wideband"), ("Split-band", "splitband"),
+                 ("Brilliant", "smart-pulse"))
+    if "| Smooth |" in pulse_text:
+        all_modes += (("Smooth", "smooth-pulse"),)
+    for mode, _ in all_modes:
+        report_name = "Smart" if mode == "Brilliant" and "| Brilliant |" not in pulse_text else mode
+        match = re.search(rf"\| {re.escape(report_name)} \| ([^\n]+)\|", pulse_text)
         if not match:
             raise ValueError(f"Could not find {mode} pulse measurements")
         mode_rows[mode] = [(float(pulse), float(quiet)) for pulse, quiet in
                            re.findall(r"(-?[\d.]+) / (-?[\d.]+) dB", match.group(1))]
         if len(mode_rows[mode]) != len(q_values):
             raise ValueError(f"Expected one pulse measurement for each Q in {mode}")
-    fig, axes = plt.subplots(3, 4, figsize=(14, 9), facecolor="#182128", sharex=True, sharey=True)
+    fig, axes = plt.subplots(len(all_modes), 4, figsize=(14, 3 * len(all_modes)),
+                             facecolor="#182128", sharex=True, sharey=True)
     fig.subplots_adjust(left=0.07, right=0.91, top=0.84, bottom=0.11, wspace=0.16, hspace=0.34)
     fig.suptitle("SHUN DE-ESS  |  TIME-VARYING SIBILANCE PULSES",
                  color="#f2f5f7", fontsize=16, fontweight="bold", x=0.07, y=0.96, ha="left")
-    fig.text(0.07, 0.90, "Same seeded input across Wideband, Split-band, and Smart · quiet baseline releases to unity",
+    fig.text(0.07, 0.90, "Same seeded input across modes · quiet baseline releases to unity",
              color="#aebbc5", fontsize=10)
     norm = TwoSlopeNorm(vmin=-18, vcenter=0, vmax=6)
     mesh = None
-    all_modes = (("Wideband", "wideband"), ("Split-band", "splitband"), ("Smart", "smart-pulse"))
     for row, (mode, stem) in enumerate(all_modes):
         for col, q in enumerate(q_values):
             ax = axes[row, col]
@@ -343,10 +353,10 @@ def render_wide_split_comparison(source):
 def render_smart_detector_q(source):
     source = Path(source)
     report_text = source.read_text(encoding="utf-8")
-    q_section = report_text.split("### Smart detector-Q time-response test", 1)[-1]
+    q_section = report_text.split("### Brilliant detector-Q time-response test", 1)[-1]
     rows = re.findall(r"\| ([\d.]+) \| (-?[\d.]+) dB \| (-?[\d.]+) dB \|", q_section)
     if len(rows) != 4:
-        raise ValueError("Could not find all Smart detector-Q response measurements")
+        raise ValueError("Could not find all Brilliant detector-Q response measurements")
     values = np.array(rows, dtype=float)
     fig, ax = plt.subplots(figsize=(8.5, 4.5), facecolor="#182128")
     ax.set_facecolor("#202c34")
@@ -358,7 +368,7 @@ def render_smart_detector_q(source):
     for q, pulse, _quiet in values:
         ax.annotate(f"{pulse:.2f} dB", (q, pulse), xytext=(0, -17), textcoords="offset points",
                     ha="center", color="#f3c778", fontsize=8)
-    ax.set_title("Smart detector Q · time-varying pulse response · Attenuator Q 2.8",
+    ax.set_title("Brilliant detector Q · time-varying pulse response · Attenuator Q 2.8",
                  color="#eef2f5", loc="left", fontsize=12, fontweight="bold", pad=12)
     ax.set_xlabel("Detector Q", color="#c6d0d8")
     ax.set_ylabel("Integrated 4.5–12 kHz output − input (dB)", color="#c6d0d8")
@@ -373,7 +383,7 @@ def render_smart_detector_q(source):
     png_path = source.with_name("smart-detector-q-report.png")
     pdf_path = source.with_name("smart-detector-q-report.pdf")
     fig.savefig(png_path, dpi=180, facecolor=fig.get_facecolor())
-    fig.savefig(pdf_path, facecolor=fig.get_facecolor(), metadata={"Title": "SHUN Smart detector-Q test"})
+    fig.savefig(pdf_path, facecolor=fig.get_facecolor(), metadata={"Title": "SHUN Brilliant detector-Q test"})
     plt.close(fig)
 
 

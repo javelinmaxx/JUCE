@@ -41,7 +41,7 @@ private:
     struct BiquadCoefficients { float b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0; };
     struct BiquadState { float x1 = 0, x2 = 0, y1 = 0, y2 = 0; };
     static float filterSample (float, BiquadState&, const BiquadCoefficients&) noexcept;
-    void analyseSmartSpectrum (float detectorFrequency, float detectorQ, float attenuationQ) noexcept;
+    void analyseSpectralDetail (float detectorFrequency, float detectorQ, float attenuationQ) noexcept;
     std::array<std::atomic<float>*, 14> raw {};
     std::array<BiquadState, 2> detectorState {}, shelfState {}, bellState {};
     std::array<float, 2> envelopes {};
@@ -54,8 +54,8 @@ private:
     std::array<BiquadCoefficients, 4> sparkleFilters {};
     std::array<float, 4> sparkleWeights {};
     int analysisPosition = 0, hopCounter = 0;
-    float smartFlatness = 0, smartAttenuation = 0;
-    bool smartMode = false;
+    float spectralFlatness = 0, spectralAttenuation = 0;
+    bool spectralMode = false;
     float sampleRate = 44100;
     float lastDetectorFrequency = -1, lastDetectorQ = -1;
     float lastAttenuationFrequency = -1, lastAttenuationQ = -1, lastDepth = -1;
