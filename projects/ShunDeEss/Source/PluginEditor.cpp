@@ -200,27 +200,28 @@ void ThreeWayModeToggle::paintButton (juce::Graphics& g, bool highlighted, bool 
     g.setColour (surface.darker (0.5f)); g.fillEllipse (cx - 6.0f, cy - 6.0f, 12.0f, 12.0f);
     g.setColour (secondary.darker (0.18f)); g.drawEllipse (cx - 5.3f, cy - 5.3f, 10.6f, 10.6f, 1.0f);
 
-    const auto handleY = cy + (position - 1.0f) * 11.0f;
-    const juce::Point<float> handleBase (cx, handleY + 5.0f);
-    const juce::Point<float> tip (cx, handleY - 5.0f);
-    g.setColour (juce::Colours::black.withAlpha (0.38f));
-    g.drawLine (handleBase.x + 1.0f, handleBase.y + 1.0f, tip.x + 1.0f, tip.y + 1.0f, 5.6f);
-    g.setColour (juce::Colour (0xffc6cbd0)); g.drawLine (handleBase.x, handleBase.y, tip.x, tip.y, 4.8f);
-    g.setColour (juce::Colour (0xff8e969d)); g.drawLine (handleBase.x - 0.8f, handleBase.y, tip.x - 0.8f, tip.y, 1.0f);
+    const auto leverLength = 17.0f;
+    const auto tipY = cy + (position - 1.0f) * leverLength;
+    const juce::Point<float> tip (cx, tipY);
+    g.setColour (juce::Colours::black.withAlpha (0.35f));
+    g.drawLine (cx + 1.0f, cy + 1.0f, tip.x + 1.0f, tip.y + 1.0f, 5.6f);
+    g.setColour (juce::Colour (0xffc6cbd0));
+    g.drawLine (cx, cy, tip.x, tip.y, 4.8f);
+    g.setColour (juce::Colour (0xff8e969d));
+    g.drawLine (cx - 0.8f, cy, tip.x - 0.8f, tip.y, 1.0f);
     const auto cap = juce::Rectangle<float> (tip.x - 4.4f, tip.y - 4.4f, 8.8f, 8.8f);
     g.setGradientFill (juce::ColourGradient (juce::Colour (0xffe0e3e5), cap.getTopLeft(),
                                               juce::Colour (0xff777f86), cap.getBottomRight(), false));
     g.fillEllipse (cap);
     g.setColour (juce::Colour (0xff515a61)); g.drawEllipse (cap, 0.8f);
-    g.setColour (juce::Colours::white.withAlpha (highlighted ? 0.62f : 0.28f));
-    g.drawEllipse (cap.reduced (1.0f), 0.55f);
 
     const std::array<const char*, 3> labels { "WIDE", "SPLIT", "SMART" };
     g.setFont (juce::FontOptions (9.0f).withStyle ("bold"));
     for (int i = 0; i < 3; ++i)
     {
-        const auto y = cy - 24.0f + static_cast<float> (i) * 22.0f;
-        g.setColour (i == mode ? accent : secondary.withAlpha (0.78f));
+        const auto y = cy - 25.5f + static_cast<float> (i) * 17.0f;
+        g.setColour (i == mode ? accent.brighter (highlighted ? 0.12f : 0.0f)
+                               : secondary.withAlpha (0.78f));
         g.drawText (labels[static_cast<size_t> (i)], juce::roundToInt (cx + 24.0f),
                     juce::roundToInt (y), juce::roundToInt (bounds.getRight() - cx - 24.0f), 17,
                     juce::Justification::centredLeft);
@@ -228,7 +229,7 @@ void ThreeWayModeToggle::paintButton (juce::Graphics& g, bool highlighted, bool 
     if (hasKeyboardFocus (true))
     {
         g.setColour (accent);
-        g.drawRoundedRectangle (bounds, 5, 1.0f);
+        g.drawEllipse (flange.expanded (3.0f, 4.0f), 1.0f);
     }
     if (down) { g.setColour (juce::Colours::black.withAlpha (0.08f)); g.fillRoundedRectangle (bounds, 4); }
 }

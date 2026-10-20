@@ -136,3 +136,9 @@
 - Changed the Wide / Split / Smart switch handle to stay vertical and travel
   along the centerline between the three labeled positions.
 - Refreshed the full-editor preview.
+
+### 2026-10-20 — match Detector switch hardware
+- Matched the three-position selector's hex nut, round flange, bat-handle
+  length, metal cap, and focus treatment to the Detector switch. Kept Wide,
+  Split, and Smart arranged vertically beside their corresponding throws.
+- Refreshed the full-editor preview.
