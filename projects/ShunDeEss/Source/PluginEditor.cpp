@@ -500,7 +500,7 @@ void ShunDeEssEditor::paintMeter (juce::Graphics& g)
     double previous = 0;
     history.visit (now, [&] (float position, float reduction, double time)
     {
-        const auto x = plot.getX() + plot.getWidth() * (1.0f - position);
+        const auto x = plot.getX() + plot.getWidth() * position;
         const auto y = plot.getY() + plot.getHeight() * reduction / 18.0f;
         if (! started || time - previous > 0.25) trace.startNewSubPath (x, y);
         else trace.lineTo (x, y);
@@ -517,8 +517,8 @@ void ShunDeEssEditor::paintMeter (juce::Graphics& g)
     g.strokePath (trace, juce::PathStrokeType (0.7f));
     g.restoreState();
     g.setColour (theme.secondary);
-    g.drawText ("NOW", 408, 516, 44, 18, juce::Justification::centredLeft);
-    g.drawText ("-3 s", 466, 516, 44, 18, juce::Justification::centredRight);
+    g.drawText ("-3 s", 408, 516, 44, 18, juce::Justification::centredLeft);
+    g.drawText ("NOW", 466, 516, 44, 18, juce::Justification::centredRight);
     g.setFont (juce::FontOptions (24.0f));
     g.setColour (theme.meter.withAlpha (glow * 0.25f));
     g.drawText (juce::String (displayedReduction, 1) + " dB", 355, 541, 158, 34, juce::Justification::centred);

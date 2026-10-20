@@ -73,5 +73,8 @@
 
 ### 2026-10-20 — GR display orientation
 - Reversed the GR meter and trace vertically so 0 dB is at the top and stronger
-  reduction descends. Reversed the history direction so NOW sits beside the
-  meter and −3 s is at the far edge.
+  reduction descends.
+
+### 2026-10-20 — restore GR history direction
+- Restored the history timeline to left-to-right: −3 s on the left and NOW on
+  the right. The vertical GR orientation remains top-down.
