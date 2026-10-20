@@ -142,7 +142,7 @@ int main (int argc, char** argv)
         {
             ShunDeEssProcessor editorProcessor;
             std::unique_ptr<juce::AudioProcessorEditor> editor (editorProcessor.createEditor());
-            check (editor && editor->getWidth() == 548 && editor->getHeight() == 726,
+            check (editor && editor->getWidth() == 548 && editor->getHeight() == 738,
                    "editor matches the YinYang compressor layout dimensions");
             check (editor->getNumChildComponents() >= 20, "editor contains all de-esser controls");
             for (auto* child : editor->getChildren())

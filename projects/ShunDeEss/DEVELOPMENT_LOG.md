@@ -17,3 +17,9 @@
   and Split-band uses an adjustable bell centered on the attenuation frequency.
 - Built the VST3 and processor tests. All 55 signal-path and editor checks pass;
   the preview was refreshed at 548 × 726.
+
+### 2026-10-20 — separate detector and attenuator panels
+- Split the controls into independent Detector and Attenuator panels, aligned
+  to YinYang Compressor's two stacked lower-left sections and 12 px gap.
+- Matched panel heights and control rows; moved the lower controls and Output
+  panel down to keep the same bottom edge and extended the editor by 12 px.

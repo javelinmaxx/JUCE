@@ -421,7 +421,7 @@ ShunDeEssEditor::ShunDeEssEditor (ShunDeEssProcessor& p)
     listen.snapToState();
     applyTheme();
     lastTick = juce::Time::getMillisecondCounterHiRes() * 0.001;
-    setSize (548, 726);
+    setSize (548, 738);
     startTimerHz (30);
 }
 
@@ -437,13 +437,15 @@ void ShunDeEssEditor::paint (juce::Graphics& g)
     g.setFont (juce::FontOptions (27.0f));
     g.drawText ("SHUN DE-ESS", 24, 38, 410, 38, juce::Justification::centredLeft);
     drawBrushedMetalPanel (g, { 24, 140, 300, 342 }, 10, theme.card, theme.grid);
-    drawAnalogPanel (g, { 24, 494, 300, 232 }, 10, theme.card, theme.grid);
-    drawAnalogPanel (g, { 344, 610, 180, 116 }, 10, theme.card, theme.grid);
+    drawAnalogPanel (g, { 24, 494, 300, 116 }, 10, theme.card, theme.grid);
+    drawAnalogPanel (g, { 24, 622, 300, 116 }, 10, theme.card, theme.grid);
+    drawAnalogPanel (g, { 344, 622, 180, 116 }, 10, theme.card, theme.grid);
     g.setColour (theme.text);
     g.setFont (juce::FontOptions (13.0f).withStyle ("bold"));
     g.drawText ("DE-ESSER", 38, 148, 250, 20, juce::Justification::centredLeft);
-    g.drawText ("ATTENUATOR", 38, 502, 250, 18, juce::Justification::centredLeft);
-    g.drawText ("OUTPUT", 358, 618, 152, 18, juce::Justification::centredLeft);
+    g.drawText ("DETECTOR", 38, 502, 250, 18, juce::Justification::centredLeft);
+    g.drawText ("ATTENUATOR", 38, 630, 250, 18, juce::Justification::centredLeft);
+    g.drawText ("OUTPUT", 358, 630, 152, 18, juce::Justification::centredLeft);
     g.setColour (theme.grid);
     g.drawHorizontalLine (488, 24, 324);
     paintMeter (g);
@@ -537,13 +539,13 @@ void ShunDeEssEditor::resized()
     place (7, 204, 350, 80, 60);
     place (0, 30, 550, 76, 64);
     place (1, 122, 550, 76, 64);
-    place (2, 30, 646, 76, 64);
-    place (3, 122, 646, 76, 64);
-    place (8, 350, 670, 54, 56);
-    place (9, 410, 670, 54, 56);
-    place (10, 470, 670, 54, 56);
-    modeSwitch.setBounds (230, up (550), 68, 76);
-    listen.setBounds (230, up (638), 68, 76);
+    place (2, 30, 678, 76, 64);
+    place (3, 122, 678, 76, 64);
+    place (8, 350, 678, 54, 56);
+    place (9, 410, 678, 54, 56);
+    place (10, 470, 678, 54, 56);
+    listen.setBounds (230, up (550), 68, 76);
+    modeSwitch.setBounds (230, up (678), 68, 76);
 }
 
 void ShunDeEssEditor::timerCallback()
