@@ -101,7 +101,7 @@
   Detector section.
 
 ### 2026-10-20 — Smart spectral mode
-- Added a Wideband / Split-band / Smart selector in the Attenuator panel. Smart
+- Added a three-position Wideband / Split-band / Smart toggle in the Attenuator panel. Smart
   uses an ebony palette while retaining the existing Detector and Attenuator
   frequency/Q controls.
 - Added a rolling 1024-point FFT over 2–16 kHz. Detector Frequency weights the

@@ -1,6 +1,7 @@
 #pragma once
 #include "PluginProcessor.h"
 #include "GainReductionHistory.h"
+#include <functional>
 
 struct CompressorTheme
 {
@@ -38,6 +39,25 @@ private:
     juce::String onCaption { "ON" }, offCaption { "OFF" };
 };
 
+class ThreeWayModeToggle final : public juce::Button
+{
+public:
+    ThreeWayModeToggle() : Button ("De-esser mode") { setClickingTogglesState (false); }
+    using juce::Button::clicked;
+    void setMode (int value, bool notify = false);
+    int getMode() const noexcept { return mode; }
+    void advance (float elapsed);
+    void setTheme (const CompressorTheme&);
+    void paintButton (juce::Graphics&, bool highlighted, bool down) override;
+    std::function<void (int)> onModeChange;
+private:
+    void clicked() override;
+    int mode = 0;
+    float position = 0;
+    juce::Colour accent { 0xff168aad }, surface { 0xff202a34 };
+    juce::Colour foreground { 0xfff0ddbb }, secondary { 0xff92a0ad };
+};
+
 class CompressorLookAndFeel final : public juce::LookAndFeel_V4
 {
 public:
@@ -68,13 +88,13 @@ private:
     void applyTheme();
     ShunDeEssProcessor& processor;
     CompressorLookAndFeel look;
-    AnimatedSwitch bypass { "BYPASS", true, false, true }, listen { "LISTEN" }, modeSwitch { "MODE" };
-    juce::ComboBox algorithm;
+    AnimatedSwitch bypass { "BYPASS", true, false, true }, listen { "LISTEN" };
+    ThreeWayModeToggle algorithm;
     std::array<juce::Slider, 10> sliders;
     std::array<juce::Label, 10> labels;
     using State = juce::AudioProcessorValueTreeState;
     std::array<std::unique_ptr<State::SliderAttachment>, 10> attachments;
-    std::unique_ptr<State::ButtonAttachment> bypassAttachment, listenAttachment, modeAttachment;
+    std::unique_ptr<State::ButtonAttachment> bypassAttachment, listenAttachment;
     bool lastSmartMode = false, lastSplitMode = false;
     GainReductionHistory history;
     juce::Rectangle<int> meterBounds { 344, 140, 180, 490 };

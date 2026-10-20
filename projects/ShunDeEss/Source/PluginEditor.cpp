@@ -140,6 +140,78 @@ CompressorTheme smartTheme()
 }
 }
 
+void ThreeWayModeToggle::setMode (int value, bool notify)
+{
+    mode = std::clamp (value, 0, 2);
+    if (notify && onModeChange) onModeChange (mode);
+    repaint();
+}
+
+void ThreeWayModeToggle::clicked()
+{
+    setMode ((mode + 1) % 3, true);
+}
+
+void ThreeWayModeToggle::advance (float elapsed)
+{
+    const auto target = static_cast<float> (mode);
+    position += (target - position) * (1.0f - std::exp (-elapsed / 0.07f));
+    if (std::abs (target - position) < 0.001f) position = target;
+    repaint();
+}
+
+void ThreeWayModeToggle::setTheme (const CompressorTheme& t)
+{
+    accent = t.control; surface = t.switchSurface; foreground = t.text; secondary = t.secondary;
+    repaint();
+}
+
+void ThreeWayModeToggle::paintButton (juce::Graphics& g, bool highlighted, bool down)
+{
+    const auto bounds = getLocalBounds().toFloat().reduced (1.0f);
+    const auto track = juce::Rectangle<float> (bounds.getX() + 3, bounds.getY() + 7, 28, bounds.getHeight() - 14);
+    g.setColour (juce::Colours::black.withAlpha (0.28f));
+    g.fillRoundedRectangle (track.translated (0, 1), 13);
+    g.setGradientFill (juce::ColourGradient (surface.brighter (0.12f), track.getTopLeft(),
+                                              surface.darker (0.25f), track.getBottomLeft(), false));
+    g.fillRoundedRectangle (track, 13);
+    g.setColour (accent.withAlpha (0.55f));
+    g.drawRoundedRectangle (track, 13, 1.0f);
+
+    const auto step = (track.getHeight() - 20.0f) * 0.5f;
+    const auto cy = track.getY() + 10.0f + position * step;
+    const auto pivot = juce::Point<float> (track.getCentreX(), cy);
+    const auto leverAngle = (position - 1.0f) * 0.38f;
+    const juce::Point<float> end (pivot.x + std::sin (leverAngle) * 17.0f,
+                                  pivot.y - std::cos (leverAngle) * 17.0f);
+    g.setColour (juce::Colours::black.withAlpha (0.55f));
+    g.drawLine (pivot.x + 1, pivot.y + 2, end.x + 1, end.y + 2, 5.0f);
+    g.setColour (juce::Colour (0xffaab0b4));
+    g.drawLine (pivot.x, pivot.y, end.x, end.y, 4.0f);
+    g.setGradientFill (juce::ColourGradient (juce::Colour (0xfff4f1e9), end.x - 3, end.y - 3,
+                                              juce::Colour (0xff747b80), end.x + 3, end.y + 4, false));
+    g.fillEllipse (end.x - 4.5f, end.y - 4.5f, 9.0f, 9.0f);
+    g.setColour (juce::Colours::white.withAlpha (highlighted ? 0.65f : 0.3f));
+    g.drawEllipse (end.x - 4.5f, end.y - 4.5f, 9.0f, 9.0f, 0.7f);
+
+    const std::array<const char*, 3> labels { "WIDE", "SPLIT", "SMART" };
+    g.setFont (juce::FontOptions (8.5f).withStyle ("bold"));
+    for (int i = 0; i < 3; ++i)
+    {
+        const auto y = track.getY() + 3.0f + static_cast<float> (i) * step;
+        g.setColour (i == mode ? accent : secondary.withAlpha (0.78f));
+        g.drawText (labels[static_cast<size_t> (i)], juce::roundToInt (track.getRight() + 5),
+                    juce::roundToInt (y), juce::roundToInt (bounds.getRight() - track.getRight() - 5),
+                    17, juce::Justification::centredLeft);
+    }
+    if (hasKeyboardFocus (true))
+    {
+        g.setColour (accent);
+        g.drawRoundedRectangle (bounds, 5, 1.0f);
+    }
+    if (down) g.setColour (juce::Colours::black.withAlpha (0.08f)), g.fillRoundedRectangle (bounds, 4);
+}
+
 void AnimatedSwitch::advance (float elapsed)
 {
     const auto target = getToggleState() ? 1.0f : 0.0f;
@@ -389,28 +461,19 @@ ShunDeEssEditor::ShunDeEssEditor (ShunDeEssProcessor& p)
 {
     setOpaque (true);
     setLookAndFeel (&look);
-    modeSwitch.setTitle ("Attenuation mode");
-    modeSwitch.setStateCaptions ("SPLIT", "WIDE");
-    modeSwitch.setFunctionLabelVisible (false);
     addAndMakeVisible (algorithm);
-    algorithm.addItemList ({ "WIDEBAND", "SPLIT-BAND", "SMART" }, 1);
-    algorithm.setTitle ("De-esser mode");
-    algorithm.setAccessible (true);
     addAndMakeVisible (bypass);
     addAndMakeVisible (listen);
-    modeAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "mode", modeSwitch);
     const auto smartInitial = p.parameters.getRawParameterValue ("smart")->load() >= 0.5f;
     lastSmartMode = smartInitial;
     lastSplitMode = p.parameters.getRawParameterValue ("mode")->load() >= 0.5f;
-    algorithm.setSelectedId (smartInitial ? 3 : (p.parameters.getRawParameterValue ("mode")->load() >= 0.5f ? 2 : 1),
-                             juce::dontSendNotification);
-    algorithm.onChange = [this]
+    algorithm.setMode (smartInitial ? 2 : (lastSplitMode ? 1 : 0));
+    algorithm.onModeChange = [this] (int selected)
     {
-        const auto selected = algorithm.getSelectedId();
         auto* split = processor.parameters.getParameter ("mode");
         auto* smart = processor.parameters.getParameter ("smart");
-        split->setValueNotifyingHost (selected == 2 ? 1.0f : 0.0f);
-        smart->setValueNotifyingHost (selected == 3 ? 1.0f : 0.0f);
+        split->setValueNotifyingHost (selected == 1 ? 1.0f : 0.0f);
+        smart->setValueNotifyingHost (selected == 2 ? 1.0f : 0.0f);
         repaint (24, 340, 300, 125);
     };
     bypassAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "bypass", bypass);
@@ -441,10 +504,8 @@ ShunDeEssEditor::ShunDeEssEditor (ShunDeEssProcessor& p)
         slider.onValueChange = [this] { repaint (24, 340, 300, 125); };
         slider.setColour (juce::Slider::textBoxTextColourId, theme.text);
     }
-    modeSwitch.onClick = [this] { repaint (24, 340, 300, 125); };
     listen.setStateCaptions ("LISTEN", "OFF");
     listen.setFunctionLabelVisible (false);
-    modeSwitch.snapToState();
     bypass.snapToState();
     listen.snapToState();
     applyTheme();
@@ -489,7 +550,7 @@ void ShunDeEssEditor::paintResponseDisplay (juce::Graphics& g)
     const auto attenuationFrequency = static_cast<float> (sliders[2].getValue());
     const auto attenuationQ = static_cast<float> (sliders[3].getValue());
     const auto maximumCut = static_cast<float> (sliders[5].getValue());
-    const auto splitBand = modeSwitch.getToggleState();
+    const auto splitBand = algorithm.getMode() == 1;
     const auto xForFrequency = [&] (float frequency)
     {
         const auto octaves = std::log2 (std::clamp (frequency, 2000.0f, 16000.0f) / 2000.0f);
@@ -571,7 +632,9 @@ void ShunDeEssEditor::paintResponseDisplay (juce::Graphics& g)
     g.setColour (theme.secondary);
     g.drawText ("DETECTOR", 38, 480, 72, 12, juce::Justification::centredLeft);
     g.setColour (theme.meter);
-    g.drawText (splitBand ? "ATTENUATOR / SPLIT" : "ATTENUATOR / WIDE",
+    const auto modeCaption = algorithm.getMode() == 2 ? "ATTENUATOR / SMART"
+                            : (splitBand ? "ATTENUATOR / SPLIT" : "ATTENUATOR / WIDE");
+    g.drawText (modeCaption,
                 208, 480, 108, 12, juce::Justification::centredRight);
 }
 
@@ -668,7 +731,7 @@ void ShunDeEssEditor::resized()
     place (8, 358, 702, 76, 64);
     place (9, 434, 702, 76, 64);
     listen.setBounds (230, up (570) + 14, 68, 76);
-    algorithm.setBounds (208, up (702) + 23, 100, 28);
+    algorithm.setBounds (205, up (702) + 5, 112, 78);
 }
 
 void ShunDeEssEditor::timerCallback()
@@ -678,22 +741,21 @@ void ShunDeEssEditor::timerCallback()
     lastTick = now;
     bypass.advance (elapsed);
     listen.advance (elapsed);
-    modeSwitch.advance (elapsed);
+    algorithm.advance (elapsed);
     const auto smart = processor.parameters.getRawParameterValue ("smart")->load() >= 0.5f;
     const auto split = processor.parameters.getRawParameterValue ("mode")->load() >= 0.5f;
     if (smart != lastSmartMode)
     {
         theme = smart ? smartTheme() : themeFor (0, false);
         applyTheme();
-        algorithm.setSelectedId (smart ? 3 : (processor.parameters.getRawParameterValue ("mode")->load() >= 0.5f ? 2 : 1),
-                                 juce::dontSendNotification);
+        algorithm.setMode (smart ? 2 : (split ? 1 : 0));
         lastSmartMode = smart;
         lastSplitMode = split;
         repaint();
     }
     else if (split != lastSplitMode)
     {
-        if (! smart) algorithm.setSelectedId (split ? 2 : 1, juce::dontSendNotification);
+        if (! smart) algorithm.setMode (split ? 1 : 0);
         lastSplitMode = split;
     }
     const auto rawValue = processor.reduction.load (std::memory_order_relaxed);
@@ -718,13 +780,5 @@ void ShunDeEssEditor::applyTheme()
         label.setColour (juce::Label::textColourId, theme.text);
     bypass.setTheme (theme);
     listen.setTheme (theme);
-    modeSwitch.setTheme (theme);
-    algorithm.setColour (juce::ComboBox::backgroundColourId, theme.card);
-    algorithm.setColour (juce::ComboBox::outlineColourId, theme.grid);
-    algorithm.setColour (juce::ComboBox::textColourId, theme.text);
-    algorithm.setColour (juce::ComboBox::arrowColourId, theme.text);
-    look.setColour (juce::PopupMenu::backgroundColourId, theme.card);
-    look.setColour (juce::PopupMenu::textColourId, theme.text);
-    look.setColour (juce::PopupMenu::highlightedBackgroundColourId, theme.control);
-    look.setColour (juce::PopupMenu::highlightedTextColourId, theme.text);
+    algorithm.setTheme (theme);
 }
