@@ -46,3 +46,6 @@
 
 ### 2026-10-20 — output control sizing
 - Increased the Output and Stereo Link knobs to match the Detector knob bounds.
+
+### 2026-10-20 — secondary knob sizing
+- Standardized all secondary knobs to the Attenuator controls' 76 × 64 bounds.
