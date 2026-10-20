@@ -53,5 +53,15 @@ Regenerate the response examples without running the processor checks:
 build-shun-deess/ShunDeEssTests --response-previews projects/ShunDeEss/Previews/ResponseExamples
 ```
 
+Run the deterministic detector/attenuator mock-signal test and write its
+Markdown report (including Smart-mode high-frequency detail retention):
+
+```bash
+build-shun-deess/ShunDeEssTests --analysis-report projects/ShunDeEss/Tests/Reports/detector-attenuator-mock-report.md
+```
+
+The committed example report is at
+[Tests/Reports/detector-attenuator-mock-report.md](Tests/Reports/detector-attenuator-mock-report.md).
+
 JUCE is provided by the parent repository. For system requirements, see the
 root [README](../../README.md).

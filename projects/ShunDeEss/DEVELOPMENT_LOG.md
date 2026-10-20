@@ -117,3 +117,17 @@
   analog flip switch: head-on hex nut, circular flange, and metal lever. Wide,
   Split, and Smart labels remain beside their corresponding positions.
 - Refreshed the full-editor preview.
+
+### 2026-10-20 — detector/attenuator mock-signal report
+- Tightened the three-position flip-switch lever travel so the handle sits
+  closer to the centerline of its round mounting.
+- Added `ShunDeEssTests --analysis-report <path>` to exercise Wideband,
+  Split-band, and Smart with deterministic broadband noise, a low-frequency
+  body tone, and a late high-frequency detail tone.
+- The generated report records gain reduction, body/detail retention, and
+  output level, plus detector rejection measured through its Listen path.
+  The detector favored the selected 7.8 kHz tone by 31.5 dB; Smart retained
+  71.9% of its detail tone versus 48.3% in Wideband while reducing the mock
+  broadband input.
+- The test asserts detector activity, Smart broadband attenuation, and better
+  high-frequency detail retention than Wideband.

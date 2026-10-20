@@ -107,6 +107,150 @@ void generateResponsePreviews (const juce::File& directory)
             throw std::runtime_error ("could not write SHUN response preview");
     }
 }
+
+struct ModeReport
+{
+    float grDb = 0.0f;
+    float lowToneGain = 0.0f;
+    float detailToneGain = 0.0f;
+    float inputRms = 0.0f;
+    float outputRms = 0.0f;
+};
+
+ModeReport runMockMode (int mode, bool smartMode)
+{
+    ShunDeEssProcessor processor;
+    processor.prepareToPlay (48000, 256);
+    set (processor, "mode", static_cast<float> (mode));
+    set (processor, "smart", smartMode ? 1.0f : 0.0f);
+    set (processor, "threshold", -48.0f);
+    set (processor, "depth", 12.0f);
+    set (processor, "frequency", 7800.0f);
+    set (processor, "q", 2.2f);
+    set (processor, "attenuationFrequency", 7200.0f);
+    set (processor, "attenuationQ", 2.8f);
+    set (processor, "attack", 0.2f);
+    set (processor, "release", 10.0f);
+
+    constexpr int blockSize = 256;
+    constexpr int sampleCount = 65536;
+    constexpr int detailStart = sampleCount / 2;
+    constexpr double pi = 3.14159265358979323846;
+    juce::AudioBuffer<float> block (2, blockSize);
+    juce::MidiBuffer midi;
+    std::mt19937 random (0x5eedu);
+    std::normal_distribution<float> noise (0.0f, 0.075f);
+    double inputLow = 0.0, outputLowSine = 0.0, outputLowCosine = 0.0;
+    double inputDetail = 0.0, outputDetailSine = 0.0, outputDetailCosine = 0.0;
+    double inputEnergy = 0.0, outputEnergy = 0.0;
+
+    for (int offset = 0; offset < sampleCount; offset += blockSize)
+    {
+        for (int i = 0; i < blockSize; ++i)
+        {
+            const auto sampleIndex = offset + i;
+            const auto low = 0.12f * std::sin (2.0 * pi * 500.0 * sampleIndex / 48000.0);
+            const auto detail = sampleIndex >= detailStart
+                ? 0.11f * std::sin (2.0 * pi * 7800.0 * sampleIndex / 48000.0) : 0.0f;
+            const auto input = noise (random) + low + detail;
+            if (sampleIndex >= sampleCount - 8192)
+                inputEnergy += input * input;
+            for (int ch = 0; ch < 2; ++ch)
+                block.setSample (ch, i, input);
+
+            if (sampleIndex >= sampleCount - 8192)
+            {
+                const auto lowPhase = 2.0 * pi * 500.0 * sampleIndex / 48000.0;
+                const auto detailPhase = 2.0 * pi * 7800.0 * sampleIndex / 48000.0;
+                inputLow += low * std::sin (lowPhase);
+                inputDetail += detail * std::sin (detailPhase);
+            }
+        }
+        processor.processBlock (block, midi);
+        if (offset >= sampleCount - 8192)
+            for (int i = 0; i < blockSize; ++i)
+            {
+                const auto sampleIndex = offset + i;
+                const auto lowPhase = 2.0 * pi * 500.0 * sampleIndex / 48000.0;
+                const auto detailPhase = 2.0 * pi * 7800.0 * sampleIndex / 48000.0;
+                outputLowSine += block.getSample (0, i) * std::sin (lowPhase);
+                outputLowCosine += block.getSample (0, i) * std::cos (lowPhase);
+                outputDetailSine += block.getSample (0, i) * std::sin (detailPhase);
+                outputDetailCosine += block.getSample (0, i) * std::cos (detailPhase);
+                outputEnergy += block.getSample (0, i) * block.getSample (0, i);
+            }
+    }
+
+    constexpr double projectionScale = 2.0 / 8192.0;
+    const auto detailOut = projectionScale * std::hypot (outputDetailSine, outputDetailCosine);
+    const auto detailIn = projectionScale * std::abs (inputDetail);
+    const auto lowOut = projectionScale * std::hypot (outputLowSine, outputLowCosine);
+    const auto lowIn = projectionScale * std::abs (inputLow);
+    return { processor.reduction.load(), static_cast<float> (lowOut / std::max (lowIn, 1.0e-9)),
+             static_cast<float> (detailOut / std::max (detailIn, 1.0e-9)),
+             static_cast<float> (std::sqrt (inputEnergy / 8192.0)),
+             static_cast<float> (std::sqrt (outputEnergy / 8192.0)) };
+}
+
+void generateAnalysisReport (const juce::File& destination)
+{
+    const auto wide = runMockMode (0, false);
+    const auto split = runMockMode (1, false);
+    const auto smart = runMockMode (0, true);
+    ShunDeEssProcessor detector;
+    detector.prepareToPlay (48000, 256);
+    set (detector, "frequency", 7800.0f);
+    set (detector, "q", 2.2f);
+    set (detector, "listen", 1.0f);
+    juce::AudioBuffer<float> detectorInput (2, 16384);
+    constexpr double pi = 3.14159265358979323846;
+    for (int i = 0; i < detectorInput.getNumSamples(); ++i)
+    {
+        const auto sample = 0.2 * (std::sin (2.0 * pi * 500.0 * i / 48000.0)
+                                 + std::sin (2.0 * pi * 7800.0 * i / 48000.0));
+        for (int ch = 0; ch < detectorInput.getNumChannels(); ++ch)
+            detectorInput.setSample (ch, i, static_cast<float> (sample));
+    }
+    juce::MidiBuffer detectorMidi;
+    detector.processBlock (detectorInput, detectorMidi);
+    const auto lowDetectorTone = measureToneAmplitude (detectorInput, 500.0f);
+    const auto inBandDetectorTone = measureToneAmplitude (detectorInput, 7800.0f);
+    const auto detectorRejectionDb = 20.0f * std::log10 (inBandDetectorTone / std::max (lowDetectorTone, 1.0e-9f));
+    const auto report = juce::String ("# SHUN DE-ESS detector and attenuator mock-signal report\n\n")
+        + "Generated by `ShunDeEssTests --analysis-report`. Input is deterministic seeded broadband noise, "
+          "a 500 Hz body tone, and a 7.8 kHz detail tone introduced after the detector has settled. "
+          "All processing uses 48 kHz stereo blocks of 256 samples.\n\n"
+        + "The detector Listen path was also measured with equal-level 500 Hz and 7.8 kHz tones; at the "
+          "7.8 kHz center setting, the in-band tone is " + juce::String (detectorRejectionDb, 1)
+        + " dB above the out-of-band tone.\n\n"
+        + "| Mode | Detector GR (dB) | Broadband RMS reduction | 500 Hz body retained | 7.8 kHz detail retained |\n"
+          "|---|---:|---:|---:|---:|\n"
+        + "| Wideband | " + juce::String (wide.grDb, 2) + " | "
+        + juce::String (100.0f * (1.0f - wide.outputRms / std::max (wide.inputRms, 1.0e-9f)), 1)
+        + "% | " + juce::String (wide.lowToneGain * 100.0f, 1)
+        + "% | " + juce::String (wide.detailToneGain * 100.0f, 1) + "% |\n"
+        + "| Split-band | " + juce::String (split.grDb, 2) + " | "
+        + juce::String (100.0f * (1.0f - split.outputRms / std::max (split.inputRms, 1.0e-9f)), 1)
+        + "% | " + juce::String (split.lowToneGain * 100.0f, 1)
+        + "% | " + juce::String (split.detailToneGain * 100.0f, 1) + "% |\n"
+        + "| Smart | " + juce::String (smart.grDb, 2) + " | "
+        + juce::String (100.0f * (1.0f - smart.outputRms / std::max (smart.inputRms, 1.0e-9f)), 1)
+        + "% | " + juce::String (smart.lowToneGain * 100.0f, 1)
+        + "% | " + juce::String (smart.detailToneGain * 100.0f, 1) + "% |\n\n"
+        + "Detector controls: 7.8 kHz center, Q 2.2, −48 dB threshold. Attenuator controls: 7.2 kHz center, Q 2.8, "
+          "12 dB maximum depth. The retained-detail column is a sine/cosine projection of the final 8192 samples; "
+          "it shows how much of the isolated 7.8 kHz tone survives broadband attenuation. Smart is expected to "
+          "retain more of that tone than Wideband while still reducing the broadband mock input.\n";
+
+    if (! destination.getParentDirectory().createDirectory() || ! destination.replaceWithText (report))
+        throw std::runtime_error ("could not write detector/attenuator mock-signal report");
+    check (wide.grDb > 0.0f && split.grDb > 0.0f && smart.grDb > 0.0f,
+           "all detector modes report gain reduction on the mock sibilance input");
+    check (detectorRejectionDb > 10.0f, "detector Listen path favors its selected frequency over out-of-band audio");
+    check (smart.outputRms < smart.inputRms * 0.90f, "Smart attenuates the broadband mock input");
+    check (smart.detailToneGain > wide.detailToneGain * 1.05f,
+           "Smart retains more isolated high-frequency detail than Wideband");
+}
 }
 
 int main (int argc, char** argv)
@@ -118,6 +262,12 @@ int main (int argc, char** argv)
         {
             generateResponsePreviews (juce::File (argv[2]));
             std::cout << "5 SHUN response previews generated\n";
+            return 0;
+        }
+        if (argc > 2 && juce::String (argv[1]) == "--analysis-report")
+        {
+            generateAnalysisReport (juce::File (argv[2]));
+            std::cout << "SHUN DE-ESS detector/attenuator report generated: " << argv[2] << '\n';
             return 0;
         }
         ShunDeEssProcessor processor;

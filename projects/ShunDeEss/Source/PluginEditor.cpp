@@ -200,7 +200,8 @@ void ThreeWayModeToggle::paintButton (juce::Graphics& g, bool highlighted, bool 
     g.setColour (surface.darker (0.5f)); g.fillEllipse (cx - 6.0f, cy - 6.0f, 12.0f, 12.0f);
     g.setColour (secondary.darker (0.18f)); g.drawEllipse (cx - 5.3f, cy - 5.3f, 10.6f, 10.6f, 1.0f);
 
-    const auto theta = (position - 1.0f) * 0.68f;
+    const auto theta = (position - 1.0f) * 0.42f;
+    // Keep the three lever throws close to the centre line of the switch.
     const juce::Point<float> tip (cx + std::sin (theta) * 18.0f, cy - std::cos (theta) * 18.0f);
     g.setColour (juce::Colours::black.withAlpha (0.38f));
     g.drawLine (cx + 1.0f, cy + 1.0f, tip.x + 1.0f, tip.y + 1.0f, 5.6f);
