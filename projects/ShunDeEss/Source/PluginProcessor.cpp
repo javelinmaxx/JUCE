@@ -3,6 +3,8 @@
 
 namespace
 {
+// Keep this order aligned with raw[] and the positional reads in process().
+// The IDs themselves are persisted in host automation and saved sessions.
 constexpr std::array<const char*, 14> parameterIds { "mode", "frequency", "q", "attenuationFrequency",
     "attenuationQ", "threshold", "depth", "attack", "release", "output", "stereoLink", "bypass", "listen", "smart" };
 constexpr float pi = 3.14159265358979323846f;
@@ -71,6 +73,8 @@ void ShunDeEssProcessor::analyseSmartSpectrum (float detectorFrequency, float de
         fftData[static_cast<size_t> (i)] = source * window;
     }
     spectralFft.performFrequencyOnlyForwardTransform (fftData.data());
+    // Detector Q controls temporal smoothing of each FFT bin: higher Q tracks
+    // changes faster, so short spectral peaks can stand out from the baseline.
     const auto smoothing = std::clamp (0.92f - (detectorQ - 0.5f) * 0.15f, 0.35f, 0.92f);
     float arithmetic = 0, logarithmic = 0, weightSum = 0;
     std::array<float, 513> magnitudes {};
@@ -92,6 +96,8 @@ void ShunDeEssProcessor::analyseSmartSpectrum (float detectorFrequency, float de
         }
     }
     const auto meanLevel = arithmetic / std::max (weightSum, 1.0f);
+    // Spectral flatness is the weighted geometric mean divided by the weighted
+    // arithmetic mean. Broadband sibilance approaches one; tonal peaks do not.
     smartFlatness = std::clamp (std::exp (logarithmic / std::max (weightSum, 1.0f))
                               / std::max (meanLevel, 1.0e-9f), 0.0f, 1.0f);
     smartAttenuation = std::clamp (smartFlatness * 1.8f, 0.0f, 1.0f);
@@ -285,6 +291,8 @@ void ShunDeEssProcessor::process (juce::AudioBuffer<float>& buffer, bool hostByp
             const auto c = static_cast<size_t> (ch);
             const auto input = buffer.getSample (ch, i);
             dry[c] = std::isfinite (input) ? input : 0.0f;
+            // Share one Smart analysis across both channels while keeping each
+            // channel's detector envelope and audio path independent.
             if (smartMode && ch == 0)
             {
                 analysisRing[static_cast<size_t> (analysisPosition)] = dry[c];
@@ -315,6 +323,8 @@ void ShunDeEssProcessor::process (juce::AudioBuffer<float>& buffer, bool hostByp
             auto wet = listen ? detected[c] : dry[c] + amount * (shaped - dry[c]);
             if (smartMode && ! listen)
             {
+                // Apply a broad cut when the spectrum is noise-like, then mix
+                // back narrow tonal peaks selected by analyseSmartSpectrum().
                 const auto smartAmount = amount * smartAttenuation;
                 wet = dry[c] + smartAmount * (shelfOutput - dry[c]);
                 for (size_t peak = 0; peak < sparkleWeights.size(); ++peak)
