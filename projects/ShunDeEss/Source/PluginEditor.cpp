@@ -412,10 +412,10 @@ ShunDeEssEditor::ShunDeEssEditor (ShunDeEssProcessor& p)
         addAndMakeVisible (slider);
         addAndMakeVisible (labels[i]);
         attachments[i] = std::make_unique<State::SliderAttachment> (p.parameters, ids[i], slider);
-        slider.onValueChange = [this] { repaint (24, 330, 300, 115); };
+        slider.onValueChange = [this] { repaint (24, 340, 300, 125); };
         slider.setColour (juce::Slider::textBoxTextColourId, theme.text);
     }
-    modeSwitch.onClick = [this] { repaint (24, 330, 300, 115); };
+    modeSwitch.onClick = [this] { repaint (24, 340, 300, 125); };
     listen.setStateCaptions ("LISTEN", "OFF");
     listen.setFunctionLabelVisible (false);
     modeSwitch.snapToState();
@@ -423,7 +423,7 @@ ShunDeEssEditor::ShunDeEssEditor (ShunDeEssProcessor& p)
     listen.snapToState();
     applyTheme();
     lastTick = juce::Time::getMillisecondCounterHiRes() * 0.001;
-    setSize (548, 726);
+    setSize (548, 741);
     startTimerHz (30);
 }
 
@@ -441,17 +441,15 @@ void ShunDeEssEditor::paint (juce::Graphics& g)
     g.saveState();
     g.addTransform (juce::AffineTransform::translation (0.0f, -50.0f));
     drawBrushedMetalPanel (g, { 24, 140, 300, 252 }, 10, theme.card, theme.grid);
-    drawAnalogPanel (g, { 24, 494, 300, 116 }, 10, theme.card, theme.grid);
-    drawAnalogPanel (g, { 24, 622, 300, 116 }, 10, theme.card, theme.grid);
-    drawAnalogPanel (g, { 344, 622, 180, 116 }, 10, theme.card, theme.grid);
+    drawAnalogPanel (g, { 24, 514, 300, 116 }, 10, theme.card, theme.grid);
+    drawAnalogPanel (g, { 24, 642, 300, 116 }, 10, theme.card, theme.grid);
+    drawAnalogPanel (g, { 344, 642, 180, 116 }, 10, theme.card, theme.grid);
     g.setColour (theme.text);
     g.setFont (juce::FontOptions (13.0f).withStyle ("bold"));
     g.drawText ("DE-ESSER", 38, 148, 250, 20, juce::Justification::centredLeft);
-    g.drawText ("DETECTOR", 38, 502, 250, 18, juce::Justification::centredLeft);
-    g.drawText ("ATTENUATOR", 38, 630, 250, 18, juce::Justification::centredLeft);
-    g.drawText ("OUTPUT", 358, 630, 152, 18, juce::Justification::centredLeft);
-    g.setColour (theme.grid);
-    g.drawHorizontalLine (488, 24, 324);
+    g.drawText ("DETECTOR", 38, 522, 250, 18, juce::Justification::centredLeft);
+    g.drawText ("ATTENUATOR", 38, 650, 250, 18, juce::Justification::centredLeft);
+    g.drawText ("OUTPUT", 358, 650, 152, 18, juce::Justification::centredLeft);
     paintResponseDisplay (g);
     paintMeter (g);
     g.restoreState();
@@ -459,7 +457,7 @@ void ShunDeEssEditor::paint (juce::Graphics& g)
 
 void ShunDeEssEditor::paintResponseDisplay (juce::Graphics& g)
 {
-    const juce::Rectangle<float> plot (42.0f, 397.0f, 266.0f, 62.0f);
+    const juce::Rectangle<float> plot (42.0f, 407.0f, 266.0f, 57.0f);
     const auto detectorFrequency = static_cast<float> (sliders[0].getValue());
     const auto detectorQ = static_cast<float> (sliders[1].getValue());
     const auto attenuationFrequency = static_cast<float> (sliders[2].getValue());
@@ -473,12 +471,12 @@ void ShunDeEssEditor::paintResponseDisplay (juce::Graphics& g)
     };
     const auto yForDb = [&] (float db)
     {
-        return plot.getY() + plot.getHeight() * std::clamp (-db / 30.0f, 0.0f, 1.0f);
+        return plot.getY() + plot.getHeight() * std::clamp (-db / 18.0f, 0.0f, 1.0f);
     };
 
     g.setColour (theme.meterPanel.withAlpha (0.62f));
     g.fillRoundedRectangle (plot.expanded (7.0f, 4.0f), 5.0f);
-    for (const auto db : { 0, -15, -30 })
+    for (const auto db : { 0, -9, -18 })
     {
         const auto y = yForDb (static_cast<float> (db));
         g.setColour (theme.grid.withAlpha (0.72f));
@@ -545,10 +543,10 @@ void ShunDeEssEditor::paintResponseDisplay (juce::Graphics& g)
 
     g.setFont (juce::FontOptions (7.5f).withStyle ("bold"));
     g.setColour (theme.secondary);
-    g.drawText ("DETECTOR", 38, 477, 72, 12, juce::Justification::centredLeft);
+    g.drawText ("DETECTOR", 38, 480, 72, 12, juce::Justification::centredLeft);
     g.setColour (theme.meter);
     g.drawText (splitBand ? "ATTENUATOR / SPLIT" : "ATTENUATOR / WIDE",
-                208, 477, 108, 12, juce::Justification::centredRight);
+                208, 480, 108, 12, juce::Justification::centredRight);
 }
 
 void ShunDeEssEditor::paintMeter (juce::Graphics& g)
@@ -557,7 +555,7 @@ void ShunDeEssEditor::paintMeter (juce::Graphics& g)
     g.setColour (theme.secondary);
     g.setFont (juce::FontOptions (11.0f));
     g.drawText ("GAIN REDUCTION", 356, 158, 156, 20, juce::Justification::centred);
-    const juce::Rectangle<float> bar (360, 202, 14, 310), plot (410, 202, 98, 310);
+    const juce::Rectangle<float> bar (360, 202, 14, 330), plot (410, 202, 98, 330);
     g.setColour (theme.gaugeTrack);
     g.fillRoundedRectangle (bar, 4);
     for (int db = 0; db <= 18; db += 6)
@@ -614,13 +612,13 @@ void ShunDeEssEditor::paintMeter (juce::Graphics& g)
     g.strokePath (trace, juce::PathStrokeType (0.7f));
     g.restoreState();
     g.setColour (theme.secondary);
-    g.drawText ("-3 s", 408, 516, 44, 18, juce::Justification::centredLeft);
-    g.drawText ("NOW", 466, 516, 44, 18, juce::Justification::centredRight);
+    g.drawText ("-3 s", 408, 536, 44, 18, juce::Justification::centredLeft);
+    g.drawText ("NOW", 466, 536, 44, 18, juce::Justification::centredRight);
     g.setFont (juce::FontOptions (24.0f));
     g.setColour (theme.meter.withAlpha (glow * 0.25f));
-    g.drawText (juce::String (displayedReduction, 1) + " dB", 355, 541, 158, 34, juce::Justification::centred);
+    g.drawText (juce::String (displayedReduction, 1) + " dB", 355, 561, 158, 34, juce::Justification::centred);
     g.setColour (theme.text);
-    g.drawText (juce::String (displayedReduction, 1) + " dB", 356, 542, 156, 32, juce::Justification::centred);
+    g.drawText (juce::String (displayedReduction, 1) + " dB", 356, 562, 156, 32, juce::Justification::centred);
 }
 
 void ShunDeEssEditor::resized()
@@ -637,14 +635,14 @@ void ShunDeEssEditor::resized()
     place (5, 168, 198, 156, 108);
     place (6, 64, 325, 76, 64);
     place (7, 208, 325, 76, 64);
-    place (0, 30, 550, 76, 64);
-    place (1, 122, 550, 76, 64);
-    place (2, 30, 682, 76, 64);
-    place (3, 122, 682, 76, 64);
-    place (8, 358, 682, 76, 64);
-    place (9, 434, 682, 76, 64);
-    listen.setBounds (230, up (550) + 14, 68, 76);
-    modeSwitch.setBounds (230, up (682) + 14, 68, 76);
+    place (0, 30, 570, 76, 64);
+    place (1, 122, 570, 76, 64);
+    place (2, 30, 702, 76, 64);
+    place (3, 122, 702, 76, 64);
+    place (8, 358, 702, 76, 64);
+    place (9, 434, 702, 76, 64);
+    listen.setBounds (230, up (570) + 14, 68, 76);
+    modeSwitch.setBounds (230, up (702) + 14, 68, 76);
 }
 
 void ShunDeEssEditor::timerCallback()

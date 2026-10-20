@@ -90,3 +90,8 @@
   with distinct detector frequency/Q and Wideband shelf or Split bell settings.
 - The preview mode skips processor checks so it can be used just to refresh the
   graph examples.
+
+### 2026-10-20 — vertical layout and response scale
+- Increased editor height by 15 px; shifted Detector, Attenuator, and Output
+  sections down 20 px; extended the GR bar and plot by 20 px.
+- Lowered the response plot by 10 px and changed its vertical axis to −18..0 dB.
