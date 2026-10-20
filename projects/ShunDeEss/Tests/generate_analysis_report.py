@@ -273,12 +273,11 @@ def render(source, png_path, pdf_path):
 
 def render_wide_split_comparison(source):
     source = Path(source)
-    modes = (("Wideband", "wideband"), ("Split-band", "splitband"))
     q_values = (0.5, 1.2, 2.8, 4.0)
     report_text = source.read_text(encoding="utf-8")
-    pulse_text = report_text.split("### Wideband and Split-band pulse test", 1)[-1]
+    pulse_text = report_text.split("### Time-varying pulse test across all modes", 1)[-1]
     mode_rows = {}
-    for mode in ("Wideband", "Split-band"):
+    for mode in ("Wideband", "Split-band", "Smart"):
         match = re.search(rf"\| {re.escape(mode)} \| ([^\n]+)\|", pulse_text)
         if not match:
             raise ValueError(f"Could not find {mode} pulse measurements")
@@ -286,15 +285,16 @@ def render_wide_split_comparison(source):
                            re.findall(r"(-?[\d.]+) / (-?[\d.]+) dB", match.group(1))]
         if len(mode_rows[mode]) != len(q_values):
             raise ValueError(f"Expected one pulse measurement for each Q in {mode}")
-    fig, axes = plt.subplots(2, 4, figsize=(14, 7), facecolor="#182128", sharex=True, sharey=True)
-    fig.subplots_adjust(left=0.07, right=0.91, top=0.82, bottom=0.14, wspace=0.16, hspace=0.30)
-    fig.suptitle("SHUN DE-ESS  |  WIDEBAND & SPLIT-BAND SIBILANCE PULSES",
+    fig, axes = plt.subplots(3, 4, figsize=(14, 9), facecolor="#182128", sharex=True, sharey=True)
+    fig.subplots_adjust(left=0.07, right=0.91, top=0.84, bottom=0.11, wspace=0.16, hspace=0.34)
+    fig.suptitle("SHUN DE-ESS  |  TIME-VARYING SIBILANCE PULSES",
                  color="#f2f5f7", fontsize=16, fontweight="bold", x=0.07, y=0.96, ha="left")
-    fig.text(0.07, 0.90, "Same seeded high-pass noise bursts · measured output − input by frequency and time",
+    fig.text(0.07, 0.90, "Same seeded input across Wideband, Split-band, and Smart · quiet baseline releases to unity",
              color="#aebbc5", fontsize=10)
     norm = TwoSlopeNorm(vmin=-18, vcenter=0, vmax=6)
     mesh = None
-    for row, (mode, stem) in enumerate(modes):
+    all_modes = (("Wideband", "wideband"), ("Split-band", "splitband"), ("Smart", "smart-pulse"))
+    for row, (mode, stem) in enumerate(all_modes):
         for col, q in enumerate(q_values):
             ax = axes[row, col]
             ax.set_facecolor("#202c34")
@@ -324,14 +324,14 @@ def render_wide_split_comparison(source):
             ax.tick_params(colors="#aebbc5", labelsize=8)
             if col == 0:
                 ax.set_ylabel("Frequency (Hz)", color="#c6d0d8")
-            if row == 1:
+            if row == len(all_modes) - 1:
                 ax.set_xlabel("Time (s)", color="#c6d0d8")
             for spine in ax.spines.values():
                 spine.set_color("#52616c")
     cb = fig.colorbar(mesh, ax=axes, pad=0.015, fraction=0.025)
     cb.set_label("Measured output − input (dB)", color="#c6d0d8")
     cb.ax.tick_params(colors="#aebbc5")
-    fig.text(0.07, 0.065, "Pulse / quiet values compare integrated 4.5–12 kHz energy; lower pulse values show detector-linked attenuation. Blue indicates attenuation.",
+    fig.text(0.07, 0.045, "Panel titles show integrated pulse / quiet 4.5–12 kHz change; each pulse should be lower than its quiet baseline. Blue indicates attenuation.",
              color="#c4d0d8", fontsize=9)
     png_path = source.with_name("wide-split-pulse-test-report.png")
     pdf_path = source.with_name("wide-split-pulse-test-report.pdf")

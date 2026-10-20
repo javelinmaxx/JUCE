@@ -224,3 +224,8 @@
   quiet-baseline change is 0.00 dB in both modes.
 - Wideband pulse change now measures −1.07 to −1.96 dB; Split-band measures
   −0.57 to −3.31 dB, depending on Q.
+- Added equivalent pulse-focused Smart runs at each Q while preserving the
+  existing Smart detail-retention sweep. Smart quiet-baseline change is 0.00 dB;
+  pulse attenuation ranges from −1.01 to −1.95 dB.
+- Expanded the comparison heatmap and pulse-versus-quiet regression checks to
+  include all three modes.
