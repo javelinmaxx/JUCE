@@ -54,7 +54,8 @@ build-shun-deess/ShunDeEssTests --response-previews projects/ShunDeEss/Previews/
 ```
 
 Run the deterministic detector/attenuator mock-signal test and write its
-Markdown report (including Smart-mode high-frequency detail retention):
+Markdown report and measured Smart input/output spectrum CSV (including the
+7.8 kHz detail tone):
 
 ```bash
 build-shun-deess/ShunDeEssTests --analysis-report projects/ShunDeEss/Tests/Reports/detector-attenuator-mock-report.md
@@ -64,7 +65,7 @@ The committed example report is at
 [Tests/Reports/detector-attenuator-mock-report.md](Tests/Reports/detector-attenuator-mock-report.md).
 Its plotted versions are available as [PNG](Tests/Reports/detector-attenuator-mock-report.png)
 and [PDF](Tests/Reports/detector-attenuator-mock-report.pdf). Regenerate both from
-the report data with:
+the report and measured spectrum data with:
 
 ```bash
 python3 projects/ShunDeEss/Tests/generate_analysis_report.py

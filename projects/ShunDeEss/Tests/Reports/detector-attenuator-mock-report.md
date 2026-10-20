@@ -12,4 +12,6 @@ The detector Listen path was also measured with equal-level 500 Hz and 7.8 kHz t
 
 Detector controls: 7.8 kHz center, Q 2.2, −48 dB threshold. Attenuator controls: 7.2 kHz center, Q 2.8, 12 dB maximum depth. The retained-detail column is a sine/cosine projection of the final 8192 samples; it shows how much of the isolated 7.8 kHz tone survives broadband attenuation. Smart is expected to retain more of that tone than Wideband while still reducing the broadband mock input.
 
+The Smart spectrum plot is measured from the final 8192 samples of this same mock signal; the narrow 7.8 kHz tone is present in both input and output spectra. Source bins are in [smart-spectral-spectrum.csv](smart-spectral-spectrum.csv).
+
 Plotted report: [PNG](detector-attenuator-mock-report.png) · [PDF](detector-attenuator-mock-report.pdf). Regenerate with `Tests/generate_analysis_report.py`.

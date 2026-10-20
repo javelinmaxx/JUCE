@@ -4,6 +4,7 @@
 #include <iostream>
 #include <random>
 #include <stdexcept>
+#include <vector>
 
 namespace
 {
@@ -115,6 +116,8 @@ struct ModeReport
     float detailToneGain = 0.0f;
     float inputRms = 0.0f;
     float outputRms = 0.0f;
+    std::vector<float> smartInputSamples;
+    std::vector<float> smartOutputSamples;
 };
 
 ModeReport runMockMode (int mode, bool smartMode)
@@ -143,6 +146,12 @@ ModeReport runMockMode (int mode, bool smartMode)
     double inputLow = 0.0, outputLowSine = 0.0, outputLowCosine = 0.0;
     double inputDetail = 0.0, outputDetailSine = 0.0, outputDetailCosine = 0.0;
     double inputEnergy = 0.0, outputEnergy = 0.0;
+    std::vector<float> smartInputSamples, smartOutputSamples;
+    if (smartMode)
+    {
+        smartInputSamples.reserve (8192);
+        smartOutputSamples.reserve (8192);
+    }
 
     for (int offset = 0; offset < sampleCount; offset += blockSize)
     {
@@ -154,7 +163,11 @@ ModeReport runMockMode (int mode, bool smartMode)
                 ? 0.11f * std::sin (2.0 * pi * 7800.0 * sampleIndex / 48000.0) : 0.0f;
             const auto input = noise (random) + low + detail;
             if (sampleIndex >= sampleCount - 8192)
+            {
                 inputEnergy += input * input;
+                if (smartMode)
+                    smartInputSamples.push_back (input);
+            }
             for (int ch = 0; ch < 2; ++ch)
                 block.setSample (ch, i, input);
 
@@ -178,6 +191,8 @@ ModeReport runMockMode (int mode, bool smartMode)
                 outputDetailSine += block.getSample (0, i) * std::sin (detailPhase);
                 outputDetailCosine += block.getSample (0, i) * std::cos (detailPhase);
                 outputEnergy += block.getSample (0, i) * block.getSample (0, i);
+                if (smartMode)
+                    smartOutputSamples.push_back (block.getSample (0, i));
             }
     }
 
@@ -189,7 +204,46 @@ ModeReport runMockMode (int mode, bool smartMode)
     return { processor.reduction.load(), static_cast<float> (lowOut / std::max (lowIn, 1.0e-9)),
              static_cast<float> (detailOut / std::max (detailIn, 1.0e-9)),
              static_cast<float> (std::sqrt (inputEnergy / 8192.0)),
-             static_cast<float> (std::sqrt (outputEnergy / 8192.0)) };
+             static_cast<float> (std::sqrt (outputEnergy / 8192.0)),
+             std::move (smartInputSamples), std::move (smartOutputSamples) };
+}
+
+void writeSmartSpectrumCsv (const juce::File& destination, const ModeReport& smart)
+{
+    constexpr int fftSize = 8192;
+    constexpr double pi = 3.14159265358979323846;
+    if (smart.smartInputSamples.size() != fftSize || smart.smartOutputSamples.size() != fftSize)
+        throw std::runtime_error ("Smart mock signal is missing samples for its measured spectrum");
+
+    juce::dsp::FFT fft (13);
+    std::vector<float> inputSpectrum (static_cast<size_t> (fftSize * 2), 0.0f);
+    std::vector<float> outputSpectrum (static_cast<size_t> (fftSize * 2), 0.0f);
+    double windowSum = 0.0;
+    for (int i = 0; i < fftSize; ++i)
+    {
+        const auto window = 0.5 - 0.5 * std::cos (2.0 * pi * i / (fftSize - 1));
+        inputSpectrum[static_cast<size_t> (i)] = smart.smartInputSamples[static_cast<size_t> (i)] * static_cast<float> (window);
+        outputSpectrum[static_cast<size_t> (i)] = smart.smartOutputSamples[static_cast<size_t> (i)] * static_cast<float> (window);
+        windowSum += window;
+    }
+    fft.performFrequencyOnlyForwardTransform (inputSpectrum.data());
+    fft.performFrequencyOnlyForwardTransform (outputSpectrum.data());
+
+    juce::FileOutputStream stream (destination);
+    if (! stream.openedOk() || ! stream.writeText ("frequency_hz,input_dbfs,output_dbfs,change_db\n", false, false, "\n"))
+        throw std::runtime_error ("could not create Smart spectral measurement CSV");
+    for (int bin = 1; bin <= fftSize / 2; ++bin)
+    {
+        const auto frequency = static_cast<float> (bin) * 48000.0f / fftSize;
+        const auto inputDb = 20.0f * std::log10 (std::max (inputSpectrum[static_cast<size_t> (bin)]
+                                                * static_cast<float> (2.0 / windowSum), 1.0e-9f));
+        const auto outputDb = 20.0f * std::log10 (std::max (outputSpectrum[static_cast<size_t> (bin)]
+                                                 * static_cast<float> (2.0 / windowSum), 1.0e-9f));
+        const auto row = juce::String (frequency, 2) + "," + juce::String (inputDb, 4) + ","
+                       + juce::String (outputDb, 4) + "," + juce::String (outputDb - inputDb, 4) + "\n";
+        if (! stream.writeText (row, false, false, "\n"))
+            throw std::runtime_error ("could not write Smart spectral measurement CSV");
+    }
 }
 
 void generateAnalysisReport (const juce::File& destination)
@@ -241,10 +295,17 @@ void generateAnalysisReport (const juce::File& destination)
           "12 dB maximum depth. The retained-detail column is a sine/cosine projection of the final 8192 samples; "
           "it shows how much of the isolated 7.8 kHz tone survives broadband attenuation. Smart is expected to "
           "retain more of that tone than Wideband while still reducing the broadband mock input.\n\n"
+          "The Smart spectrum plot is measured from the final 8192 samples of this same mock signal; "
+          "the narrow 7.8 kHz tone is present in both input and output spectra. Source bins are in "
+          "[smart-spectral-spectrum.csv](smart-spectral-spectrum.csv).\n\n"
           "Plotted report: [PNG](detector-attenuator-mock-report.png) · "
           "[PDF](detector-attenuator-mock-report.pdf). Regenerate with `Tests/generate_analysis_report.py`.\n";
 
-    if (! destination.getParentDirectory().createDirectory() || ! destination.replaceWithText (report))
+    const auto spectrumCsv = destination.getSiblingFile ("smart-spectral-spectrum.csv");
+    if (! destination.getParentDirectory().createDirectory())
+        throw std::runtime_error ("could not create detector/attenuator report directory");
+    writeSmartSpectrumCsv (spectrumCsv, smart);
+    if (! destination.replaceWithText (report))
         throw std::runtime_error ("could not write detector/attenuator mock-signal report");
     check (wide.grDb > 0.0f && split.grDb > 0.0f && smart.grDb > 0.0f,
            "all detector modes report gain reduction on the mock sibilance input");

@@ -147,3 +147,11 @@
 - Regenerated the editor preview from a clean build; the handle now visibly
   stays on the centerline through all three throws. Rebuilt VST3, Standalone,
   and test targets from the same clean objects.
+
+### 2026-10-20 — measured Smart attenuation spectrum
+- Extended the mock-signal report test to export the final 8192 samples of
+  Smart-mode input and output as an FFT CSV, with the 7.8 kHz detail tone active.
+- Added a measured spectrum panel plotting input, output, and output-minus-input
+  across 2–16 kHz, alongside the existing detector, attenuator, and retention
+  plots. The difference trace shows Smart's actual broad attenuation and narrow
+  detail restoration from the processed mock signal.
