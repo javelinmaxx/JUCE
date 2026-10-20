@@ -53,3 +53,8 @@
 ### 2026-10-20 — control alignment refinement
 - Restored DET Q and ATT Q to their prior positions and lowered both switches
   by 3 px to align with the knob rows.
+
+### 2026-10-20 — compressor panel spacing
+- Aligned Release horizontally with Range and moved Attack/Release up by 15 px.
+- Shortened the Compressor panel by 15 px. With Detector unchanged, the gap
+  between panels is now 27 px, up from 12 px (15 px of additional open space).
