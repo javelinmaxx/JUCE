@@ -34,14 +34,18 @@ public:
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     void process (juce::AudioBuffer<float>&, bool hostBypassed);
-    void updateDetectorCoefficients (float frequency, float q) noexcept;
+    void updateFilterCoefficients (float detectorFrequency, float detectorQ,
+                                   float attenuationFrequency, float attenuationQ,
+                                   float maximumReduction) noexcept;
+    struct BiquadCoefficients { float b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0; };
     struct BiquadState { float x1 = 0, x2 = 0, y1 = 0, y2 = 0; };
-    std::array<std::atomic<float>*, 12> raw {};
-    std::array<BiquadState, 2> detectorState {};
-    std::array<float, 2> envelopes {}, lowBand {};
-    float b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0;
-    float sampleRate = 44100, lastFrequency = -1, lastQ = -1;
-    float attackCoefficient = 0, releaseCoefficient = 0;
-    float lowPassCoefficient = 0;
+    static float filterSample (float, BiquadState&, const BiquadCoefficients&) noexcept;
+    std::array<std::atomic<float>*, 14> raw {};
+    std::array<BiquadState, 2> detectorState {}, shelfState {}, bellState {};
+    std::array<float, 2> envelopes {};
+    BiquadCoefficients detectorFilter, shelfFilter, bellFilter;
+    float sampleRate = 44100;
+    float lastDetectorFrequency = -1, lastDetectorQ = -1;
+    float lastAttenuationFrequency = -1, lastAttenuationQ = -1, lastDepth = -1;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ShunDeEssProcessor)
 };

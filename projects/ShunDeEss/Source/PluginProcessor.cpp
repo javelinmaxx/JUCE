@@ -3,8 +3,9 @@
 
 namespace
 {
-constexpr std::array<const char*, 12> parameterIds { "mode", "frequency", "q", "threshold", "depth",
-    "attack", "release", "output", "mix", "stereoLink", "bypass", "listen" };
+constexpr std::array<const char*, 14> parameterIds { "mode", "frequency", "q", "attenuationFrequency",
+    "attenuationQ", "threshold", "depth", "attack", "release", "output", "mix", "stereoLink",
+    "bypass", "listen" };
 constexpr float pi = 3.14159265358979323846f;
 }
 
@@ -12,8 +13,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout ShunDeEssProcessor::createPa
 {
     using Float = juce::AudioParameterFloat;
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
-    layout.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { "mode", 1 },
-        "De-ess mode", juce::StringArray { "Wideband", "Split-band" }, 0));
+    layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "mode", 1 }, "Split-band", false));
     const auto addFloat = [&] (const char* id, const char* title, float minimum, float maximum,
                                float interval, float initial, float centre, const char* unit)
     {
@@ -23,8 +23,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout ShunDeEssProcessor::createPa
         layout.add (std::make_unique<Float> (juce::ParameterID { id, 1 }, title, range, initial,
             juce::AudioParameterFloatAttributes().withLabel (unit)));
     };
-    addFloat ("frequency", "Sibilance frequency", 2000, 12000, 10, 6500, 6000, "Hz");
+    addFloat ("frequency", "Detector frequency", 2000, 12000, 10, 6500, 6000, "Hz");
     addFloat ("q", "Detector bandwidth", 0.5f, 4, 0.01f, 1.4f, 1.2f, "Q");
+    addFloat ("attenuationFrequency", "Attenuation frequency", 2000, 16000, 10, 6500, 7000, "Hz");
+    addFloat ("attenuationQ", "Attenuation Q", 0.5f, 4, 0.01f, 1.2f, 1.2f, "Q");
     addFloat ("threshold", "Threshold", -60, 0, 0.1f, -28, -30, "dB");
     addFloat ("depth", "Maximum reduction", 0, 18, 0.1f, 8, 8, "dB");
     addFloat ("attack", "Attack", 0.1f, 20, 0.01f, 1, 2, "ms");
@@ -50,17 +52,19 @@ void ShunDeEssProcessor::prepareToPlay (double rate, int)
 {
     sampleRate = std::isfinite (rate) && rate >= 8000 ? static_cast<float> (rate) : 44100.0f;
     detectorState = {};
+    shelfState = {};
+    bellState = {};
     envelopes = {};
-    lowBand = {};
-    lastFrequency = lastQ = -1;
+    lastDetectorFrequency = lastDetectorQ = lastAttenuationFrequency = lastAttenuationQ = lastDepth = -1;
     reduction.store (0, std::memory_order_relaxed);
 }
 
 void ShunDeEssProcessor::releaseResources()
 {
     detectorState = {};
+    shelfState = {};
+    bellState = {};
     envelopes = {};
-    lowBand = {};
 }
 
 bool ShunDeEssProcessor::isBusesLayoutSupported (const BusesLayout& buses) const
@@ -70,21 +74,72 @@ bool ShunDeEssProcessor::isBusesLayoutSupported (const BusesLayout& buses) const
         && (input == juce::AudioChannelSet::mono() || input == juce::AudioChannelSet::stereo());
 }
 
-void ShunDeEssProcessor::updateDetectorCoefficients (float frequency, float q) noexcept
+float ShunDeEssProcessor::filterSample (float input, BiquadState& state,
+                                        const BiquadCoefficients& coefficients) noexcept
 {
-    frequency = std::clamp (frequency, 2000.0f, std::min (12000.0f, sampleRate * 0.45f));
-    q = std::clamp (q, 0.5f, 4.0f);
-    const auto omega = 2.0f * pi * frequency / sampleRate;
-    const auto alpha = std::sin (omega) / (2.0f * q);
-    const auto normalizer = 1.0f / (1.0f + alpha);
-    b0 = alpha * normalizer;
-    b1 = 0.0f;
-    b2 = -alpha * normalizer;
-    a1 = -2.0f * std::cos (omega) * normalizer;
-    a2 = (1.0f - alpha) * normalizer;
-    lowPassCoefficient = 1.0f - std::exp (-2.0f * pi * frequency / sampleRate);
-    lastFrequency = frequency;
-    lastQ = q;
+    const auto output = coefficients.b0 * input + coefficients.b1 * state.x1 + coefficients.b2 * state.x2
+                      - coefficients.a1 * state.y1 - coefficients.a2 * state.y2;
+    state.x2 = state.x1;
+    state.x1 = input;
+    state.y2 = state.y1;
+    state.y1 = std::isfinite (output) ? output : 0.0f;
+    return state.y1;
+}
+
+void ShunDeEssProcessor::updateFilterCoefficients (float detectorFrequency, float detectorQ,
+                                                   float attenuationFrequency, float attenuationQ,
+                                                   float maximumReduction) noexcept
+{
+    const auto nyquistLimit = sampleRate * 0.45f;
+    detectorFrequency = std::clamp (detectorFrequency, 2000.0f, std::min (12000.0f, nyquistLimit));
+    attenuationFrequency = std::clamp (attenuationFrequency, 2000.0f, std::min (16000.0f, nyquistLimit));
+    detectorQ = std::clamp (detectorQ, 0.5f, 4.0f);
+    attenuationQ = std::clamp (attenuationQ, 0.5f, 4.0f);
+    maximumReduction = std::clamp (maximumReduction, 0.0f, 18.0f);
+
+    const auto normalize = [] (BiquadCoefficients& c, float a0)
+    {
+        const auto inverse = 1.0f / a0;
+        c.b0 *= inverse; c.b1 *= inverse; c.b2 *= inverse;
+        c.a1 *= inverse; c.a2 *= inverse;
+    };
+    const auto detectorOmega = 2.0f * pi * detectorFrequency / sampleRate;
+    const auto detectorAlpha = std::sin (detectorOmega) / (2.0f * detectorQ);
+    detectorFilter = { detectorAlpha, 0.0f, -detectorAlpha,
+                       -2.0f * std::cos (detectorOmega), 1.0f - detectorAlpha };
+    normalize (detectorFilter, 1.0f + detectorAlpha);
+
+    const auto omega = 2.0f * pi * attenuationFrequency / sampleRate;
+    const auto sine = std::sin (omega);
+    const auto cosine = std::cos (omega);
+    const auto alpha = sine / (2.0f * attenuationQ);
+    const auto bellA = std::pow (10.0f, -maximumReduction / 40.0f);
+    bellFilter = { 1.0f + alpha * bellA, -2.0f * cosine, 1.0f - alpha * bellA,
+                   -2.0f * cosine, 1.0f - alpha / bellA };
+    normalize (bellFilter, 1.0f + alpha / bellA);
+
+    // The shelf's slope is inversely related to its Q control: higher Q gives
+    // a steeper transition. The shelf gain is the configured maximum cut.
+    const auto shelfA = bellA;
+    const auto slope = std::clamp (1.0f / attenuationQ, 0.25f, 2.0f);
+    const auto radicand = std::max (0.0f, (shelfA + 1.0f / shelfA) * (1.0f / slope - 1.0f) + 2.0f);
+    const auto shelfAlpha = sine * 0.5f * std::sqrt (radicand);
+    const auto beta = 2.0f * std::sqrt (shelfA) * shelfAlpha;
+    shelfFilter = {
+        shelfA * ((shelfA + 1.0f) + (shelfA - 1.0f) * cosine + beta),
+        -2.0f * shelfA * ((shelfA - 1.0f) + (shelfA + 1.0f) * cosine),
+        shelfA * ((shelfA + 1.0f) + (shelfA - 1.0f) * cosine - beta),
+        2.0f * ((shelfA - 1.0f) - (shelfA + 1.0f) * cosine),
+        (shelfA + 1.0f) - (shelfA - 1.0f) * cosine - beta
+    };
+    const auto shelfA0 = (shelfA + 1.0f) - (shelfA - 1.0f) * cosine + beta;
+    normalize (shelfFilter, shelfA0);
+
+    lastDetectorFrequency = detectorFrequency;
+    lastDetectorQ = detectorQ;
+    lastAttenuationFrequency = attenuationFrequency;
+    lastAttenuationQ = attenuationQ;
+    lastDepth = maximumReduction;
 }
 
 void ShunDeEssProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
@@ -112,55 +167,58 @@ void ShunDeEssProcessor::process (juce::AudioBuffer<float>& buffer, bool hostByp
         return;
 
     const auto value = [&] (size_t index) { return raw[index]->load (std::memory_order_relaxed); };
-    const auto mode = value (0) >= 0.5f;
-    const auto frequency = value (1);
-    const auto q = value (2);
-    const auto threshold = value (3);
-    const auto depth = value (4);
-    const auto attackMs = value (5);
-    const auto releaseMs = value (6);
-    const auto outputGain = std::pow (10.0f, value (7) / 20.0f);
-    const auto mix = value (8) * 0.01f;
-    const auto stereoLink = value (9) * 0.01f;
-    const auto bypass = hostBypassed || value (10) >= 0.5f;
-    const auto listen = value (11) >= 0.5f;
-    if (std::abs (frequency - lastFrequency) > 0.1f || std::abs (q - lastQ) > 0.001f)
-        updateDetectorCoefficients (frequency, q);
+    const auto splitBand = value (0) >= 0.5f;
+    const auto detectorFrequency = value (1);
+    const auto detectorQ = value (2);
+    const auto attenuationFrequency = value (3);
+    const auto attenuationQ = value (4);
+    const auto threshold = value (5);
+    const auto depth = value (6);
+    const auto attackMs = value (7);
+    const auto releaseMs = value (8);
+    const auto outputGain = std::pow (10.0f, value (9) / 20.0f);
+    const auto mix = value (10) * 0.01f;
+    const auto stereoLink = value (11) * 0.01f;
+    const auto bypass = hostBypassed || value (12) >= 0.5f;
+    const auto listen = value (13) >= 0.5f;
+    if (std::abs (detectorFrequency - lastDetectorFrequency) > 0.1f
+        || std::abs (detectorQ - lastDetectorQ) > 0.001f
+        || std::abs (attenuationFrequency - lastAttenuationFrequency) > 0.1f
+        || std::abs (attenuationQ - lastAttenuationQ) > 0.001f
+        || std::abs (depth - lastDepth) > 0.001f)
+        updateFilterCoefficients (detectorFrequency, detectorQ, attenuationFrequency, attenuationQ, depth);
     const auto attack = std::exp (-1.0f / (0.001f * attackMs * sampleRate));
     const auto release = std::exp (-1.0f / (0.001f * releaseMs * sampleRate));
     float blockReduction = 0;
 
     for (int i = 0; i < buffer.getNumSamples(); ++i)
     {
-        std::array<float, 2> dry {}, detected {}, level {};
-        for (int ch = 0; ch < channels; ++ch)
-        {
-            auto& state = detectorState[static_cast<size_t> (ch)];
-            const auto input = buffer.getSample (ch, i);
-            dry[static_cast<size_t> (ch)] = std::isfinite (input) ? input : 0.0f;
-            const auto filtered = b0 * dry[static_cast<size_t> (ch)] + b1 * state.x1 + b2 * state.x2
-                                - a1 * state.y1 - a2 * state.y2;
-            state.x2 = state.x1; state.x1 = dry[static_cast<size_t> (ch)];
-            state.y2 = state.y1; state.y1 = std::isfinite (filtered) ? filtered : 0.0f;
-            detected[static_cast<size_t> (ch)] = state.y1;
-            const auto magnitude = std::abs (state.y1);
-            auto& envelope = envelopes[static_cast<size_t> (ch)];
-            const auto coefficient = magnitude > envelope ? attack : release;
-            envelope = magnitude + coefficient * (envelope - magnitude);
-            level[static_cast<size_t> (ch)] = 20.0f * std::log10 (std::max (envelope, 1.0e-9f));
-        }
-        const auto linkedLevel = channels == 2 ? std::max (level[0], level[1]) : level[0];
+        std::array<float, 2> dry {}, detected {}, detectorLevel {};
         for (int ch = 0; ch < channels; ++ch)
         {
             const auto c = static_cast<size_t> (ch);
-            const auto detectorDb = level[c] + stereoLink * (linkedLevel - level[c]);
-            const auto reductionDb = std::clamp (detectorDb - threshold, 0.0f, depth);
+            const auto input = buffer.getSample (ch, i);
+            dry[c] = std::isfinite (input) ? input : 0.0f;
+            detected[c] = filterSample (dry[c], detectorState[c], detectorFilter);
+            const auto magnitude = std::abs (detected[c]);
+            auto& envelope = envelopes[c];
+            const auto coefficient = magnitude > envelope ? attack : release;
+            envelope = magnitude + coefficient * (envelope - magnitude);
+            detectorLevel[c] = 20.0f * std::log10 (std::max (envelope, 1.0e-9f));
+        }
+        const auto linkedLevel = channels == 2 ? std::max (detectorLevel[0], detectorLevel[1]) : detectorLevel[0];
+        for (int ch = 0; ch < channels; ++ch)
+        {
+            const auto c = static_cast<size_t> (ch);
+            const auto level = detectorLevel[c] + stereoLink * (linkedLevel - detectorLevel[c]);
+            const auto reductionDb = std::clamp (level - threshold, 0.0f, depth);
             blockReduction = std::max (blockReduction, reductionDb);
-            const auto gain = std::pow (10.0f, -reductionDb / 20.0f);
-            lowBand[c] += lowPassCoefficient * (dry[c] - lowBand[c]);
-            const auto highBand = dry[c] - lowBand[c];
-            const auto wet = mode ? lowBand[c] + highBand * gain : dry[c] * gain;
-            const auto mixed = listen ? detected[c] : dry[c] + mix * (wet - dry[c]);
+            const auto amount = depth > 0.0f ? reductionDb / depth : 0.0f;
+            const auto shelfOutput = filterSample (dry[c], shelfState[c], shelfFilter);
+            const auto bellOutput = filterSample (dry[c], bellState[c], bellFilter);
+            const auto shaped = splitBand ? bellOutput : shelfOutput;
+            const auto wet = listen ? detected[c] : dry[c] + amount * (shaped - dry[c]);
+            const auto mixed = listen ? wet : dry[c] + mix * (wet - dry[c]);
             buffer.setSample (ch, i, bypass ? dry[c] : mixed * outputGain);
         }
     }

@@ -7,19 +7,20 @@ identity independent.
 
 The first build provides:
 
-- Wideband attenuation and split-band attenuation, which leaves low frequencies
-  intact.
-- Adjustable sibilance frequency (2–12 kHz), detector bandwidth, threshold,
-  and maximum reduction (0–18 dB).
+- A selectable Wideband/Split-band attenuator: Wideband applies a high-shelf cut,
+  while Split-band applies a bell-shaped cut around the selected attenuation band.
+- Independent detector frequency/bandwidth and attenuation frequency/Q controls,
+  plus threshold and maximum reduction (0–18 dB).
 - Attack, release, output, wet/dry mix, stereo linking, detector listen, and
   bypass controls.
 - A timestamped three-second gain-reduction trace and a vertical GR meter.
 - VST3 and Standalone targets; AU is also enabled when built on macOS.
 
 The band-pass detector is normalized to unity at its selected center frequency.
-Listen auditions its detector signal. The split-band crossover follows the selected sibilance
-frequency. These controls are intended as a practical starting point and can be
-refined against listening tests and measured material.
+Listen auditions its detector signal. Attenuation frequency and Q shape the
+wideband high shelf and the split-band bell independently from the detector.
+These controls are intended as a practical starting point and can be refined
+against listening tests and measured material.
 
 An editor preview is available at [Previews/shun-de-ess.png](Previews/shun-de-ess.png).
 

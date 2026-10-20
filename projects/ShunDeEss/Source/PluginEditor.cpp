@@ -380,21 +380,21 @@ ShunDeEssEditor::ShunDeEssEditor (ShunDeEssProcessor& p)
 {
     setOpaque (true);
     setLookAndFeel (&look);
-    mode.addItemList ({ "Wideband", "Split-band" }, 1);
-    mode.setTitle ("De-ess mode");
-    mode.setAccessible (true);
-    addAndMakeVisible (mode);
+    modeSwitch.setTitle ("Attenuation mode");
+    modeSwitch.setStateCaptions ("SPLIT", "WIDE");
+    modeSwitch.setFunctionLabelVisible (false);
+    addAndMakeVisible (modeSwitch);
     addAndMakeVisible (bypass);
     addAndMakeVisible (listen);
-    modeAttachment = std::make_unique<State::ComboBoxAttachment> (p.parameters, "mode", mode);
+    modeAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "mode", modeSwitch);
     bypassAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "bypass", bypass);
     listenAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "listen", listen);
 
-    const std::array<const char*, 9> ids { "frequency", "q", "threshold", "depth", "attack",
-        "release", "output", "mix", "stereoLink" };
-    const std::array<const char*, 9> names { "FREQUENCY", "BANDWIDTH", "THRESHOLD", "RANGE",
-        "ATTACK", "RELEASE", "OUTPUT", "MIX", "ST LINK" };
-    const std::array<const char*, 9> units { " Hz", " Q", " dB", " dB", " ms", " ms", " dB", " %", " %" };
+    const std::array<const char*, 11> ids { "frequency", "q", "attenuationFrequency", "attenuationQ",
+        "threshold", "depth", "attack", "release", "output", "mix", "stereoLink" };
+    const std::array<const char*, 11> names { "DET FREQ", "DET Q", "ATT FREQ", "ATT Q", "THRESHOLD",
+        "RANGE", "ATTACK", "RELEASE", "OUTPUT", "MIX", "ST LINK" };
+    const std::array<const char*, 11> units { " Hz", " Q", " Hz", " Q", " dB", " dB", " ms", " ms", " dB", " %", " %" };
     for (size_t i = 0; i < sliders.size(); ++i)
     {
         auto& slider = sliders[i];
@@ -416,6 +416,7 @@ ShunDeEssEditor::ShunDeEssEditor (ShunDeEssProcessor& p)
     }
     listen.setStateCaptions ("LISTEN", "OFF");
     listen.setFunctionLabelVisible (false);
+    modeSwitch.snapToState();
     bypass.snapToState();
     listen.snapToState();
     applyTheme();
@@ -436,18 +437,15 @@ void ShunDeEssEditor::paint (juce::Graphics& g)
     g.setFont (juce::FontOptions (27.0f));
     g.drawText ("SHUN DE-ESS", 24, 38, 410, 38, juce::Justification::centredLeft);
     drawBrushedMetalPanel (g, { 24, 140, 300, 342 }, 10, theme.card, theme.grid);
-    drawAnalogPanel (g, { 24, 494, 300, 116 }, 10, theme.card, theme.grid);
-    drawAnalogPanel (g, { 24, 610, 300, 116 }, 10, theme.card, theme.grid);
+    drawAnalogPanel (g, { 24, 494, 300, 232 }, 10, theme.card, theme.grid);
     drawAnalogPanel (g, { 344, 610, 180, 116 }, 10, theme.card, theme.grid);
     g.setColour (theme.text);
     g.setFont (juce::FontOptions (13.0f).withStyle ("bold"));
     g.drawText ("DE-ESSER", 38, 148, 250, 20, juce::Justification::centredLeft);
-    g.drawText ("SIDECHAIN", 38, 502, 250, 18, juce::Justification::centredLeft);
-    g.drawText ("DETECTOR", 38, 618, 250, 20, juce::Justification::centredLeft);
+    g.drawText ("ATTENUATOR", 38, 502, 250, 18, juce::Justification::centredLeft);
     g.drawText ("OUTPUT", 358, 618, 152, 18, juce::Justification::centredLeft);
     g.setColour (theme.grid);
     g.drawHorizontalLine (488, 24, 324);
-    g.drawHorizontalLine (604, 24, 324);
     paintMeter (g);
 }
 
@@ -526,7 +524,6 @@ void ShunDeEssEditor::paintMeter (juce::Graphics& g)
 void ShunDeEssEditor::resized()
 {
     const auto up = [] (int y) { return y - 30; };
-    mode.setBounds (24, up (98), 500, 32);
     bypass.setBounds (450, up (63), 74, 28);
     const auto place = [this, &up] (size_t index, int x, int y, int width, int height)
     {
@@ -534,16 +531,19 @@ void ShunDeEssEditor::resized()
         sliders[index].setTextBoxStyle (juce::Slider::TextBoxBelow, false, width, 17);
         sliders[index].setBounds (x, up (y + 20), width, height);
     };
-    place (2, 38, 208, 128, 108);
-    place (3, 168, 208, 156, 108);
-    place (4, 62, 350, 80, 60);
-    place (5, 204, 350, 80, 60);
-    place (0, 30, 550, 80, 66);
-    place (1, 130, 550, 80, 66);
-    place (8, 230, 550, 80, 66);
-    place (6, 354, 670, 70, 56);
-    place (7, 444, 670, 70, 56);
-    listen.setBounds (132, up (670), 62, 64);
+    place (4, 38, 208, 128, 108);
+    place (5, 168, 208, 156, 108);
+    place (6, 62, 350, 80, 60);
+    place (7, 204, 350, 80, 60);
+    place (0, 30, 550, 76, 64);
+    place (1, 122, 550, 76, 64);
+    place (2, 30, 646, 76, 64);
+    place (3, 122, 646, 76, 64);
+    place (8, 350, 670, 54, 56);
+    place (9, 410, 670, 54, 56);
+    place (10, 470, 670, 54, 56);
+    modeSwitch.setBounds (230, up (550), 68, 76);
+    listen.setBounds (230, up (638), 68, 76);
 }
 
 void ShunDeEssEditor::timerCallback()
@@ -553,6 +553,7 @@ void ShunDeEssEditor::timerCallback()
     lastTick = now;
     bypass.advance (elapsed);
     listen.advance (elapsed);
+    modeSwitch.advance (elapsed);
     const auto rawValue = processor.reduction.load (std::memory_order_relaxed);
     const auto reduction = std::isfinite (rawValue) ? std::clamp (rawValue, 0.0f, 18.0f) : 0.0f;
     displayedReduction = std::max (reduction, displayedReduction * std::exp (-elapsed / 0.25f));
@@ -563,10 +564,6 @@ void ShunDeEssEditor::timerCallback()
 void ShunDeEssEditor::applyTheme()
 {
     look.setTheme (theme);
-    for (auto colourId : { juce::ComboBox::backgroundColourId, juce::ComboBox::outlineColourId })
-        mode.setColour (colourId, colourId == juce::ComboBox::backgroundColourId ? theme.card : theme.grid);
-    mode.setColour (juce::ComboBox::textColourId, theme.text);
-    mode.setColour (juce::ComboBox::arrowColourId, theme.text);
     look.setColour (juce::PopupMenu::backgroundColourId, theme.card);
     look.setColour (juce::PopupMenu::textColourId, theme.text);
     look.setColour (juce::PopupMenu::highlightedBackgroundColourId, theme.control);
@@ -579,4 +576,5 @@ void ShunDeEssEditor::applyTheme()
         label.setColour (juce::Label::textColourId, theme.text);
     bypass.setTheme (theme);
     listen.setTheme (theme);
+    modeSwitch.setTheme (theme);
 }

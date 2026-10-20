@@ -29,6 +29,22 @@ float measureRms (const juce::AudioBuffer<float>& buffer, int channel = 0)
     return static_cast<float> (std::sqrt (sum / (buffer.getNumSamples() - start)));
 }
 
+float measureToneAmplitude (const juce::AudioBuffer<float>& buffer, float frequency, int channel = 0)
+{
+    constexpr double pi = 3.14159265358979323846;
+    constexpr double sampleRate = 48000;
+    const auto start = buffer.getNumSamples() - 4096;
+    double sine = 0, cosine = 0;
+    for (int i = start; i < buffer.getNumSamples(); ++i)
+    {
+        const auto phase = 2.0 * pi * frequency * i / sampleRate;
+        const auto sample = buffer.getSample (channel, i);
+        sine += sample * std::sin (phase);
+        cosine += sample * std::cos (phase);
+    }
+    return static_cast<float> (2.0 * std::hypot (sine, cosine) / 4096.0);
+}
+
 void renderSine (ShunDeEssProcessor& processor, juce::AudioBuffer<float>& buffer, float frequency, float amplitude)
 {
     juce::MidiBuffer midi;
@@ -50,7 +66,7 @@ int main (int argc, char** argv)
     {
         juce::ScopedJuceInitialiser_GUI gui;
         ShunDeEssProcessor processor;
-        check (processor.getParameters().size() == 12, "all de-esser parameters are registered");
+        check (processor.getParameters().size() == 14, "all de-esser parameters are registered");
         check (processor.getName() == "SHUN DE-ESS", "plug-in identity is SHUN DE-ESS");
         processor.prepareToPlay (48000, 256);
         set (processor, "threshold", -42);
@@ -61,6 +77,28 @@ int main (int argc, char** argv)
         renderSine (processor, highTone, 6500, 0.5f);
         check (measureRms (highTone) < 0.20f, "wideband mode reduces sustained sibilance");
         check (processor.reduction.load() > 8.0f, "gain-reduction meter reports de-essing amount");
+
+        ShunDeEssProcessor shelf;
+        shelf.prepareToPlay (48000, 256);
+        set (shelf, "threshold", -42);
+        set (shelf, "depth", 12);
+        set (shelf, "attack", 0.2f);
+        set (shelf, "release", 10);
+        juce::AudioBuffer<float> twoTones (2, 16384);
+        constexpr double pi = 3.14159265358979323846;
+        for (int i = 0; i < twoTones.getNumSamples(); ++i)
+        {
+            const auto sample = 0.25 * std::sin (2.0 * pi * 500.0 * i / 48000.0)
+                              + 0.25 * std::sin (2.0 * pi * 10000.0 * i / 48000.0);
+            for (int ch = 0; ch < twoTones.getNumChannels(); ++ch)
+                twoTones.setSample (ch, i, static_cast<float> (sample));
+        }
+        juce::MidiBuffer shelfMidi;
+        shelf.processBlock (twoTones, shelfMidi);
+        check (measureToneAmplitude (twoTones, 500) > 0.23f,
+               "wideband high-shelf attenuation preserves frequencies below the shelf");
+        check (measureToneAmplitude (twoTones, 10000) < 0.20f,
+               "wideband high-shelf attenuation reduces frequencies above the shelf");
 
         ShunDeEssProcessor split;
         split.prepareToPlay (48000, 256);

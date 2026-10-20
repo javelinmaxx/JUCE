@@ -9,3 +9,11 @@
 - The VST3 target built successfully. Eighteen signal-path checks passed; the
   editor rendered at 548 × 726 and passed its layout and component checks. The
   committed PNG preview shows the default Wideband mode.
+
+### 2026-10-20 — attenuator controls and wideband shelf
+- Combined detector frequency/bandwidth, attenuation frequency/Q, Split/Wideband
+  mode, and detector Listen in an Attenuator section; moved Stereo Link into Output.
+- Added independent attenuation filters: Wideband uses an adjustable high-shelf,
+  and Split-band uses an adjustable bell centered on the attenuation frequency.
+- Built the VST3 and processor tests. All 55 signal-path and editor checks pass;
+  the preview was refreshed at 548 × 726.
