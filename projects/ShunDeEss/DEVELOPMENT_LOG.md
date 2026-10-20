@@ -203,3 +203,12 @@
 - Zoomed the heatmaps around the two pulse windows. The measured integrated
   4.5–12 kHz changes are −1.25, −2.06, −3.68, and −4.15 dB for Q 0.5, 1.2,
   2.8, and 4.0 respectively.
+
+### 2026-10-20 — Wideband and Split-band pulse comparison
+- Ran the identical seeded gated sibilance-noise test through Wideband and
+  Split-band for Attenuator Q 0.5, 1.2, 2.8, and 4.0.
+- Added checks requiring negative integrated 4.5–12 kHz pulse-band change for
+  every tested Q in both modes, and generated a dedicated eight-panel heatmap
+  comparison with each measured value shown in its panel title.
+- Pulse-band changes were −1.65, −2.12, −3.83, and −4.35 dB for Wideband;
+  Split-band measured −8.03, −4.28, −1.69, and −1.03 dB.

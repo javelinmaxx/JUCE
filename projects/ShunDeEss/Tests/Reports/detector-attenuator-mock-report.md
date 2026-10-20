@@ -35,3 +35,14 @@ Plotted report: [PNG](detector-attenuator-mock-report.png) · [PDF](detector-att
 | 4.0 | -4.15 dB |
 
 Negative values indicate attenuation. The blue shaded regions in the rolling heatmaps mark these two noise pulses; the measured band energy should stay below 0 dB for every Q.
+
+### Wideband and Split-band pulse test
+
+The identical seeded input and Q sweep were processed in both non-Smart modes. Values are integrated output − input energy from 4.5–12 kHz during the two pulse centers.
+
+| Mode | Q 0.5 | Q 1.2 | Q 2.8 | Q 4.0 |
+|---|---:|---:|---:|---:|
+| Wideband | -1.65 dB | -2.12 dB | -3.83 dB | -4.35 dB |
+| Split-band | -8.03 dB | -4.28 dB | -1.69 dB | -1.03 dB |
+
+Negative values indicate that the noise bursts are attenuated. [Wideband/Split-band pulse plots](wide-split-pulse-test-report.png) · [PDF](wide-split-pulse-test-report.pdf).

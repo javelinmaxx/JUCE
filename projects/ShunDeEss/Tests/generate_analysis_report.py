@@ -271,6 +271,73 @@ def render(source, png_path, pdf_path):
     plt.close(fig)
 
 
+def render_wide_split_comparison(source):
+    source = Path(source)
+    modes = (("Wideband", "wideband"), ("Split-band", "splitband"))
+    q_values = (0.5, 1.2, 2.8, 4.0)
+    report_text = source.read_text(encoding="utf-8")
+    pulse_text = report_text.split("### Wideband and Split-band pulse test", 1)[-1]
+    mode_rows = {}
+    for mode in ("Wideband", "Split-band"):
+        match = re.search(rf"\| {re.escape(mode)} \| ([^\n]+)\|", pulse_text)
+        if not match:
+            raise ValueError(f"Could not find {mode} pulse measurements")
+        mode_rows[mode] = [float(value) for value in re.findall(r"(-?[\d.]+) dB", match.group(1))]
+        if len(mode_rows[mode]) != len(q_values):
+            raise ValueError(f"Expected one pulse measurement for each Q in {mode}")
+    fig, axes = plt.subplots(2, 4, figsize=(14, 7), facecolor="#182128", sharex=True, sharey=True)
+    fig.subplots_adjust(left=0.07, right=0.91, top=0.82, bottom=0.14, wspace=0.16, hspace=0.30)
+    fig.suptitle("SHUN DE-ESS  |  WIDEBAND & SPLIT-BAND SIBILANCE PULSES",
+                 color="#f2f5f7", fontsize=16, fontweight="bold", x=0.07, y=0.96, ha="left")
+    fig.text(0.07, 0.90, "Same seeded high-pass noise bursts · measured output − input by frequency and time",
+             color="#aebbc5", fontsize=10)
+    norm = TwoSlopeNorm(vmin=-18, vcenter=0, vmax=6)
+    mesh = None
+    for row, (mode, stem) in enumerate(modes):
+        for col, q in enumerate(q_values):
+            ax = axes[row, col]
+            ax.set_facecolor("#202c34")
+            path = source.with_name(f"{stem}-rolling-q-{q:.1f}.csv")
+            rolling = np.genfromtxt(path, delimiter=",", names=True)
+            rolling = rolling[np.isfinite(rolling["time_s"]) & np.isfinite(rolling["frequency_hz"])
+                              & np.isfinite(rolling["change_db"])]
+            cells = np.rec.fromarrays([rolling["time_s"], rolling["frequency_hz"]], names="time,frequency")
+            _, first = np.unique(cells, return_index=True)
+            rolling = rolling[np.sort(first)]
+            times = np.unique(rolling["time_s"]); freqs = np.unique(rolling["frequency_hz"])
+            ti = np.searchsorted(times, rolling["time_s"]); fi = np.searchsorted(freqs, rolling["frequency_hz"])
+            change = np.full((len(times), len(freqs)), np.nan)
+            change[ti, fi] = rolling["change_db"]
+            if np.isnan(change).any():
+                change = np.where(np.isnan(change), np.nanmedian(change), change)
+            mesh = ax.pcolormesh(times, freqs, change.T, shading="auto", cmap="RdBu_r", norm=norm)
+            mesh.set_rasterized(True)
+            ax.axvspan(0.82, 1.24, color="#54c2d8", alpha=0.10)
+            ax.axvspan(2.05, 2.43, color="#54c2d8", alpha=0.10)
+            ax.set_title(f"{mode} · Q {q:.1f} · pulse {mode_rows[mode][col]:+.2f} dB",
+                         color="#eef2f5", loc="left", fontsize=8, pad=5)
+            ax.set_xlim(0.65, 2.60); ax.set_ylim(2000, 16000)
+            ax.set_xticks([0.8, 1.2, 1.6, 2.0, 2.4])
+            ax.set_yticks([2000, 6000, 10000, 14000], ["2k", "6k", "10k", "14k"])
+            ax.tick_params(colors="#aebbc5", labelsize=8)
+            if col == 0:
+                ax.set_ylabel("Frequency (Hz)", color="#c6d0d8")
+            if row == 1:
+                ax.set_xlabel("Time (s)", color="#c6d0d8")
+            for spine in ax.spines.values():
+                spine.set_color("#52616c")
+    cb = fig.colorbar(mesh, ax=axes, pad=0.015, fraction=0.025)
+    cb.set_label("Measured output − input (dB)", color="#c6d0d8")
+    cb.ax.tick_params(colors="#aebbc5")
+    fig.text(0.07, 0.065, "Shaded windows mark the noise bursts. Blue indicates attenuation; red indicates gain.",
+             color="#c4d0d8", fontsize=9)
+    png_path = source.with_name("wide-split-pulse-test-report.png")
+    pdf_path = source.with_name("wide-split-pulse-test-report.pdf")
+    fig.savefig(png_path, dpi=180, facecolor=fig.get_facecolor())
+    fig.savefig(pdf_path, facecolor=fig.get_facecolor(), metadata={"Title": "SHUN Wideband and Split-band pulse test"})
+    plt.close(fig)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", default="projects/ShunDeEss/Tests/Reports/detector-attenuator-mock-report.md")
@@ -278,6 +345,7 @@ def main():
     parser.add_argument("--pdf", default="projects/ShunDeEss/Tests/Reports/detector-attenuator-mock-report.pdf")
     args = parser.parse_args()
     render(args.input, args.png, args.pdf)
+    render_wide_split_comparison(args.input)
     print(f"Wrote {args.png} and {args.pdf}")
 
 

@@ -253,13 +253,15 @@ struct RollingMeasurements
     float sibilanceChangeDb = 0.0f;
 };
 
-RollingMeasurements writeRollingSmartSpectrogram (const juce::File& destination, float attenuationQ)
+RollingMeasurements writeRollingModeSpectrogram (const juce::File& destination, float attenuationQ,
+                                                  int mode, bool smartMode)
 {
     constexpr int fftSize = 2048, hop = 512, totalSamples = 48000 * 4;
     constexpr double pi = 3.14159265358979323846;
     ShunDeEssProcessor processor;
     processor.prepareToPlay (48000, hop);
-    set (processor, "smart", 1.0f); set (processor, "threshold", -48.0f);
+    set (processor, "mode", static_cast<float> (mode));
+    set (processor, "smart", smartMode ? 1.0f : 0.0f); set (processor, "threshold", -48.0f);
     set (processor, "depth", 12.0f); set (processor, "frequency", 7800.0f);
     set (processor, "q", 2.2f); set (processor, "attenuationFrequency", 7200.0f);
     set (processor, "attenuationQ", attenuationQ); set (processor, "attack", 0.2f); set (processor, "release", 10.0f);
@@ -306,7 +308,7 @@ RollingMeasurements writeRollingSmartSpectrogram (const juce::File& destination,
     destination.deleteFile();
     juce::FileOutputStream stream (destination);
     if (! stream.openedOk() || !stream.writeText ("time_s,frequency_hz,input_dbfs,output_dbfs,change_db\n", false, false, "\n"))
-        throw std::runtime_error ("could not create rolling Smart spectrogram CSV");
+        throw std::runtime_error ("could not create rolling mode spectrogram CSV");
     double detailChangeSum = 0.0;
     int detailChangeCount = 0;
     double pulseChangeSum = 0.0;
@@ -448,7 +450,7 @@ void generateAnalysisReport (const juce::File& destination)
     for (size_t i = 0; i < heatmapQValues.size(); ++i)
     {
         const auto file = destination.getSiblingFile ("smart-rolling-q-" + juce::String (heatmapQValues[i], 1) + ".csv");
-        heatmapMeasurements[i] = writeRollingSmartSpectrogram (file, heatmapQValues[i]);
+        heatmapMeasurements[i] = writeRollingModeSpectrogram (file, heatmapQValues[i], 0, true);
         if (i == 2)
         {
             rollingCsv.deleteFile();
@@ -463,6 +465,32 @@ void generateAnalysisReport (const juce::File& destination)
             + juce::String (heatmapMeasurements[i].sibilanceChangeDb, 2) + " dB |\n";
     report += "\nNegative values indicate attenuation. The blue shaded regions in the rolling heatmaps "
               "mark these two noise pulses; the measured band energy should stay below 0 dB for every Q.\n\n";
+    report += "### Wideband and Split-band pulse test\n\n"
+              "The identical seeded input and Q sweep were processed in both non-Smart modes. "
+              "Values are integrated output − input energy from 4.5–12 kHz during the two pulse centers.\n\n"
+              "| Mode | Q 0.5 | Q 1.2 | Q 2.8 | Q 4.0 |\n"
+              "|---|---:|---:|---:|---:|\n";
+    std::array<std::array<RollingMeasurements, heatmapQValues.size()>, 2> standardModeMeasurements {};
+    const std::array<const char*, 2> standardModeNames { "Wideband", "Split-band" };
+    for (size_t modeIndex = 0; modeIndex < standardModeNames.size(); ++modeIndex)
+    {
+        const auto mode = static_cast<int> (modeIndex);
+        report += "| " + juce::String (standardModeNames[modeIndex]) + " |";
+        for (size_t qIndex = 0; qIndex < heatmapQValues.size(); ++qIndex)
+        {
+            const auto stem = modeIndex == 0 ? "wideband" : "splitband";
+            const auto file = destination.getSiblingFile (juce::String (stem) + "-rolling-q-"
+                + juce::String (heatmapQValues[qIndex], 1) + ".csv");
+            standardModeMeasurements[modeIndex][qIndex] = writeRollingModeSpectrogram (
+                file, heatmapQValues[qIndex], mode, false);
+            report += " " + juce::String (standardModeMeasurements[modeIndex][qIndex].sibilanceChangeDb, 2)
+                + " dB |";
+        }
+        report += "\n";
+    }
+    report += "\nNegative values indicate that the noise bursts are attenuated. "
+              "[Wideband/Split-band pulse plots](wide-split-pulse-test-report.png) · "
+              "[PDF](wide-split-pulse-test-report.pdf).\n\n";
     if (! destination.replaceWithText (report))
         throw std::runtime_error ("could not write detector/attenuator mock-signal report");
     check (wide.grDb > 0.0f && split.grDb > 0.0f && smart.grDb > 0.0f,
@@ -485,6 +513,15 @@ void generateAnalysisReport (const juce::File& destination)
            "rolling heatmap changes with Smart attenuator Q");
     check (std::all_of (sibilanceChanges.begin(), sibilanceChanges.end(), [] (float change) { return change < 0.0f; }),
            "Smart attenuates the gated sibilance noise pulses at every tested Q");
+    for (size_t modeIndex = 0; modeIndex < standardModeNames.size(); ++modeIndex)
+    {
+        const auto modeAttenuatesEveryPulse = std::all_of (
+            standardModeMeasurements[modeIndex].begin(), standardModeMeasurements[modeIndex].end(),
+            [] (const auto& measurements) { return measurements.sibilanceChangeDb < 0.0f; });
+        check (modeAttenuatesEveryPulse, modeIndex == 0
+            ? "Wideband attenuates the gated sibilance pulses at every tested Q"
+            : "Split-band attenuates the gated sibilance pulses at every tested Q");
+    }
 }
 }
 
