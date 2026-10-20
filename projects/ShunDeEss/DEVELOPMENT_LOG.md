@@ -70,3 +70,8 @@
 ### 2026-10-20 — main control spacing
 - Moved Threshold, Range, Attack, and Release up by 10 px and shortened the
   Compressor panel by 10 px. The gap before Detector is now 102 px.
+
+### 2026-10-20 — GR display orientation
+- Reversed the GR meter and trace vertically so 0 dB is at the top and stronger
+  reduction descends. Reversed the history direction so NOW sits beside the
+  meter and −3 s is at the far edge.

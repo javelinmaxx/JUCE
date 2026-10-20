@@ -465,7 +465,7 @@ void ShunDeEssEditor::paintMeter (juce::Graphics& g)
     g.fillRoundedRectangle (bar, 4);
     for (int db = 0; db <= 18; db += 6)
     {
-        const auto y = plot.getBottom() - plot.getHeight() * static_cast<float> (db) / 18.0f;
+        const auto y = plot.getY() + plot.getHeight() * static_cast<float> (db) / 18.0f;
         g.setColour (theme.grid);
         g.drawLine (plot.getX(), y, plot.getRight(), y);
         g.setColour (theme.secondary);
@@ -479,7 +479,7 @@ void ShunDeEssEditor::paintMeter (juce::Graphics& g)
         g.drawLine (x, plot.getY(), x, plot.getBottom());
     }
     const auto amount = std::clamp (displayedReduction / 18.0f, 0.0f, 1.0f);
-    const auto fill = bar.withHeight (bar.getHeight() * amount).withY (bar.getBottom() - bar.getHeight() * amount);
+    const auto fill = bar.withHeight (bar.getHeight() * amount);
     const auto glow = std::clamp (0.2f + amount * 0.7f, 0.2f, 0.9f);
     if (fill.getHeight() > 0)
     {
@@ -500,8 +500,8 @@ void ShunDeEssEditor::paintMeter (juce::Graphics& g)
     double previous = 0;
     history.visit (now, [&] (float position, float reduction, double time)
     {
-        const auto x = plot.getX() + plot.getWidth() * position;
-        const auto y = plot.getBottom() - plot.getHeight() * reduction / 18.0f;
+        const auto x = plot.getX() + plot.getWidth() * (1.0f - position);
+        const auto y = plot.getY() + plot.getHeight() * reduction / 18.0f;
         if (! started || time - previous > 0.25) trace.startNewSubPath (x, y);
         else trace.lineTo (x, y);
         previous = time;
@@ -517,8 +517,8 @@ void ShunDeEssEditor::paintMeter (juce::Graphics& g)
     g.strokePath (trace, juce::PathStrokeType (0.7f));
     g.restoreState();
     g.setColour (theme.secondary);
-    g.drawText ("-3 s", 408, 516, 44, 18, juce::Justification::centredLeft);
-    g.drawText ("NOW", 466, 516, 44, 18, juce::Justification::centredRight);
+    g.drawText ("NOW", 408, 516, 44, 18, juce::Justification::centredLeft);
+    g.drawText ("-3 s", 466, 516, 44, 18, juce::Justification::centredRight);
     g.setFont (juce::FontOptions (24.0f));
     g.setColour (theme.meter.withAlpha (glow * 0.25f));
     g.drawText (juce::String (displayedReduction, 1) + " dB", 355, 541, 158, 34, juce::Justification::centred);
