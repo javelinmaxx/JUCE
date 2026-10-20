@@ -95,3 +95,7 @@
 - Increased editor height by 15 px; shifted Detector, Attenuator, and Output
   sections down 20 px; extended the GR bar and plot by 20 px.
 - Lowered the response plot by 10 px and changed its vertical axis to −18..0 dB.
+
+### 2026-10-20 — GR panel alignment
+- Extended the GR panel background down 20 px to align its bottom edge with the
+  Detector section.

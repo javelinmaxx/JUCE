@@ -75,7 +75,7 @@ private:
     std::array<std::unique_ptr<State::SliderAttachment>, 10> attachments;
     std::unique_ptr<State::ButtonAttachment> bypassAttachment, listenAttachment, modeAttachment;
     GainReductionHistory history;
-    juce::Rectangle<int> meterBounds { 344, 140, 180, 470 };
+    juce::Rectangle<int> meterBounds { 344, 140, 180, 490 };
     double lastTick = 0;
     float displayedReduction = 0;
     CompressorTheme theme;
