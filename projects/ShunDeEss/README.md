@@ -54,8 +54,8 @@ build-shun-deess/ShunDeEssTests --response-previews projects/ShunDeEss/Previews/
 ```
 
 Run the deterministic detector/attenuator mock-signal test and write its
-Markdown report and measured Smart input/output spectrum CSV (including the
-7.8 kHz detail tone):
+Markdown report, measured Smart attenuator-Q sweep, fixed-tone spectrum CSV, and
+rolling Smart spectrogram CSV from a swept detail tone with transient bursts:
 
 ```bash
 build-shun-deess/ShunDeEssTests --analysis-report projects/ShunDeEss/Tests/Reports/detector-attenuator-mock-report.md

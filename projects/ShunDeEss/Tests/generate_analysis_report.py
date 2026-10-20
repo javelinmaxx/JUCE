@@ -23,7 +23,10 @@ def read_results(path):
     detector = re.search(r"in-band tone is ([\d.]+) dB", text)
     if not detector:
         raise ValueError(f"Could not find detector selectivity in {path}")
-    return rows, float(detector.group(1))
+    qrows = re.findall(r"\| ([\d.]+) \| ([\d.]+)% \| ([\d.]+)% \|", text[text.find("### Smart attenuator-Q"):])
+    if len(qrows) < 2:
+        raise ValueError("Could not find Smart attenuator-Q sweep")
+    return rows, float(detector.group(1)), np.array(qrows, dtype=float)
 
 
 def response_db(b, a, frequencies, sample_rate=48000.0):
@@ -73,9 +76,13 @@ def shelf_filter(center=7200.0, q=2.8, depth=12.0, sample_rate=48000.0):
 
 
 def render(source, png_path, pdf_path):
-    results, rejection_db = read_results(source)
+    results, rejection_db, qresults = read_results(source)
     spectrum_path = Path(source).with_name("smart-spectral-spectrum.csv")
     spectrum = np.genfromtxt(spectrum_path, delimiter=",", names=True)
+    rolling_path = Path(source).with_name("smart-rolling-spectrogram.csv")
+    rolling = np.genfromtxt(rolling_path, delimiter=",", names=True)
+    rolling = rolling[np.isfinite(rolling["time_s"]) & np.isfinite(rolling["frequency_hz"])
+                      & np.isfinite(rolling["output_dbfs"])]
     measured = (spectrum["frequency_hz"] >= 2000.0) & (spectrum["frequency_hz"] <= 16000.0)
     if not np.any(measured):
         raise ValueError(f"No 2–16 kHz Smart spectrum samples in {spectrum_path}")
@@ -89,15 +96,15 @@ def render(source, png_path, pdf_path):
         "xtick.color": "#aebbc5",
         "ytick.color": "#aebbc5",
     })
-    fig = plt.figure(figsize=(13, 12), facecolor="#182128")
-    grid = fig.add_gridspec(3, 2, height_ratios=[1, 1, 0.95], left=0.09, right=0.97,
-                            top=0.83, bottom=0.14, hspace=0.48, wspace=0.28)
+    fig = plt.figure(figsize=(13, 15), facecolor="#182128")
+    grid = fig.add_gridspec(4, 2, height_ratios=[1, 1, 0.9, 1.45], left=0.09, right=0.90,
+                            top=0.83, bottom=0.17, hspace=0.48, wspace=0.28)
     axes = np.array([[fig.add_subplot(grid[0, 0]), fig.add_subplot(grid[0, 1])],
                      [fig.add_subplot(grid[1, 0]), fig.add_subplot(grid[1, 1])]])
     fig.suptitle("SHUN DE-ESS  |  DETECTOR & ATTENUATOR TEST", color="#f2f5f7",
                  fontsize=19, fontweight="bold", x=0.08, y=0.955, ha="left")
     fig.text(0.08, 0.905,
-             "Deterministic 48 kHz mock signal: broadband noise + 500 Hz body + late 7.8 kHz detail tone",
+             "Deterministic 48 kHz mocks: fixed detail for Q sweep; swept tone and bursts for rolling analysis",
              color="#aebbc5", fontsize=10)
     fig.text(0.08, 0.865,
              f"Detector Listen selectivity: {rejection_db:.1f} dB at 7.8 kHz vs 500 Hz  ·  "
@@ -178,54 +185,43 @@ def render(source, png_path, pdf_path):
 
     ax = fig.add_subplot(grid[2, :])
     ax.set_facecolor("#202c34")
-    ax.set_title("Smart measured spectrum · detail tone present", color="#eef2f5", loc="left",
-                 fontsize=12, fontweight="bold", pad=10)
-    f = spectrum["frequency_hz"][measured]
-    input_db = spectrum["input_dbfs"][measured]
-    output_db = spectrum["output_dbfs"][measured]
-    change_db = spectrum["change_db"][measured]
-    ax.plot(f, input_db, color="#96a6b0", linewidth=0.8, alpha=0.58, label="Mock input")
-    ax.plot(f, output_db, color="#54c2d8", linewidth=1.0, alpha=0.9, label="Smart output")
-    ax.axvspan(7600, 8000, color="#e7ad5b", alpha=0.10)
-    ax.axvline(7800, color="#e7ad5b", linewidth=1.1, linestyle="--", alpha=0.85)
-    ax.set_xlim(2000, 16000)
-    ax.set_xlabel("Frequency (Hz)")
-    ax.set_ylabel("Magnitude (dBFS)")
-    ax.set_ylim(min(float(input_db.min()), float(output_db.min())) - 4.0,
-                max(float(input_db.max()), float(output_db.max())) + 10.0)
-    ax.set_xticks([2000, 4000, 6000, 7800, 10000, 12000, 14000, 16000])
-    ax.set_xticklabels(["2k", "4k", "6k", "7.8k", "10k", "12k", "14k", "16k"])
+    ax.set_title("Smart detail retention vs attenuator Q", color="#eef2f5", loc="left", fontsize=12, fontweight="bold", pad=10)
+    ax.plot(qresults[:, 0], qresults[:, 2], marker="o", color="#e7ad5b", linewidth=2.2, label="7.8 kHz detail tone")
+    ax.set_xlabel("Attenuator Q"); ax.set_ylabel("Detail tone retained (%)")
     ax.grid(True, color="#52616c", alpha=0.35, linewidth=0.7)
-    for spine in ax.spines.values():
-        spine.set_color("#52616c")
-    delta_ax = ax.twinx()
-    smoothed_change = np.convolve(change_db, np.ones(31) / 31.0, mode="same")
-    delta_line, = delta_ax.plot(f, smoothed_change, color="#e7ad5b", linewidth=1.8,
-                                label="Measured output − input")
-    delta_ax.set_ylabel("Output − input (dB)", color="#e7ad5b")
-    delta_ax.tick_params(axis="y", colors="#e7ad5b")
-    delta_ax.set_ylim(min(-18.0, float(smoothed_change.min()) - 2.0),
-                      max(3.0, float(smoothed_change.max()) + 2.0))
-    delta_ax.axhline(0, color="#e7ad5b", linewidth=0.7, alpha=0.35)
-    input_line, output_line = ax.get_lines()[:2]
-    ax.legend([input_line, output_line, delta_line],
-              ["Mock input", "Smart output", "Measured output − input"],
-              frameon=False, labelcolor="#dce5eb", loc="lower left", ncols=3, fontsize=9)
-    peak = np.argmax(output_db)
-    peak_x, peak_y = f[peak], output_db[peak]
-    ax.annotate("7.8 kHz detail tone", xy=(peak_x, peak_y), xytext=(peak_x + 900, peak_y + 8),
-                color="#f0c77e", fontsize=9,
-                arrowprops={"arrowstyle": "->", "color": "#e7ad5b", "lw": 1.0})
+    for spine in ax.spines.values(): spine.set_color("#52616c")
+    ax.legend(frameon=False, labelcolor="#dce5eb", loc="lower right")
+
+    ax = fig.add_subplot(grid[3, :])
+    ax.set_facecolor("#202c34")
+    ax.set_title("Smart rolling spectrogram · swept detail + transient bursts", color="#eef2f5", loc="left",
+                 fontsize=12, fontweight="bold", pad=10)
+    # JUCE stream writes can repeat newline-terminated rows on some platforms;
+    # collapse repeated time/frequency cells before arranging FFT frames.
+    cells = np.rec.fromarrays([rolling["time_s"], rolling["frequency_hz"]], names="time,frequency")
+    _, first = np.unique(cells, return_index=True)
+    rolling = rolling[np.sort(first)]
+    times = np.unique(rolling["time_s"]); freqs = np.unique(rolling["frequency_hz"])
+    ti = np.searchsorted(times, rolling["time_s"]); fi = np.searchsorted(freqs, rolling["frequency_hz"])
+    out = np.full((len(times), len(freqs)), np.nan)
+    out[ti, fi] = rolling["output_dbfs"]
+    if np.isnan(out).any():
+        out = np.where(np.isnan(out), np.nanmedian(out), out)
+    mesh = ax.pcolormesh(times, freqs, out.T, shading="auto", cmap="magma", vmin=-90, vmax=-24)
+    ax.set_ylim(2000, 16000); ax.set_xlabel("Time (s)"); ax.set_ylabel("Frequency (Hz)")
+    ax.set_yticks([2000, 4000, 6000, 8000, 10000, 12000, 14000, 16000], ["2k", "4k", "6k", "8k", "10k", "12k", "14k", "16k"])
+    cb = fig.colorbar(mesh, ax=ax, pad=0.012); cb.set_label("Smart output (dBFS)", color="#c6d0d8"); cb.ax.tick_params(colors="#aebbc5")
+    for spine in ax.spines.values(): spine.set_color("#52616c")
 
     smart_detail = results["Smart"][3]
     wide_detail = results["Wideband"][3]
     delta = smart_detail - wide_detail
-    fig.text(0.08, 0.075,
+    fig.text(0.08, 0.105,
              f"Smart keeps {smart_detail:.1f}% of the 7.8 kHz detail tone vs {wide_detail:.1f}% in Wideband "
              f"(+{delta:.1f} points).",
              color="#e7ad5b", fontsize=11, fontweight="bold")
-    fig.text(0.08, 0.043,
-             f"It retains {results['Smart'][2]:.1f}% of the 500 Hz body. Bottom panel plots measured Smart input/output spectra and their difference.",
+    fig.text(0.08, 0.065,
+             f"It retains {results['Smart'][2]:.1f}% of the 500 Hz body. Bottom panel shows the measured rolling Smart output spectrum over time.",
              color="#c4d0d8", fontsize=9.5)
 
     for path in (png_path, pdf_path):

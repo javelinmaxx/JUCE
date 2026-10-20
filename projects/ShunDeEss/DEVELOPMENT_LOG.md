@@ -155,3 +155,14 @@
   across 2–16 kHz, alongside the existing detector, attenuator, and retention
   plots. The difference trace shows Smart's actual broad attenuation and narrow
   detail restoration from the processed mock signal.
+
+### 2026-10-20 — Smart attenuator-Q and rolling spectrogram report
+- Added a measured Attenuator Q sweep using the same Smart mock signal. The
+  7.8 kHz detail retention changes from 81.0% at Q 0.5 to 67.6% at Q 4.0,
+  while broadband attenuation rises from 9.1% to 21.4%; the report test checks
+  that this Q-dependent detail change remains measurable.
+- Replaced the fixed-spectrum report panel with a rolling FFT spectrogram of
+  the actual Smart processor output for a four-second swept detail tone and two
+  transient high-frequency bursts over noise and a 500 Hz body tone.
+- Exported the rolling FFT frames to `smart-rolling-spectrogram.csv` for plot
+  regeneration and inspection.

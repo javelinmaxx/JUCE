@@ -12,6 +12,15 @@ The detector Listen path was also measured with equal-level 500 Hz and 7.8 kHz t
 
 Detector controls: 7.8 kHz center, Q 2.2, −48 dB threshold. Attenuator controls: 7.2 kHz center, Q 2.8, 12 dB maximum depth. The retained-detail column is a sine/cosine projection of the final 8192 samples; it shows how much of the isolated 7.8 kHz tone survives broadband attenuation. Smart is expected to retain more of that tone than Wideband while still reducing the broadband mock input.
 
-The Smart spectrum plot is measured from the final 8192 samples of this same mock signal; the narrow 7.8 kHz tone is present in both input and output spectra. Source bins are in [smart-spectral-spectrum.csv](smart-spectral-spectrum.csv).
+### Smart attenuator-Q detail check
+
+| Attenuator Q | Broadband RMS reduction | 7.8 kHz detail retained |
+|---:|---:|---:|
+| 0.5 | 9.1% | 81.0% |
+| 1.2 | 13.2% | 82.1% |
+| 2.8 | 19.1% | 71.9% |
+| 4.0 | 21.4% | 67.6% |
+
+This sweeps Attenuator Q while holding the mock signal fixed. The measured change confirms that Q affects detail retention: the wider low-Q restoration preserves more of this tone, while higher Q increases broadband attenuation. The rolling plot uses a separate four-second time-varying mock: a 4.3–11.2 kHz swept detail tone plus two brief 9.8 kHz bursts over broadband noise and a 500 Hz body. It plots measured Smart output FFT frames, not an idealized filter response. Source data is in [smart-rolling-spectrogram.csv](smart-rolling-spectrogram.csv).
 
 Plotted report: [PNG](detector-attenuator-mock-report.png) · [PDF](detector-attenuator-mock-report.pdf). Regenerate with `Tests/generate_analysis_report.py`.

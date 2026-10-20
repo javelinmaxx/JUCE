@@ -120,7 +120,7 @@ struct ModeReport
     std::vector<float> smartOutputSamples;
 };
 
-ModeReport runMockMode (int mode, bool smartMode)
+ModeReport runMockMode (int mode, bool smartMode, float attenuationQ = 2.8f)
 {
     ShunDeEssProcessor processor;
     processor.prepareToPlay (48000, 256);
@@ -131,7 +131,7 @@ ModeReport runMockMode (int mode, bool smartMode)
     set (processor, "frequency", 7800.0f);
     set (processor, "q", 2.2f);
     set (processor, "attenuationFrequency", 7200.0f);
-    set (processor, "attenuationQ", 2.8f);
+    set (processor, "attenuationQ", attenuationQ);
     set (processor, "attack", 0.2f);
     set (processor, "release", 10.0f);
 
@@ -229,6 +229,7 @@ void writeSmartSpectrumCsv (const juce::File& destination, const ModeReport& sma
     fft.performFrequencyOnlyForwardTransform (inputSpectrum.data());
     fft.performFrequencyOnlyForwardTransform (outputSpectrum.data());
 
+    destination.deleteFile();
     juce::FileOutputStream stream (destination);
     if (! stream.openedOk() || ! stream.writeText ("frequency_hz,input_dbfs,output_dbfs,change_db\n", false, false, "\n"))
         throw std::runtime_error ("could not create Smart spectral measurement CSV");
@@ -246,11 +247,73 @@ void writeSmartSpectrumCsv (const juce::File& destination, const ModeReport& sma
     }
 }
 
+void writeRollingSmartSpectrogram (const juce::File& destination)
+{
+    constexpr int fftSize = 2048, hop = 512, totalSamples = 48000 * 4;
+    constexpr double pi = 3.14159265358979323846;
+    ShunDeEssProcessor processor;
+    processor.prepareToPlay (48000, hop);
+    set (processor, "smart", 1.0f); set (processor, "threshold", -48.0f);
+    set (processor, "depth", 12.0f); set (processor, "frequency", 7800.0f);
+    set (processor, "q", 2.2f); set (processor, "attenuationFrequency", 7200.0f);
+    set (processor, "attenuationQ", 2.8f); set (processor, "attack", 0.2f); set (processor, "release", 10.0f);
+    std::vector<float> input (totalSamples), output (totalSamples);
+    std::mt19937 random (0x5eedu); std::normal_distribution<float> noise (0.0f, 0.055f);
+    juce::AudioBuffer<float> block (2, hop); juce::MidiBuffer midi;
+    for (int offset = 0; offset < totalSamples; offset += hop)
+    {
+        for (int i = 0; i < hop; ++i)
+        {
+            const int n = offset + i; const float t = static_cast<float> (n) / 48000.0f;
+            const float sweep = 4300.0f + 6900.0f * t / 4.0f;
+            const float detail = t > 0.45f && t < 3.75f ? 0.16f * std::sin (2.0 * pi * sweep * t) : 0.0f;
+            const float burst = (t > 1.1f && t < 1.45f) || (t > 2.65f && t < 2.95f)
+                ? 0.12f * std::sin (2.0 * pi * 9800.0 * t) : 0.0f;
+            const float sample = noise (random) + 0.08f * std::sin (2.0 * pi * 500.0 * t) + detail + burst;
+            input[static_cast<size_t> (n)] = sample;
+            block.setSample (0, i, sample); block.setSample (1, i, sample);
+        }
+        processor.processBlock (block, midi);
+        for (int i = 0; i < hop; ++i) output[static_cast<size_t> (offset + i)] = block.getSample (0, i);
+    }
+    juce::dsp::FFT fft (11);
+    std::vector<float> inFft (fftSize * 2, 0.0f), outFft (fftSize * 2, 0.0f);
+    destination.deleteFile();
+    juce::FileOutputStream stream (destination);
+    if (! stream.openedOk() || !stream.writeText ("time_s,frequency_hz,input_dbfs,output_dbfs,change_db\n", false, false, "\n"))
+        throw std::runtime_error ("could not create rolling Smart spectrogram CSV");
+    for (int end = fftSize; end <= totalSamples; end += hop)
+    {
+        double windowSum = 0.0;
+        for (int i = 0; i < fftSize; ++i)
+        {
+            const float w = static_cast<float> (0.5 - 0.5 * std::cos (2.0 * pi * i / (fftSize - 1)));
+            inFft[static_cast<size_t> (i)] = input[static_cast<size_t> (end - fftSize + i)] * w;
+            outFft[static_cast<size_t> (i)] = output[static_cast<size_t> (end - fftSize + i)] * w;
+            windowSum += w;
+        }
+        fft.performFrequencyOnlyForwardTransform (inFft.data()); fft.performFrequencyOnlyForwardTransform (outFft.data());
+        for (int bin = 85; bin <= 683; bin += 2)
+        {
+            const float f = static_cast<float> (bin) * 48000.0f / fftSize;
+            const float inDb = 20.0f * std::log10 (std::max (inFft[static_cast<size_t> (bin)] * static_cast<float> (2.0 / windowSum), 1.0e-8f));
+            const float outDb = 20.0f * std::log10 (std::max (outFft[static_cast<size_t> (bin)] * static_cast<float> (2.0 / windowSum), 1.0e-8f));
+            const auto row = juce::String (static_cast<float> (end) / 48000.0f, 3) + "," + juce::String (f, 1) + ","
+                + juce::String (inDb, 2) + "," + juce::String (outDb, 2) + "," + juce::String (outDb - inDb, 2) + "\n";
+            if (!stream.writeText (row, false, false, "\n")) throw std::runtime_error ("could not write rolling Smart spectrogram CSV");
+        }
+    }
+}
+
 void generateAnalysisReport (const juce::File& destination)
 {
     const auto wide = runMockMode (0, false);
     const auto split = runMockMode (1, false);
     const auto smart = runMockMode (0, true);
+    constexpr std::array<float, 4> smartQValues { 0.5f, 1.2f, 2.8f, 4.0f };
+    std::array<ModeReport, smartQValues.size()> qReports;
+    for (size_t i = 0; i < smartQValues.size(); ++i)
+        qReports[i] = runMockMode (0, true, smartQValues[i]);
     ShunDeEssProcessor detector;
     detector.prepareToPlay (48000, 256);
     set (detector, "frequency", 7800.0f);
@@ -295,16 +358,34 @@ void generateAnalysisReport (const juce::File& destination)
           "12 dB maximum depth. The retained-detail column is a sine/cosine projection of the final 8192 samples; "
           "it shows how much of the isolated 7.8 kHz tone survives broadband attenuation. Smart is expected to "
           "retain more of that tone than Wideband while still reducing the broadband mock input.\n\n"
-          "The Smart spectrum plot is measured from the final 8192 samples of this same mock signal; "
-          "the narrow 7.8 kHz tone is present in both input and output spectra. Source bins are in "
-          "[smart-spectral-spectrum.csv](smart-spectral-spectrum.csv).\n\n"
+          "### Smart attenuator-Q detail check\n\n"
+          "| Attenuator Q | Broadband RMS reduction | 7.8 kHz detail retained |\n"
+          "|---:|---:|---:|\n"
+        + [&]
+          {
+              juce::String rows;
+              for (size_t i = 0; i < smartQValues.size(); ++i)
+                  rows += "| " + juce::String (smartQValues[i], 1) + " | "
+                      + juce::String (100.0f * (1.0f - qReports[i].outputRms
+                          / std::max (qReports[i].inputRms, 1.0e-9f)), 1) + "% | "
+                      + juce::String (qReports[i].detailToneGain * 100.0f, 1) + "% |\n";
+              return rows + "\n";
+          } ()
+          + "This sweeps Attenuator Q while holding the mock signal fixed. The measured change confirms that Q "
+            "affects detail retention: the wider low-Q restoration preserves more of this tone, while higher Q "
+            "increases broadband attenuation. The rolling plot uses a separate four-second time-varying mock: "
+            "a 4.3–11.2 kHz swept detail tone plus two brief 9.8 kHz bursts over broadband noise and a 500 Hz body. "
+            "It plots measured Smart output FFT frames, not an idealized filter response. Source data is in "
+            "[smart-rolling-spectrogram.csv](smart-rolling-spectrogram.csv).\n\n"
           "Plotted report: [PNG](detector-attenuator-mock-report.png) · "
           "[PDF](detector-attenuator-mock-report.pdf). Regenerate with `Tests/generate_analysis_report.py`.\n";
 
     const auto spectrumCsv = destination.getSiblingFile ("smart-spectral-spectrum.csv");
+    const auto rollingCsv = destination.getSiblingFile ("smart-rolling-spectrogram.csv");
     if (! destination.getParentDirectory().createDirectory())
         throw std::runtime_error ("could not create detector/attenuator report directory");
     writeSmartSpectrumCsv (spectrumCsv, smart);
+    writeRollingSmartSpectrogram (rollingCsv);
     if (! destination.replaceWithText (report))
         throw std::runtime_error ("could not write detector/attenuator mock-signal report");
     check (wide.grDb > 0.0f && split.grDb > 0.0f && smart.grDb > 0.0f,
@@ -313,6 +394,8 @@ void generateAnalysisReport (const juce::File& destination)
     check (smart.outputRms < smart.inputRms * 0.90f, "Smart attenuates the broadband mock input");
     check (smart.detailToneGain > wide.detailToneGain * 1.05f,
            "Smart retains more isolated high-frequency detail than Wideband");
+    check (qReports.front().detailToneGain > qReports.back().detailToneGain + 0.10f,
+           "Smart attenuator Q measurably affects retained detail");
 }
 }
 
