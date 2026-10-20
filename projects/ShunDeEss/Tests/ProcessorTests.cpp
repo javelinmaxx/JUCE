@@ -751,6 +751,12 @@ int main (int argc, char** argv)
                     modeKnob = slider;
             check (modeKnob != nullptr && modeKnob->getSliderStyle() == juce::Slider::RotaryHorizontalVerticalDrag,
                    "four-mode selector is a rotary knob");
+            juce::Label* modeValueLabel = nullptr;
+            for (auto* child : modeKnob->getChildren())
+                if (auto* label = dynamic_cast<juce::Label*> (child))
+                    modeValueLabel = label;
+            check (modeValueLabel != nullptr && modeValueLabel->getText() == "WIDEBAND",
+                   "the mode selector displays Wideband when the editor first opens");
             for (int mode = 0; mode < 4; ++mode)
             {
                 modeKnob->setValue (mode, juce::sendNotificationSync);

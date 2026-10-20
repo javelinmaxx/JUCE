@@ -369,6 +369,8 @@ ShunDeEssEditor::ShunDeEssEditor (ShunDeEssProcessor& p)
     };
     algorithm.setValue (lastSpectralMode ? (lastSplitMode ? 3 : 2) : (lastSplitMode ? 1 : 0),
                         juce::dontSendNotification);
+    // Position 0 is already the slider's default, so setValue does not refresh its text box.
+    algorithm.updateText();
     algorithm.onValueChange = [this]
     {
         const auto selected = juce::roundToInt (algorithm.getValue());
