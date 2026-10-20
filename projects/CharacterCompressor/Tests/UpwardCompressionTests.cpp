@@ -58,7 +58,7 @@ void testModelCurves()
     using namespace character;
     constexpr float thresholdDb = -18;
     constexpr float quietDb = -30;
-    constexpr float ratio = 4;
+    constexpr float ratio = 2;
     const auto expectedBoostDb = (thresholdDb - quietDb) * (1 - 1 / ratio);
 
     for (int index = 0; index < 4; ++index)
@@ -81,6 +81,13 @@ void testModelCurves()
         {
             check (std::abs (measuredBoostDb - expectedBoostDb) < 0.12f,
                    "below-threshold boost follows the configured ratio for every other model");
+        }
+
+        for (const auto requestedRatio : { 4.0f, 20.0f })
+        {
+            const auto cappedOutput = steadyOutput (model, quietDb, requestedRatio);
+            check (std::abs (Compressor::db (cappedOutput) - Compressor::db (boosted)) < 0.03f,
+                   "Upward ratios above 2:1 are capped at the supported maximum for every model");
         }
 
         check (std::abs (steadyOutput (model, quietDb, 1) - Compressor::gain (quietDb)) < 1.0e-6f,
