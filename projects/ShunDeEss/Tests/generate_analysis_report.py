@@ -282,7 +282,8 @@ def render_wide_split_comparison(source):
         match = re.search(rf"\| {re.escape(mode)} \| ([^\n]+)\|", pulse_text)
         if not match:
             raise ValueError(f"Could not find {mode} pulse measurements")
-        mode_rows[mode] = [float(value) for value in re.findall(r"(-?[\d.]+) dB", match.group(1))]
+        mode_rows[mode] = [(float(pulse), float(quiet)) for pulse, quiet in
+                           re.findall(r"(-?[\d.]+) / (-?[\d.]+) dB", match.group(1))]
         if len(mode_rows[mode]) != len(q_values):
             raise ValueError(f"Expected one pulse measurement for each Q in {mode}")
     fig, axes = plt.subplots(2, 4, figsize=(14, 7), facecolor="#182128", sharex=True, sharey=True)
@@ -314,7 +315,8 @@ def render_wide_split_comparison(source):
             mesh.set_rasterized(True)
             ax.axvspan(0.82, 1.24, color="#54c2d8", alpha=0.10)
             ax.axvspan(2.05, 2.43, color="#54c2d8", alpha=0.10)
-            ax.set_title(f"{mode} · Q {q:.1f} · pulse {mode_rows[mode][col]:+.2f} dB",
+            pulse_db, quiet_db = mode_rows[mode][col]
+            ax.set_title(f"{mode} · Q {q:.1f} · pulse {pulse_db:+.2f} / quiet {quiet_db:+.2f} dB",
                          color="#eef2f5", loc="left", fontsize=8, pad=5)
             ax.set_xlim(0.65, 2.60); ax.set_ylim(2000, 16000)
             ax.set_xticks([0.8, 1.2, 1.6, 2.0, 2.4])
@@ -329,7 +331,7 @@ def render_wide_split_comparison(source):
     cb = fig.colorbar(mesh, ax=axes, pad=0.015, fraction=0.025)
     cb.set_label("Measured output − input (dB)", color="#c6d0d8")
     cb.ax.tick_params(colors="#aebbc5")
-    fig.text(0.07, 0.065, "Shaded windows mark the noise bursts. Blue indicates attenuation; red indicates gain.",
+    fig.text(0.07, 0.065, "Pulse / quiet values compare integrated 4.5–12 kHz energy; lower pulse values show detector-linked attenuation. Blue indicates attenuation.",
              color="#c4d0d8", fontsize=9)
     png_path = source.with_name("wide-split-pulse-test-report.png")
     pdf_path = source.with_name("wide-split-pulse-test-report.pdf")

@@ -212,3 +212,15 @@
   comparison with each measured value shown in its panel title.
 - Pulse-band changes were −1.65, −2.12, −3.83, and −4.35 dB for Wideband;
   Split-band measured −8.03, −4.28, −1.69, and −1.03 dB.
+
+### 2026-10-20 — detector-linked Wideband and Split-band pulse response
+- Corrected the non-Smart mock setup: a strong swept detail tone had held the
+  detector above threshold between the noise bursts, masking time variation.
+- Set the non-Smart detector threshold to −30 dB and lowered the swept tone
+  below threshold, so the quiet intervals release to unity and the sibilance
+  bursts activate attenuation.
+- Added pulse-versus-quiet integrated band measurements and assertions across
+  every Q. The refreshed heatmaps show attenuation localized to the two bursts;
+  quiet-baseline change is 0.00 dB in both modes.
+- Wideband pulse change now measures −1.07 to −1.96 dB; Split-band measures
+  −0.57 to −3.31 dB, depending on Q.

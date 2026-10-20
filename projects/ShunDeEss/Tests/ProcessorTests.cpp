@@ -251,6 +251,7 @@ struct RollingMeasurements
 {
     float detailChangeDb = 0.0f;
     float sibilanceChangeDb = 0.0f;
+    float idleChangeDb = 0.0f;
 };
 
 RollingMeasurements writeRollingModeSpectrogram (const juce::File& destination, float attenuationQ,
@@ -261,7 +262,8 @@ RollingMeasurements writeRollingModeSpectrogram (const juce::File& destination, 
     ShunDeEssProcessor processor;
     processor.prepareToPlay (48000, hop);
     set (processor, "mode", static_cast<float> (mode));
-    set (processor, "smart", smartMode ? 1.0f : 0.0f); set (processor, "threshold", -48.0f);
+    set (processor, "smart", smartMode ? 1.0f : 0.0f);
+    set (processor, "threshold", smartMode ? -48.0f : -30.0f);
     set (processor, "depth", 12.0f); set (processor, "frequency", 7800.0f);
     set (processor, "q", 2.2f); set (processor, "attenuationFrequency", 7200.0f);
     set (processor, "attenuationQ", attenuationQ); set (processor, "attack", 0.2f); set (processor, "release", 10.0f);
@@ -293,7 +295,8 @@ RollingMeasurements writeRollingModeSpectrogram (const juce::File& destination, 
             const auto fadeIn = 0.5f - 0.5f * std::cos (static_cast<float> (pi) * fadeInPhase);
             const auto fadeOut = 0.5f - 0.5f * std::cos (static_cast<float> (pi) * fadeOutPhase);
             const auto sweepWindow = std::min (fadeIn, fadeOut);
-            const float detail = 0.16f * sweepWindow * (1.0f - sibilancePulse)
+            const float detailLevel = smartMode ? 0.16f : 0.005f;
+            const float detail = detailLevel * sweepWindow * (1.0f - sibilancePulse)
                 * std::sin (2.0 * pi * sweep * t);
             const float sample = 0.045f * white + 3.5f * sibilancePulse * highpassedNoise
                 + 0.08f * std::sin (2.0 * pi * 500.0f * t) + detail;
@@ -313,6 +316,8 @@ RollingMeasurements writeRollingModeSpectrogram (const juce::File& destination, 
     int detailChangeCount = 0;
     double pulseChangeSum = 0.0;
     int pulseChangeCount = 0;
+    double idleChangeSum = 0.0;
+    int idleChangeCount = 0;
     for (int end = fftSize; end <= totalSamples; end += hop)
     {
         double windowSum = 0.0;
@@ -325,7 +330,11 @@ RollingMeasurements writeRollingModeSpectrogram (const juce::File& destination, 
         }
         fft.performFrequencyOnlyForwardTransform (inFft.data()); fft.performFrequencyOnlyForwardTransform (outFft.data());
         const auto frameTime = static_cast<float> (end) / 48000.0f;
-        if ((frameTime >= 0.92f && frameTime <= 1.14f) || (frameTime >= 2.13f && frameTime <= 2.33f))
+        const auto inPulseCenter = (frameTime >= 0.92f && frameTime <= 1.14f)
+                                || (frameTime >= 2.13f && frameTime <= 2.33f);
+        const auto inQuietBaseline = (frameTime >= 1.55f && frameTime <= 1.85f)
+                                  || (frameTime >= 2.55f && frameTime <= 2.85f);
+        if (inPulseCenter || inQuietBaseline)
         {
             double inputPower = 0.0, outputPower = 0.0;
             for (int bin = 96; bin <= 256; bin += 4)
@@ -333,9 +342,18 @@ RollingMeasurements writeRollingModeSpectrogram (const juce::File& destination, 
                 inputPower += std::pow (inFft[static_cast<size_t> (bin)], 2.0f);
                 outputPower += std::pow (outFft[static_cast<size_t> (bin)], 2.0f);
             }
-            pulseChangeSum += 10.0 * std::log10 (std::max (outputPower, 1.0e-18)
-                                                  / std::max (inputPower, 1.0e-18));
-            ++pulseChangeCount;
+            const auto change = 10.0 * std::log10 (std::max (outputPower, 1.0e-18)
+                                                     / std::max (inputPower, 1.0e-18));
+            if (inPulseCenter)
+            {
+                pulseChangeSum += change;
+                ++pulseChangeCount;
+            }
+            else
+            {
+                idleChangeSum += change;
+                ++idleChangeCount;
+            }
         }
         for (int bin = 85; bin <= 683; bin += 4)
         {
@@ -355,7 +373,8 @@ RollingMeasurements writeRollingModeSpectrogram (const juce::File& destination, 
         }
     }
     return { static_cast<float> (detailChangeSum / std::max (detailChangeCount, 1)),
-             static_cast<float> (pulseChangeSum / std::max (pulseChangeCount, 1)) };
+             static_cast<float> (pulseChangeSum / std::max (pulseChangeCount, 1)),
+             static_cast<float> (idleChangeSum / std::max (idleChangeCount, 1)) };
 }
 
 void generateAnalysisReport (const juce::File& destination)
@@ -466,9 +485,11 @@ void generateAnalysisReport (const juce::File& destination)
     report += "\nNegative values indicate attenuation. The blue shaded regions in the rolling heatmaps "
               "mark these two noise pulses; the measured band energy should stay below 0 dB for every Q.\n\n";
     report += "### Wideband and Split-band pulse test\n\n"
-              "The identical seeded input and Q sweep were processed in both non-Smart modes. "
-              "Values are integrated output − input energy from 4.5–12 kHz during the two pulse centers.\n\n"
-              "| Mode | Q 0.5 | Q 1.2 | Q 2.8 | Q 4.0 |\n"
+              "The same seeded input and Q sweep were processed in both non-Smart modes. Their detector "
+              "threshold is −30 dB; the swept detail tone is kept below it so the quiet baseline releases to "
+              "unity, while the gated noise bursts cross threshold. Values are integrated output − input "
+              "energy from 4.5–12 kHz during pulse centers and quiet intervals.\n\n"
+              "| Mode | Q 0.5 (pulse / quiet) | Q 1.2 (pulse / quiet) | Q 2.8 (pulse / quiet) | Q 4.0 (pulse / quiet) |\n"
               "|---|---:|---:|---:|---:|\n";
     std::array<std::array<RollingMeasurements, heatmapQValues.size()>, 2> standardModeMeasurements {};
     const std::array<const char*, 2> standardModeNames { "Wideband", "Split-band" };
@@ -483,12 +504,14 @@ void generateAnalysisReport (const juce::File& destination)
                 + juce::String (heatmapQValues[qIndex], 1) + ".csv");
             standardModeMeasurements[modeIndex][qIndex] = writeRollingModeSpectrogram (
                 file, heatmapQValues[qIndex], mode, false);
-            report += " " + juce::String (standardModeMeasurements[modeIndex][qIndex].sibilanceChangeDb, 2)
-                + " dB |";
+            const auto& measurement = standardModeMeasurements[modeIndex][qIndex];
+            report += " " + juce::String (measurement.sibilanceChangeDb, 2) + " / "
+                + juce::String (measurement.idleChangeDb, 2) + " dB |";
         }
         report += "\n";
     }
-    report += "\nNegative values indicate that the noise bursts are attenuated. "
+    report += "\nPulse values should be more negative than quiet-baseline values, showing detector-linked "
+              "attenuation that follows the bursts. "
               "[Wideband/Split-band pulse plots](wide-split-pulse-test-report.png) · "
               "[PDF](wide-split-pulse-test-report.pdf).\n\n";
     if (! destination.replaceWithText (report))
@@ -517,7 +540,11 @@ void generateAnalysisReport (const juce::File& destination)
     {
         const auto modeAttenuatesEveryPulse = std::all_of (
             standardModeMeasurements[modeIndex].begin(), standardModeMeasurements[modeIndex].end(),
-            [] (const auto& measurements) { return measurements.sibilanceChangeDb < 0.0f; });
+            [] (const auto& measurements)
+            {
+                return measurements.sibilanceChangeDb < -0.25f
+                    && measurements.sibilanceChangeDb < measurements.idleChangeDb - 0.5f;
+            });
         check (modeAttenuatesEveryPulse, modeIndex == 0
             ? "Wideband attenuates the gated sibilance pulses at every tested Q"
             : "Split-band attenuates the gated sibilance pulses at every tested Q");

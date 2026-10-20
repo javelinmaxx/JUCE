@@ -38,11 +38,11 @@ Negative values indicate attenuation. The blue shaded regions in the rolling hea
 
 ### Wideband and Split-band pulse test
 
-The identical seeded input and Q sweep were processed in both non-Smart modes. Values are integrated output − input energy from 4.5–12 kHz during the two pulse centers.
+The same seeded input and Q sweep were processed in both non-Smart modes. Their detector threshold is −30 dB; the swept detail tone is kept below it so the quiet baseline releases to unity, while the gated noise bursts cross threshold. Values are integrated output − input energy from 4.5–12 kHz during pulse centers and quiet intervals.
 
-| Mode | Q 0.5 | Q 1.2 | Q 2.8 | Q 4.0 |
+| Mode | Q 0.5 (pulse / quiet) | Q 1.2 (pulse / quiet) | Q 2.8 (pulse / quiet) | Q 4.0 (pulse / quiet) |
 |---|---:|---:|---:|---:|
-| Wideband | -1.65 dB | -2.12 dB | -3.83 dB | -4.35 dB |
-| Split-band | -8.03 dB | -4.28 dB | -1.69 dB | -1.03 dB |
+| Wideband | -1.07 / 0.00 dB | -1.24 / 0.00 dB | -1.81 / 0.00 dB | -1.96 / 0.00 dB |
+| Split-band | -3.31 / 0.00 dB | -2.07 / 0.00 dB | -0.90 / 0.00 dB | -0.57 / 0.00 dB |
 
-Negative values indicate that the noise bursts are attenuated. [Wideband/Split-band pulse plots](wide-split-pulse-test-report.png) · [PDF](wide-split-pulse-test-report.pdf).
+Pulse values should be more negative than quiet-baseline values, showing detector-linked attenuation that follows the bursts. [Wideband/Split-band pulse plots](wide-split-pulse-test-report.png) · [PDF](wide-split-pulse-test-report.pdf).
