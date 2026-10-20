@@ -185,3 +185,9 @@
   output to the dry signal. Kept the Q comparison and low-Q shelf passband fix.
 - Updated the phase plot and regenerated report to include the 7.8 kHz
   restoration band-pass response.
+
+### 2026-10-20 — pulsed sibilance in rolling mock input
+- Added two smooth-envelope, high-pass noise pulses to each rolling Q test run
+  to mimic sibilant consonants, while retaining the swept detail tone and
+  narrow transient tones for comparison.
+- Regenerated the four measured Q heatmaps and report from the new signal.

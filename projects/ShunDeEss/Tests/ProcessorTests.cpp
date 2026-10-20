@@ -259,6 +259,8 @@ float writeRollingSmartSpectrogram (const juce::File& destination, float attenua
     set (processor, "attenuationQ", attenuationQ); set (processor, "attack", 0.2f); set (processor, "release", 10.0f);
     std::vector<float> input (totalSamples), output (totalSamples);
     std::mt19937 random (0x5eedu); std::normal_distribution<float> noise (0.0f, 0.055f);
+    float sibilanceLowpass = 0.0f;
+    const auto highpassCoefficient = 1.0f - std::exp (-2.0f * pi * 4500.0f / 48000.0f);
     juce::AudioBuffer<float> block (2, hop); juce::MidiBuffer midi;
     for (int offset = 0; offset < totalSamples; offset += hop)
     {
@@ -269,7 +271,20 @@ float writeRollingSmartSpectrogram (const juce::File& destination, float attenua
             const float detail = t > 0.45f && t < 3.75f ? 0.16f * std::sin (2.0 * pi * sweep * t) : 0.0f;
             const float burst = (t > 1.1f && t < 1.45f) || (t > 2.65f && t < 2.95f)
                 ? 0.12f * std::sin (2.0 * pi * 9800.0 * t) : 0.0f;
-            const float sample = noise (random) + 0.08f * std::sin (2.0 * pi * 500.0 * t) + detail + burst;
+            const auto white = noise (random);
+            sibilanceLowpass += highpassCoefficient * (white - sibilanceLowpass);
+            const auto highpassedNoise = white - sibilanceLowpass;
+            const auto pulseEnvelope = [&] (float start, float duration)
+            {
+                const auto phase = (t - start) / duration;
+                if (phase <= 0.0f || phase >= 1.0f) return 0.0f;
+                const auto raisedCosine = static_cast<float> (0.5 - 0.5 * std::cos (2.0 * pi * phase));
+                return raisedCosine * raisedCosine;
+            };
+            const auto sibilancePulse = std::max (pulseEnvelope (0.82f, 0.42f),
+                                                   pulseEnvelope (2.05f, 0.38f));
+            const float sample = 0.045f * white + 0.24f * sibilancePulse * highpassedNoise
+                + 0.08f * std::sin (2.0 * pi * 500.0 * t) + detail + burst;
             input[static_cast<size_t> (n)] = sample;
             block.setSample (0, i, sample); block.setSample (1, i, sample);
         }
@@ -388,7 +403,8 @@ void generateAnalysisReport (const juce::File& destination)
             "processor test verifies that Q 0.5 does not boost the shelf passband. The Smart restoration retains "
             "its additive band-pass path, whose phase response is plotted alongside the shelf phase. Four rolling "
             "heatmaps compare Q 0.5, 1.2, 2.8, and 4.0 using distinct measured runs. The rolling input is a "
-            "four-second time-varying mock: "
+            "four-second time-varying mock with two gated 4.5 kHz high-pass noise pulses to mimic sibilant "
+            "consonants: "
             "a 4.3–11.2 kHz swept detail tone plus two brief 9.8 kHz bursts over broadband noise and a 500 Hz body. "
             "Source data files are `smart-rolling-q-*.csv`; `smart-rolling-spectrogram.csv` is the Q 2.8 run.\n\n"
           "Plotted report: [PNG](detector-attenuator-mock-report.png) · "
