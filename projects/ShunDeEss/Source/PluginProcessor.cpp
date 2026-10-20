@@ -120,15 +120,10 @@ void ShunDeEssProcessor::analyseSmartSpectrum (float detectorFrequency, float de
         const auto hz = static_cast<float> (bestBin) * sampleRate / fftSize;
         const auto omega = 2.0f * pi * hz / sampleRate;
         const auto alpha = std::sin (omega) / (2.0f * std::clamp (attenuationQ, 0.5f, 4.0f));
-        // Use a conventional +6 dB peaking EQ for restoration. Adding a raw
-        // band-pass signal to dry audio makes its phase rotation create a
-        // comb-shaped gain ridge around each detail peak.
-        const auto boostA = std::pow (10.0f, 6.0f / 40.0f);
-        const auto a0 = 1.0f + alpha / boostA;
         auto& f = sparkleFilters[static_cast<size_t> (pick)];
-        f = { (1.0f + alpha * boostA) / a0, -2.0f * std::cos (omega) / a0,
-              (1.0f - alpha * boostA) / a0, -2.0f * std::cos (omega) / a0,
-              (1.0f - alpha / boostA) / a0 };
+        f = { alpha, 0.0f, -alpha, -2.0f * std::cos (omega), 1.0f - alpha };
+        const auto inv = 1.0f / (1.0f + alpha);
+        f.b0 *= inv; f.b1 *= inv; f.b2 *= inv; f.a1 *= inv; f.a2 *= inv;
         sparkleWeights[static_cast<size_t> (pick)] = std::clamp (best / std::max (meanLevel, 1.0e-9f), 0.0f, 1.0f) * 0.28f;
     }
 }
@@ -309,10 +304,8 @@ void ShunDeEssProcessor::process (juce::AudioBuffer<float>& buffer, bool hostByp
                 const auto smartAmount = amount * smartAttenuation;
                 wet = dry[c] + smartAmount * (shelfOutput - dry[c]);
                 for (size_t peak = 0; peak < sparkleWeights.size(); ++peak)
-                {
-                    const auto restored = filterSample (dry[c], sparkleStates[c][peak], sparkleFilters[peak]);
-                    wet += (restored - dry[c]) * smartAmount * sparkleWeights[peak];
-                }
+                    wet += filterSample (dry[c], sparkleStates[c][peak], sparkleFilters[peak])
+                         * smartAmount * sparkleWeights[peak];
             }
             buffer.setSample (ch, i, bypass ? dry[c] : wet * outputGain);
         }

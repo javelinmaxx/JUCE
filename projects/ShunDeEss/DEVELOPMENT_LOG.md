@@ -179,3 +179,9 @@
   dry audio, creating a comb-like ridge around detected detail. Replaced it with
   a controlled +6 dB peaking EQ blended by the existing peak-confidence weight.
 - Added wideband shelf phase curves to the report for low, nominal, and high Q.
+
+### 2026-10-20 — restore Smart band-pass restoration
+- Restored Smart peak restoration to adding the original Q-shaped band-pass
+  output to the dry signal. Kept the Q comparison and low-Q shelf passband fix.
+- Updated the phase plot and regenerated report to include the 7.8 kHz
+  restoration band-pass response.

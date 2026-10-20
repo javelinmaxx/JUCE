@@ -161,6 +161,10 @@ def render(source, png_path, pdf_path):
         shelf_h = (b_shelf[0] + b_shelf[1] * z1 + b_shelf[2] * z1 * z1) / (1.0 + a_shelf[0] * z1 + a_shelf[1] * z1 * z1)
         phase_ax.plot(frequencies, np.angle(shelf_h, deg=True), color=color, linewidth=1.4,
                       linestyle=style, label=f"Wideband phase (Q {q:g})")
+    bp_b, bp_a = detector_filter(center=7800.0, q=2.8)
+    bp_h = (bp_b[0] + bp_b[1] * z1 + bp_b[2] * z1 * z1) / (1.0 + bp_a[0] * z1 + bp_a[1] * z1 * z1)
+    phase_ax.plot(frequencies, np.angle(bp_h, deg=True), color="#bd91ed", linewidth=1.5,
+                  linestyle="-", label="Restoration band-pass (7.8 kHz, Q 2.8)")
     phase_ax.set_ylabel("Phase (degrees)", color="#f0c77e")
     phase_ax.tick_params(axis="y", colors="#f0c77e")
     phase_ax.set_ylim(-90, 90)
