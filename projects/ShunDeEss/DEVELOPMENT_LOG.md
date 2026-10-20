@@ -66,3 +66,7 @@
 ### 2026-10-20 — additional Compressor panel reduction
 - Shortened the Compressor panel by another 30 px with the other panels fixed.
   The gap before Detector is now 92 px; Attack and Release retain their position.
+
+### 2026-10-20 — main control spacing
+- Moved Threshold, Range, Attack, and Release up by 10 px and shortened the
+  Compressor panel by 10 px. The gap before Detector is now 102 px.

@@ -438,7 +438,7 @@ void ShunDeEssEditor::paint (juce::Graphics& g)
     g.drawText ("SHUN DE-ESS", 24, 38, 410, 38, juce::Justification::centredLeft);
     g.saveState();
     g.addTransform (juce::AffineTransform::translation (0.0f, -50.0f));
-    drawBrushedMetalPanel (g, { 24, 140, 300, 262 }, 10, theme.card, theme.grid);
+    drawBrushedMetalPanel (g, { 24, 140, 300, 252 }, 10, theme.card, theme.grid);
     drawAnalogPanel (g, { 24, 494, 300, 116 }, 10, theme.card, theme.grid);
     drawAnalogPanel (g, { 24, 622, 300, 116 }, 10, theme.card, theme.grid);
     drawAnalogPanel (g, { 344, 622, 180, 116 }, 10, theme.card, theme.grid);
@@ -536,10 +536,10 @@ void ShunDeEssEditor::resized()
         sliders[index].setTextBoxStyle (juce::Slider::TextBoxBelow, false, width, 17);
         sliders[index].setBounds (x, up (y + 20), width, height);
     };
-    place (4, 38, 208, 128, 108);
-    place (5, 168, 208, 156, 108);
-    place (6, 64, 335, 76, 64);
-    place (7, 208, 335, 76, 64);
+    place (4, 38, 198, 128, 108);
+    place (5, 168, 198, 156, 108);
+    place (6, 64, 325, 76, 64);
+    place (7, 208, 325, 76, 64);
     place (0, 30, 550, 76, 64);
     place (1, 122, 550, 76, 64);
     place (2, 30, 682, 76, 64);
