@@ -1,4 +1,4 @@
-name: YinYang Compressor - Windows VST3
+name: YinYang and SHUN - Windows VST3
 
 on:
   workflow_dispatch:
@@ -11,17 +11,19 @@ on:
       - build-windows-vst3.ps1
       - projects/CharacterCompressor/Source/**
       - projects/CharacterCompressor/CMakeLists.txt
+      - projects/ShunDeEss/Source/**
+      - projects/ShunDeEss/CMakeLists.txt
 
 permissions:
   contents: read
 
 concurrency:
-  group: character-compressor-windows-${{ github.ref }}
+  group: j-sonic-windows-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build:
-    name: Windows x64 Release
+  build_yinyang:
+    name: YinYang Windows x64 Release
     runs-on: windows-2022
     timeout-minutes: 30
     defaults:
@@ -49,5 +51,43 @@ jobs:
           name: YinYang-Compressor-Windows-x64-VST3
           # Upload the parent directory to preserve the whole .vst3 bundle.
           path: build-character-win/CharacterCompressor_artefacts/Release/VST3/
+          if-no-files-found: error
+          retention-days: 30
+
+  build_shun:
+    name: SHUN Windows x64 Release
+    runs-on: windows-2022
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Configure SHUN DE-ESS
+        run: |
+          cmake -S projects/ShunDeEss -B build-shun-win -G 'Visual Studio 17 2022' -A x64 '-DSHUN_BUILD_TESTS=OFF' '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded$<$<CONFIG:Debug>:Debug>'
+          if ($LASTEXITCODE -ne 0) { throw "SHUN configuration failed (exit $LASTEXITCODE)." }
+
+      - name: Build SHUN DE-ESS VST3
+        run: |
+          cmake --build build-shun-win --config Release --target ShunDeEss_VST3 --parallel 4
+          if ($LASTEXITCODE -ne 0) { throw "SHUN VST3 build failed (exit $LASTEXITCODE)." }
+
+      - name: Check SHUN Windows bundle
+        run: |
+          $bundle = 'build-shun-win/ShunDeEss_artefacts/Release/VST3/SHUN DE-ESS.vst3'
+          $binary = Join-Path $bundle 'Contents/x86_64-win/SHUN DE-ESS.vst3'
+          if (-not (Test-Path -LiteralPath $binary -PathType Leaf)) {
+            throw "Windows VST3 binary missing: $binary"
+          }
+          Get-ChildItem -LiteralPath $bundle -Recurse
+
+      - name: Upload SHUN Windows VST3
+        uses: actions/upload-artifact@v4
+        with:
+          name: SHUN-DE-ESS-Windows-x64-VST3
+          path: build-shun-win/ShunDeEss_artefacts/Release/VST3/
           if-no-files-found: error
           retention-days: 30

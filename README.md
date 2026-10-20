@@ -81,7 +81,7 @@ another JUCE download. All build commands below run from the repository root.
 
 Build SHUN DE-ESS with CMake using the commands in its
 [project README](projects/ShunDeEss/README.md). The platform scripts below
-currently build YinYang Compressor.
+build YinYang Compressor; the Windows GitHub workflow builds both plug-ins.
 
 Download the development branch with Git:
 
@@ -136,7 +136,7 @@ cmake --build build-character-win --config Release --target CharacterCompressor_
 The complete Windows x64 plug-in bundle is:
 
 ```text
-build-character-win\CharacterCompressor_artefacts\Release\VST3\Character Compressor.vst3
+build-character-win\CharacterCompressor_artefacts\Release\VST3\YinYang Compressor.vst3
 ```
 
 Copy the entire `.vst3` folder, including its contents, into:
@@ -148,17 +148,17 @@ C:\Program Files\Common Files\VST3\
 Windows may request administrator permission. Restart your Windows DAW and
 rescan its plug-ins. The build links the MSVC runtime statically.
 
-### Build from a Mac using GitHub Actions
+### Build with GitHub Actions
 
-A Windows computer is not required to compile this version. GitHub can build
-it on a Windows runner:
+A Windows computer is not required to compile either plug-in. GitHub builds
+YinYang Compressor and SHUN DE-ESS in separate Windows jobs:
 
 1. Open [Windows VST3 builds](https://github.com/javelinmaxx/Multi-Compressor/actions/workflows/character-compressor-windows.yml).
-2. Enable Actions if GitHub prompts you, then open a successful run for the
-   compressor branch.
-3. Under **Artifacts**, download **Character-Compressor-Windows-x64-VST3**.
-4. Extract the ZIP. Install the complete `Character Compressor.vst3` folder
-   on Windows using the location above.
+2. Enable Actions if GitHub prompts you, then open a successful run for the branch.
+3. Under **Artifacts**, download **YinYang-Compressor-Windows-x64-VST3** and
+   **SHUN-DE-ESS-Windows-x64-VST3**.
+4. Extract each ZIP. Install both complete `.vst3` folders in the Windows
+   plug-in location above.
 
 Source/configuration pushes to `feature/character-compressor` or `master`
 automatically trigger the workflow. Once the workflow is on the repository's

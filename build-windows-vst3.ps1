@@ -31,8 +31,8 @@ if ($LASTEXITCODE -ne 0) { throw "CMake configuration failed (exit $LASTEXITCODE
 & cmake --build $BuildDirectory --config Release --target CharacterCompressor_VST3 --parallel $Parallel
 if ($LASTEXITCODE -ne 0) { throw "VST3 build failed (exit $LASTEXITCODE)." }
 
-$bundle = Join-Path $BuildDirectory 'CharacterCompressor_artefacts/Release/VST3/Character Compressor.vst3'
-$binary = Join-Path $bundle 'Contents/x86_64-win/Character Compressor.vst3'
+$bundle = Join-Path $BuildDirectory 'CharacterCompressor_artefacts/Release/VST3/YinYang Compressor.vst3'
+$binary = Join-Path $bundle 'Contents/x86_64-win/YinYang Compressor.vst3'
 if (-not (Test-Path -LiteralPath $binary -PathType Leaf)) {
     throw "Windows VST3 binary missing: $binary"
 }
