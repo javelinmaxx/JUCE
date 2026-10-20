@@ -50,5 +50,6 @@
 ### 2026-10-20 — secondary knob sizing
 - Standardized all secondary knobs to the Attenuator controls' 76 × 64 bounds.
 
-### 2026-10-20 — Q control alignment
-- Centered DET Q and ATT Q horizontally in their respective panels.
+### 2026-10-20 — control alignment refinement
+- Restored DET Q and ATT Q to their prior positions and lowered both switches
+  by 3 px to align with the knob rows.
