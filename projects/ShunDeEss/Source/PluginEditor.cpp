@@ -438,7 +438,7 @@ void ShunDeEssEditor::paint (juce::Graphics& g)
     g.drawText ("SHUN DE-ESS", 24, 38, 410, 38, juce::Justification::centredLeft);
     g.saveState();
     g.addTransform (juce::AffineTransform::translation (0.0f, -50.0f));
-    drawBrushedMetalPanel (g, { 24, 140, 300, 292 }, 10, theme.card, theme.grid);
+    drawBrushedMetalPanel (g, { 24, 140, 300, 262 }, 10, theme.card, theme.grid);
     drawAnalogPanel (g, { 24, 494, 300, 116 }, 10, theme.card, theme.grid);
     drawAnalogPanel (g, { 24, 622, 300, 116 }, 10, theme.card, theme.grid);
     drawAnalogPanel (g, { 344, 622, 180, 116 }, 10, theme.card, theme.grid);
