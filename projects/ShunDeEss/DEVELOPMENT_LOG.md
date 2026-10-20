@@ -58,3 +58,7 @@
 - Aligned Release horizontally with Range and moved Attack/Release up by 15 px.
 - Shortened the Compressor panel by 15 px. With Detector unchanged, the gap
   between panels is now 27 px, up from 12 px (15 px of additional open space).
+
+### 2026-10-20 — additional Compressor panel reduction
+- Shortened the Compressor panel by another 35 px with the other panels fixed.
+  The gap before Detector is now 62 px; Attack and Release retain their position.
