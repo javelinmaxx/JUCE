@@ -111,3 +111,9 @@
 - Smart analysis updates every 256 samples and controls the existing audio
   filterbank, keeping the plug-in's reported latency at zero. Added a focused
   broadband-noise stability check.
+
+### 2026-10-20 — Smart mode selector styling
+- Restyled the three-position mode selector to match the Detector's round
+  analog flip switch: head-on hex nut, circular flange, and metal lever. Wide,
+  Split, and Smart labels remain beside their corresponding positions.
+- Refreshed the full-editor preview.

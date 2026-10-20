@@ -169,47 +169,67 @@ void ThreeWayModeToggle::setTheme (const CompressorTheme& t)
 void ThreeWayModeToggle::paintButton (juce::Graphics& g, bool highlighted, bool down)
 {
     const auto bounds = getLocalBounds().toFloat().reduced (1.0f);
-    const auto track = juce::Rectangle<float> (bounds.getX() + 3, bounds.getY() + 7, 28, bounds.getHeight() - 14);
-    g.setColour (juce::Colours::black.withAlpha (0.28f));
-    g.fillRoundedRectangle (track.translated (0, 1), 13);
-    g.setGradientFill (juce::ColourGradient (surface.brighter (0.12f), track.getTopLeft(),
-                                              surface.darker (0.25f), track.getBottomLeft(), false));
-    g.fillRoundedRectangle (track, 13);
-    g.setColour (accent.withAlpha (0.55f));
-    g.drawRoundedRectangle (track, 13, 1.0f);
+    const auto cx = bounds.getX() + 31.0f;
+    const auto cy = bounds.getCentreY();
+    juce::Path nut, innerNut;
+    for (int corner = 0; corner < 6; ++corner)
+    {
+        const auto angle = juce::MathConstants<float>::twoPi * static_cast<float> (corner) / 6.0f;
+        const auto point = juce::Point<float> (cx + std::cos (angle) * 16.0f, cy + std::sin (angle) * 16.0f);
+        const auto inset = juce::Point<float> (cx + std::cos (angle) * 13.2f, cy + std::sin (angle) * 13.2f);
+        if (corner == 0) { nut.startNewSubPath (point); innerNut.startNewSubPath (inset); }
+        else { nut.lineTo (point); innerNut.lineTo (inset); }
+    }
+    nut.closeSubPath(); innerNut.closeSubPath();
+    g.setColour (juce::Colours::black.withAlpha (0.32f));
+    g.fillPath (nut, juce::AffineTransform::translation (0.0f, 1.5f));
+    g.setGradientFill (juce::ColourGradient (secondary.brighter (0.16f), cx - 12.0f, cy - 13.0f,
+                                              secondary.darker (0.34f), cx + 10.0f, cy + 13.0f, false));
+    g.fillPath (nut);
+    g.setColour (secondary.darker (0.16f)); g.strokePath (nut, juce::PathStrokeType (0.8f));
+    g.setColour (secondary.darker (0.22f)); g.fillPath (innerNut);
+    g.setColour (secondary.darker (0.36f).withAlpha (0.8f)); g.strokePath (innerNut, juce::PathStrokeType (0.65f));
 
-    const auto step = (track.getHeight() - 20.0f) * 0.5f;
-    const auto cy = track.getY() + 10.0f + position * step;
-    const auto pivot = juce::Point<float> (track.getCentreX(), cy);
-    const auto leverAngle = (position - 1.0f) * 0.38f;
-    const juce::Point<float> end (pivot.x + std::sin (leverAngle) * 17.0f,
-                                  pivot.y - std::cos (leverAngle) * 17.0f);
-    g.setColour (juce::Colours::black.withAlpha (0.55f));
-    g.drawLine (pivot.x + 1, pivot.y + 2, end.x + 1, end.y + 2, 5.0f);
-    g.setColour (juce::Colour (0xffaab0b4));
-    g.drawLine (pivot.x, pivot.y, end.x, end.y, 4.0f);
-    g.setGradientFill (juce::ColourGradient (juce::Colour (0xfff4f1e9), end.x - 3, end.y - 3,
-                                              juce::Colour (0xff747b80), end.x + 3, end.y + 4, false));
-    g.fillEllipse (end.x - 4.5f, end.y - 4.5f, 9.0f, 9.0f);
-    g.setColour (juce::Colours::white.withAlpha (highlighted ? 0.65f : 0.3f));
-    g.drawEllipse (end.x - 4.5f, end.y - 4.5f, 9.0f, 9.0f, 0.7f);
+    const auto flange = juce::Rectangle<float> (cx - 12.0f, cy - 12.0f, 24.0f, 24.0f);
+    g.setColour (surface.darker (0.42f)); g.fillEllipse (flange.expanded (1.0f));
+    g.setGradientFill (juce::ColourGradient (secondary.brighter (0.18f), flange.getTopLeft(),
+                                              secondary.darker (0.28f), flange.getBottomLeft(), false));
+    g.fillEllipse (flange);
+    g.setColour (surface.darker (0.35f)); g.fillEllipse (flange.reduced (3.0f));
+    g.setColour (secondary.brighter (0.12f).withAlpha (0.85f)); g.drawEllipse (flange, 0.7f);
+    g.setColour (surface.darker (0.5f)); g.fillEllipse (cx - 6.0f, cy - 6.0f, 12.0f, 12.0f);
+    g.setColour (secondary.darker (0.18f)); g.drawEllipse (cx - 5.3f, cy - 5.3f, 10.6f, 10.6f, 1.0f);
+
+    const auto theta = (position - 1.0f) * 0.68f;
+    const juce::Point<float> tip (cx + std::sin (theta) * 18.0f, cy - std::cos (theta) * 18.0f);
+    g.setColour (juce::Colours::black.withAlpha (0.38f));
+    g.drawLine (cx + 1.0f, cy + 1.0f, tip.x + 1.0f, tip.y + 1.0f, 5.6f);
+    g.setColour (juce::Colour (0xffc6cbd0)); g.drawLine (cx, cy, tip.x, tip.y, 4.8f);
+    g.setColour (juce::Colour (0xff8e969d)); g.drawLine (cx - 0.8f, cy, tip.x - 0.8f, tip.y, 1.0f);
+    const auto cap = juce::Rectangle<float> (tip.x - 4.4f, tip.y - 4.4f, 8.8f, 8.8f);
+    g.setGradientFill (juce::ColourGradient (juce::Colour (0xffe0e3e5), cap.getTopLeft(),
+                                              juce::Colour (0xff777f86), cap.getBottomRight(), false));
+    g.fillEllipse (cap);
+    g.setColour (juce::Colour (0xff515a61)); g.drawEllipse (cap, 0.8f);
+    g.setColour (juce::Colours::white.withAlpha (highlighted ? 0.62f : 0.28f));
+    g.drawEllipse (cap.reduced (1.0f), 0.55f);
 
     const std::array<const char*, 3> labels { "WIDE", "SPLIT", "SMART" };
-    g.setFont (juce::FontOptions (8.5f).withStyle ("bold"));
+    g.setFont (juce::FontOptions (9.0f).withStyle ("bold"));
     for (int i = 0; i < 3; ++i)
     {
-        const auto y = track.getY() + 3.0f + static_cast<float> (i) * step;
+        const auto y = cy - 24.0f + static_cast<float> (i) * 22.0f;
         g.setColour (i == mode ? accent : secondary.withAlpha (0.78f));
-        g.drawText (labels[static_cast<size_t> (i)], juce::roundToInt (track.getRight() + 5),
-                    juce::roundToInt (y), juce::roundToInt (bounds.getRight() - track.getRight() - 5),
-                    17, juce::Justification::centredLeft);
+        g.drawText (labels[static_cast<size_t> (i)], juce::roundToInt (cx + 24.0f),
+                    juce::roundToInt (y), juce::roundToInt (bounds.getRight() - cx - 24.0f), 17,
+                    juce::Justification::centredLeft);
     }
     if (hasKeyboardFocus (true))
     {
         g.setColour (accent);
         g.drawRoundedRectangle (bounds, 5, 1.0f);
     }
-    if (down) g.setColour (juce::Colours::black.withAlpha (0.08f)), g.fillRoundedRectangle (bounds, 4);
+    if (down) { g.setColour (juce::Colours::black.withAlpha (0.08f)); g.fillRoundedRectangle (bounds, 4); }
 }
 
 void AnimatedSwitch::advance (float elapsed)
