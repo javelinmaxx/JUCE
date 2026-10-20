@@ -412,8 +412,10 @@ ShunDeEssEditor::ShunDeEssEditor (ShunDeEssProcessor& p)
         addAndMakeVisible (slider);
         addAndMakeVisible (labels[i]);
         attachments[i] = std::make_unique<State::SliderAttachment> (p.parameters, ids[i], slider);
+        slider.onValueChange = [this] { repaint (24, 330, 300, 115); };
         slider.setColour (juce::Slider::textBoxTextColourId, theme.text);
     }
+    modeSwitch.onClick = [this] { repaint (24, 330, 300, 115); };
     listen.setStateCaptions ("LISTEN", "OFF");
     listen.setFunctionLabelVisible (false);
     modeSwitch.snapToState();
@@ -450,8 +452,103 @@ void ShunDeEssEditor::paint (juce::Graphics& g)
     g.drawText ("OUTPUT", 358, 630, 152, 18, juce::Justification::centredLeft);
     g.setColour (theme.grid);
     g.drawHorizontalLine (488, 24, 324);
+    paintResponseDisplay (g);
     paintMeter (g);
     g.restoreState();
+}
+
+void ShunDeEssEditor::paintResponseDisplay (juce::Graphics& g)
+{
+    const juce::Rectangle<float> plot (42.0f, 397.0f, 266.0f, 62.0f);
+    const auto detectorFrequency = static_cast<float> (sliders[0].getValue());
+    const auto detectorQ = static_cast<float> (sliders[1].getValue());
+    const auto attenuationFrequency = static_cast<float> (sliders[2].getValue());
+    const auto attenuationQ = static_cast<float> (sliders[3].getValue());
+    const auto maximumCut = static_cast<float> (sliders[5].getValue());
+    const auto splitBand = modeSwitch.getToggleState();
+    const auto xForFrequency = [&] (float frequency)
+    {
+        const auto octaves = std::log2 (std::clamp (frequency, 2000.0f, 16000.0f) / 2000.0f);
+        return plot.getX() + plot.getWidth() * octaves / 3.0f;
+    };
+    const auto yForDb = [&] (float db)
+    {
+        return plot.getY() + plot.getHeight() * std::clamp (-db / 30.0f, 0.0f, 1.0f);
+    };
+
+    g.setColour (theme.meterPanel.withAlpha (0.62f));
+    g.fillRoundedRectangle (plot.expanded (7.0f, 4.0f), 5.0f);
+    for (const auto db : { 0, -15, -30 })
+    {
+        const auto y = yForDb (static_cast<float> (db));
+        g.setColour (theme.grid.withAlpha (0.72f));
+        g.drawHorizontalLine (juce::roundToInt (y), plot.getX(), plot.getRight());
+        g.setColour (theme.secondary.withAlpha (0.82f));
+        g.setFont (juce::FontOptions (7.0f));
+        g.drawText (juce::String (db), 20, juce::roundToInt (y) - 5, 19, 10,
+                    juce::Justification::centredRight);
+    }
+    for (const auto frequency : { 2000.0f, 4000.0f, 8000.0f, 16000.0f })
+    {
+        const auto x = xForFrequency (frequency);
+        g.setColour (theme.grid.withAlpha (0.62f));
+        g.drawVerticalLine (juce::roundToInt (x), plot.getY(), plot.getBottom());
+        g.setColour (theme.secondary);
+        const auto label = juce::String (static_cast<int> (frequency / 1000.0f)) + "k";
+        g.drawText (label, x - 14.0f, plot.getBottom() + 2.0f, 28.0f, 10.0f,
+                    juce::Justification::centred);
+    }
+
+    juce::Path detectorCurve, attenuationCurve;
+    constexpr int points = 160;
+    for (int index = 0; index <= points; ++index)
+    {
+        const auto proportion = static_cast<float> (index) / static_cast<float> (points);
+        const auto frequency = 2000.0f * std::pow (8.0f, proportion);
+        const auto detectorRatio = frequency / detectorFrequency;
+        const auto detectorDenominator = std::sqrt (
+            std::pow (1.0f - detectorRatio * detectorRatio, 2.0f)
+            + std::pow (detectorRatio / detectorQ, 2.0f));
+        const auto detectorDb = 20.0f * std::log10 (std::max (
+            (detectorRatio / detectorQ) / detectorDenominator, 1.0e-5f));
+
+        const auto relative = frequency / attenuationFrequency;
+        const auto cut = splitBand
+            ? -maximumCut / (1.0f + std::pow (attenuationQ * (relative - 1.0f / relative), 2.0f))
+            : -maximumCut / (1.0f + std::exp (-std::clamp (1.5f * attenuationQ
+                                                           * std::log (relative), -20.0f, 20.0f)));
+        const auto x = plot.getX() + plot.getWidth() * proportion;
+        const auto detectorY = yForDb (detectorDb);
+        const auto attenuationY = yForDb (cut);
+        if (index == 0)
+        {
+            detectorCurve.startNewSubPath (x, detectorY);
+            attenuationCurve.startNewSubPath (x, attenuationY);
+        }
+        else
+        {
+            detectorCurve.lineTo (x, detectorY);
+            attenuationCurve.lineTo (x, attenuationY);
+        }
+    }
+    g.saveState();
+    g.reduceClipRegion (plot.expanded (1.0f).toNearestInt());
+    g.setColour (theme.secondary.withAlpha (0.22f));
+    g.strokePath (detectorCurve, juce::PathStrokeType (4.0f));
+    g.setColour (theme.secondary);
+    g.strokePath (detectorCurve, juce::PathStrokeType (1.5f));
+    g.setColour (theme.meter.withAlpha (0.22f));
+    g.strokePath (attenuationCurve, juce::PathStrokeType (4.0f));
+    g.setColour (theme.meter);
+    g.strokePath (attenuationCurve, juce::PathStrokeType (1.8f));
+    g.restoreState();
+
+    g.setFont (juce::FontOptions (7.5f).withStyle ("bold"));
+    g.setColour (theme.secondary);
+    g.drawText ("DETECTOR", 38, 477, 72, 12, juce::Justification::centredLeft);
+    g.setColour (theme.meter);
+    g.drawText (splitBand ? "ATTENUATOR / SPLIT" : "ATTENUATOR / WIDE",
+                208, 477, 108, 12, juce::Justification::centredRight);
 }
 
 void ShunDeEssEditor::paintMeter (juce::Graphics& g)

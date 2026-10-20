@@ -64,6 +64,7 @@ public:
 private:
     void timerCallback() override;
     void paintMeter (juce::Graphics&);
+    void paintResponseDisplay (juce::Graphics&);
     void applyTheme();
     ShunDeEssProcessor& processor;
     CompressorLookAndFeel look;

@@ -78,3 +78,9 @@
 ### 2026-10-20 — restore GR history direction
 - Restored the history timeline to left-to-right: −3 s on the left and NOW on
   the right. The vertical GR orientation remains top-down.
+
+### 2026-10-20 — detector/attenuator response display
+- Added a live frequency-response plot in the open space between Compressor and
+  Detector, showing the detector band-pass and active attenuation shape.
+- The logarithmic frequency axis spans 2–16 kHz to cover both frequency controls;
+  curves follow the current frequency, Q, mode, and maximum-cut settings.
