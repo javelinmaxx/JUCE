@@ -27,7 +27,11 @@ def read_results(path):
     qrows = re.findall(r"\| ([\d.]+) \| ([\d.]+)% \| ([\d.]+)% \|", text[text.find("### Smart attenuator-Q"):])
     if len(qrows) < 2:
         raise ValueError("Could not find Smart attenuator-Q sweep")
-    return rows, float(detector.group(1)), np.array(qrows, dtype=float)
+    pulse_section = text.split("### Sibilance pulse attenuation", 1)[-1]
+    pulse_rows = re.findall(r"\| ([\d.]+) \| (-?[\d.]+) dB \|", pulse_section)
+    if len(pulse_rows) != 4:
+        raise ValueError("Could not find all four sibilance pulse measurements")
+    return rows, float(detector.group(1)), np.array(qrows, dtype=float), np.array(pulse_rows, dtype=float)
 
 
 def response_db(b, a, frequencies, sample_rate=48000.0):
@@ -77,7 +81,7 @@ def shelf_filter(center=7200.0, q=2.8, depth=12.0, sample_rate=48000.0):
 
 
 def render(source, png_path, pdf_path):
-    results, rejection_db, qresults = read_results(source)
+    results, rejection_db, qresults, pulse_results = read_results(source)
     spectrum_path = Path(source).with_name("smart-spectral-spectrum.csv")
     spectrum = np.genfromtxt(spectrum_path, delimiter=",", names=True)
     rolling_sets = {}
@@ -108,7 +112,7 @@ def render(source, png_path, pdf_path):
     fig.suptitle("SHUN DE-ESS  |  DETECTOR & ATTENUATOR TEST", color="#f2f5f7",
                  fontsize=19, fontweight="bold", x=0.08, y=0.955, ha="left")
     fig.text(0.08, 0.905,
-             "Deterministic 48 kHz mocks: fixed detail for Q sweep; swept tone and bursts for rolling analysis",
+             "Deterministic 48 kHz mocks: fixed detail for Q sweep; swept tone plus gated sibilance noise pulses",
              color="#aebbc5", fontsize=10)
     fig.text(0.08, 0.865,
              f"Detector Listen selectivity: {rejection_db:.1f} dB at 7.8 kHz vs 500 Hz  ·  "
@@ -216,7 +220,7 @@ def render(source, png_path, pdf_path):
     ax.legend(frameon=False, labelcolor="#dce5eb", loc="lower right")
 
     heatmap_grid = grid[3, :].subgridspec(2, 2, hspace=0.28, wspace=0.18)
-    fig.text(0.09, 0.355, "Rolling attenuator shape · measured output − input during the sweep",
+    fig.text(0.09, 0.355, "Rolling attenuator shape · blue sibilance pulses",
              color="#eef2f5", fontsize=12, fontweight="bold")
     heat_axes = []
     norm = TwoSlopeNorm(vmin=-18, vcenter=0, vmax=6)
@@ -236,8 +240,11 @@ def render(source, png_path, pdf_path):
             change = np.where(np.isnan(change), np.nanmedian(change), change)
         mesh = ax.pcolormesh(times, freqs, change.T, shading="auto", cmap="RdBu_r", norm=norm)
         mesh.set_rasterized(True)
+        ax.axvspan(0.82, 1.24, color="#54c2d8", alpha=0.07)
+        ax.axvspan(2.05, 2.43, color="#54c2d8", alpha=0.07)
         ax.set_title(f"Attenuator Q {q:.1f}", color="#eef2f5", loc="left", fontsize=9, pad=4)
         ax.set_ylim(2000, 16000); ax.set_xlabel("Time (s)"); ax.set_ylabel("Frequency (Hz)")
+        ax.set_xlim(0.65, 2.60)
         ax.set_yticks([2000, 6000, 10000, 14000], ["2k", "6k", "10k", "14k"])
         ax.tick_params(labelsize=8)
         for spine in ax.spines.values(): spine.set_color("#52616c")
@@ -252,8 +259,10 @@ def render(source, png_path, pdf_path):
              f"(+{delta:.1f} points).",
              color="#e7ad5b", fontsize=11, fontweight="bold")
     fig.text(0.08, 0.065,
-             f"It retains {results['Smart'][2]:.1f}% of the 500 Hz body. Heatmaps compare measured gain change at Q 0.5, 1.2, 2.8, and 4.0; blue is attenuation, red is gain restoration.",
-             color="#c4d0d8", fontsize=9.5)
+             "Pulse band change (4.5–12 kHz; negative = attenuation): "
+             + "   ".join(f"Q {q:.1f} {change:+.2f} dB" for q, change in pulse_results)
+             + ". Blue is attenuation; red is gain restoration.",
+             color="#c4d0d8", fontsize=8.5)
 
     for path in (png_path, pdf_path):
         Path(path).parent.mkdir(parents=True, exist_ok=True)

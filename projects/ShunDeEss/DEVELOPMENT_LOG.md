@@ -188,6 +188,18 @@
 
 ### 2026-10-20 — pulsed sibilance in rolling mock input
 - Added two smooth-envelope, high-pass noise pulses to each rolling Q test run
-  to mimic sibilant consonants, while retaining the swept detail tone and
-  narrow transient tones for comparison.
+  to mimic sibilant consonants alongside the swept detail tone.
 - Regenerated the four measured Q heatmaps and report from the new signal.
+- Made the noise pulses stronger than the swept tone and temporally separated
+  the two sources, so their measured attenuation is clearly distinguishable
+  from intentionally restored tonal detail.
+- Gated peak restoration on a clear local spectral peak, preventing random
+  bins in broadband sibilance noise from being classified as narrow detail.
+  Added a regression assertion that integrated 4.5–12 kHz pulse energy drops
+  at every tested Attenuator Q.
+- Added the measured pulse-band change for each Q to the Markdown report and
+  plot footer, clarifying that the heatmap's occasional positive single-bin
+  noise estimates do not indicate positive integrated burst energy.
+- Zoomed the heatmaps around the two pulse windows. The measured integrated
+  4.5–12 kHz changes are −1.25, −2.06, −3.68, and −4.15 dB for Q 0.5, 1.2,
+  2.8, and 4.0 respectively.

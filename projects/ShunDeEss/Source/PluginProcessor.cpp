@@ -106,6 +106,20 @@ void ShunDeEssProcessor::analyseSmartSpectrum (float detectorFrequency, float de
         {
             const auto hz = static_cast<float> (bin) * sampleRate / fftSize;
             if (hz < 2000 || hz > 16000) continue;
+            float localFloor = 0.0f;
+            int localCount = 0;
+            for (int offset = -5; offset <= 5; ++offset)
+                if (std::abs (offset) > 1 && bin + offset > 0 && bin + offset <= 512)
+                {
+                    localFloor += magnitudes[static_cast<size_t> (bin + offset)];
+                    ++localCount;
+                }
+            // A broadband noise burst can produce a large temporal residual
+            // in every bin. Restore only peaks that stand out spectrally from
+            // their neighbors, so transient sibilance remains attenuated.
+            if (magnitudes[static_cast<size_t> (bin)]
+                < 4.0f * localFloor / static_cast<float> (std::max (localCount, 1)))
+                continue;
             bool nearChosen = false;
             for (auto selected : chosenBins)
                 nearChosen = nearChosen || (selected != 0 && std::abs (selected - bin) < 5);

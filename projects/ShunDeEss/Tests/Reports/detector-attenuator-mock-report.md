@@ -8,7 +8,7 @@ The detector Listen path was also measured with equal-level 500 Hz and 7.8 kHz t
 |---|---:|---:|---:|---:|
 | Wideband | 12.00 | 28.0% | 98.7% | 48.3% |
 | Split-band | 12.00 | 19.0% | 100.0% | 35.4% |
-| Smart | 12.00 | 19.1% | 98.6% | 71.9% |
+| Smart | 12.00 | 26.5% | 98.7% | 52.5% |
 
 Detector controls: 7.8 kHz center, Q 2.2, −48 dB threshold. Attenuator controls: 7.2 kHz center, Q 2.8, 12 dB maximum depth. The retained-detail column is a sine/cosine projection of the final 8192 samples; it shows how much of the isolated 7.8 kHz tone survives broadband attenuation. Smart is expected to retain more of that tone than Wideband while still reducing the broadband mock input.
 
@@ -16,11 +16,22 @@ Detector controls: 7.8 kHz center, Q 2.2, −48 dB threshold. Attenuator control
 
 | Attenuator Q | Broadband RMS reduction | 7.8 kHz detail retained |
 |---:|---:|---:|
-| 0.5 | 4.4% | 97.4% |
-| 1.2 | 13.2% | 82.1% |
-| 2.8 | 19.1% | 71.9% |
-| 4.0 | 21.4% | 67.6% |
+| 0.5 | 25.2% | 49.3% |
+| 1.2 | 25.8% | 49.6% |
+| 2.8 | 26.5% | 52.5% |
+| 4.0 | 27.0% | 53.0% |
 
-This sweeps Attenuator Q while holding the mock signal fixed. The measured change confirms that Q affects detail retention: the wider low-Q restoration preserves more of this tone, while higher Q increases broadband attenuation. The phase plot shows the shelf's minimum-phase rotation; at low Q, the original RBJ slope setting allowed passband peaking. The shelf slope is now capped at 1.0, and a processor test verifies that Q 0.5 does not boost the shelf passband. The Smart restoration retains its additive band-pass path, whose phase response is plotted alongside the shelf phase. Four rolling heatmaps compare Q 0.5, 1.2, 2.8, and 4.0 using distinct measured runs. The rolling input is a four-second time-varying mock with two gated 4.5 kHz high-pass noise pulses to mimic sibilant consonants: a 4.3–11.2 kHz swept detail tone plus two brief 9.8 kHz bursts over broadband noise and a 500 Hz body. Source data files are `smart-rolling-q-*.csv`; `smart-rolling-spectrogram.csv` is the Q 2.8 run.
+This sweeps Attenuator Q while holding the mock signal fixed. The measured change confirms that Q affects detail retention: the narrower high-Q restoration retains more of this tone, while higher Q increases broadband attenuation. The phase plot shows the shelf's minimum-phase rotation; at low Q, the original RBJ slope setting allowed passband peaking. The shelf slope is now capped at 1.0, and a processor test verifies that Q 0.5 does not boost the shelf passband. The Smart restoration retains its additive band-pass path, whose phase response is plotted alongside the shelf phase. Four rolling heatmaps compare Q 0.5, 1.2, 2.8, and 4.0 using distinct measured runs. The rolling input is a four-second time-varying mock with two gated 4.5 kHz high-pass noise pulses to mimic sibilant consonants. The swept detail tone is gated out during the pulses so their attenuation reads clearly; the signal combines a 4.3–11.2 kHz swept detail tone, two high-pass noise pulses, broadband noise, and a 500 Hz body. The test verifies that integrated 4.5–12 kHz output energy is lower during each pulse at all four Q settings. Source data files are `smart-rolling-q-*.csv`; `smart-rolling-spectrogram.csv` is the Q 2.8 run.
 
 Plotted report: [PNG](detector-attenuator-mock-report.png) · [PDF](detector-attenuator-mock-report.pdf). Regenerate with `Tests/generate_analysis_report.py`.
+
+### Sibilance pulse attenuation
+
+| Attenuator Q | 4.5–12 kHz output − input during pulses |
+|---:|---:|
+| 0.5 | -1.25 dB |
+| 1.2 | -2.06 dB |
+| 2.8 | -3.68 dB |
+| 4.0 | -4.15 dB |
+
+Negative values indicate attenuation. The blue shaded regions in the rolling heatmaps mark these two noise pulses; the measured band energy should stay below 0 dB for every Q.
