@@ -84,3 +84,9 @@
   Detector, showing the detector band-pass and active attenuation shape.
 - The logarithmic frequency axis spans 2–16 kHz to cover both frequency controls;
   curves follow the current frequency, Q, mode, and maximum-cut settings.
+
+### 2026-10-20 — response preview generator
+- Added a dedicated `--response-previews` mode that renders four full-editor PNGs
+  with distinct detector frequency/Q and Wideband shelf or Split bell settings.
+- The preview mode skips processor checks so it can be used just to refresh the
+  graph examples.
