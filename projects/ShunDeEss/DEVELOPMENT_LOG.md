@@ -30,3 +30,7 @@
   and restored the 726 px editor height.
 - Matched the lower panel positions and 18 px bottom margin so the interface
   fits without clipping.
+
+### 2026-10-20 — title and frame spacing refinement
+- Shifted the interface panels, meter, and controls up another 10 px to tighten
+  the title gap and increase the lower frame margin.
