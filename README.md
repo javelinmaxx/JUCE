@@ -73,9 +73,15 @@ through. Closely spaced notes can keep the slower recovery component engaged.
 
 ## Get the source and build scripts
 
-This repository includes the JUCE framework; the plug-in project is in
-[`projects/CharacterCompressor`](projects/CharacterCompressor). You do not need
+This repository includes the JUCE framework and two independent plug-in
+projects: [`projects/CharacterCompressor`](projects/CharacterCompressor) and
+[`projects/ShunDeEss`](projects/ShunDeEss). SHUN DE-ESS reuses the compressor's
+analog visual style and has its own processor and build target. You do not need
 another JUCE download. All build commands below run from the repository root.
+
+Build SHUN DE-ESS with CMake using the commands in its
+[project README](projects/ShunDeEss/README.md). The platform scripts below
+currently build YinYang Compressor.
 
 Download the development branch with Git:
 
