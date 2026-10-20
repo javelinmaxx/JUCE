@@ -437,7 +437,7 @@ void ShunDeEssEditor::paint (juce::Graphics& g)
     g.setFont (juce::FontOptions (27.0f));
     g.drawText ("SHUN DE-ESS", 24, 38, 410, 38, juce::Justification::centredLeft);
     g.saveState();
-    g.addTransform (juce::AffineTransform::translation (0.0f, -40.0f));
+    g.addTransform (juce::AffineTransform::translation (0.0f, -50.0f));
     drawBrushedMetalPanel (g, { 24, 140, 300, 342 }, 10, theme.card, theme.grid);
     drawAnalogPanel (g, { 24, 494, 300, 116 }, 10, theme.card, theme.grid);
     drawAnalogPanel (g, { 24, 622, 300, 116 }, 10, theme.card, theme.grid);
@@ -528,7 +528,7 @@ void ShunDeEssEditor::paintMeter (juce::Graphics& g)
 
 void ShunDeEssEditor::resized()
 {
-    const auto up = [] (int y) { return y - 70; };
+    const auto up = [] (int y) { return y - 80; };
     bypass.setBounds (450, 33, 74, 28);
     const auto place = [this, &up] (size_t index, int x, int y, int width, int height)
     {
