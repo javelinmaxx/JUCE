@@ -255,7 +255,8 @@ struct RollingMeasurements
 };
 
 RollingMeasurements writeRollingModeSpectrogram (const juce::File& destination, float attenuationQ,
-                                                  int mode, bool smartMode, bool pulseFocused = false)
+                                                  int mode, bool smartMode, bool pulseFocused = false,
+                                                  float detectorQ = 2.2f)
 {
     constexpr int fftSize = 2048, hop = 512, totalSamples = 48000 * 4;
     constexpr double pi = 3.14159265358979323846;
@@ -265,7 +266,7 @@ RollingMeasurements writeRollingModeSpectrogram (const juce::File& destination, 
     set (processor, "smart", smartMode ? 1.0f : 0.0f);
     set (processor, "threshold", smartMode && ! pulseFocused ? -48.0f : -30.0f);
     set (processor, "depth", 12.0f); set (processor, "frequency", 7800.0f);
-    set (processor, "q", 2.2f); set (processor, "attenuationFrequency", 7200.0f);
+    set (processor, "q", detectorQ); set (processor, "attenuationFrequency", 7200.0f);
     set (processor, "attenuationQ", attenuationQ); set (processor, "attack", 0.2f); set (processor, "release", 10.0f);
     std::vector<float> input (totalSamples), output (totalSamples);
     std::mt19937 random (0x5eedu); std::normal_distribution<float> noise (0.0f, 0.055f);
@@ -511,6 +512,23 @@ void generateAnalysisReport (const juce::File& destination)
         }
         report += "\n";
     }
+    report += "\n### Smart detector-Q time-response test\n\n"
+              "Smart pulse-focused runs hold Attenuator Q at 2.8 and vary Detector Q. Values are integrated "
+              "4.5–12 kHz output − input during pulse centers and quiet intervals.\n\n"
+              "| Detector Q | Pulse change | Quiet change |\n"
+              "|---:|---:|---:|\n";
+    std::array<RollingMeasurements, heatmapQValues.size()> detectorQMeasurements {};
+    for (size_t i = 0; i < heatmapQValues.size(); ++i)
+    {
+        const auto detectorQ = heatmapQValues[i];
+        const auto file = destination.getSiblingFile ("smart-detector-q-" + juce::String (detectorQ, 1) + ".csv");
+        detectorQMeasurements[i] = writeRollingModeSpectrogram (file, 2.8f, 0, true, true, detectorQ);
+        report += "| " + juce::String (detectorQ, 1) + " | "
+            + juce::String (detectorQMeasurements[i].sibilanceChangeDb, 2) + " dB | "
+            + juce::String (detectorQMeasurements[i].idleChangeDb, 2) + " dB |\n";
+    }
+    report += "\n[Smart detector-Q pulse response plots](smart-detector-q-report.png) · "
+              "[PDF](smart-detector-q-report.pdf).\n\n";
     report += "\nPulse values should be more negative than quiet-baseline values, showing detector-linked "
               "attenuation that follows the bursts. "
               "[Wideband/Split-band/Smart pulse plots](wide-split-pulse-test-report.png) · "
@@ -551,6 +569,13 @@ void generateAnalysisReport (const juce::File& destination)
             : modeIndex == 1 ? "Split-band attenuates the gated sibilance pulses at every tested Q"
                              : "Smart attenuates the gated sibilance pulses above its quiet baseline at every tested Q");
     }
+    const auto detectorPulseExtrema = std::minmax_element (detectorQMeasurements.begin(), detectorQMeasurements.end(),
+        [] (const auto& a, const auto& b) { return a.sibilanceChangeDb < b.sibilanceChangeDb; });
+    check (std::all_of (detectorQMeasurements.begin(), detectorQMeasurements.end(), [] (const auto& measurements)
+          { return measurements.sibilanceChangeDb < measurements.idleChangeDb - 0.5f; }),
+          "Smart detector Q settings all attenuate pulses above their quiet baseline");
+    check (detectorPulseExtrema.second->sibilanceChangeDb - detectorPulseExtrema.first->sibilanceChangeDb > 0.05f,
+           "Smart detector Q changes measured pulse response");
 }
 }
 

@@ -54,9 +54,10 @@ build-shun-deess/ShunDeEssTests --response-previews projects/ShunDeEss/Previews/
 ```
 
 Run the deterministic detector/attenuator mock-signal test and write its
-Markdown report, measured Smart attenuator-Q sweep, phase plot, and rolling
-attenuator-shape heatmaps at Q 0.5, 1.2, 2.8, and 4.0. The rolling signal
-includes gated high-pass noise pulses to mimic sibilant consonants:
+Markdown report, measured Smart attenuator-Q and detector-Q sweeps, phase plot,
+and rolling attenuator-shape heatmaps at Q 0.5, 1.2, 2.8, and 4.0. The rolling
+signal includes gated high-pass noise pulses to mimic sibilant consonants and
+compares pulse attenuation with the quiet baseline:
 
 ```bash
 build-shun-deess/ShunDeEssTests --analysis-report projects/ShunDeEss/Tests/Reports/detector-attenuator-mock-report.md
@@ -71,6 +72,9 @@ the report and measured spectrum data with:
 ```bash
 python3 projects/ShunDeEss/Tests/generate_analysis_report.py
 ```
+
+The generator also writes `Tests/Reports/wide-split-pulse-test-report.png` and
+`Tests/Reports/smart-detector-q-report.png`, with matching PDF reports.
 
 JUCE is provided by the parent repository. For system requirements, see the
 root [README](../../README.md).

@@ -46,4 +46,18 @@ The same seeded input and Q sweep were processed in Wideband, Split-band, and Sm
 | Split-band | -3.31 / 0.00 dB | -2.07 / 0.00 dB | -0.90 / 0.00 dB | -0.57 / 0.00 dB |
 | Smart | -1.01 / 0.00 dB | -1.23 / 0.00 dB | -1.80 / 0.00 dB | -1.95 / 0.00 dB |
 
+### Smart detector-Q time-response test
+
+Smart pulse-focused runs hold Attenuator Q at 2.8 and vary Detector Q. Values are integrated 4.5–12 kHz output − input during pulse centers and quiet intervals.
+
+| Detector Q | Pulse change | Quiet change |
+|---:|---:|---:|
+| 0.5 | -2.89 dB | 0.00 dB |
+| 1.2 | -2.36 dB | 0.00 dB |
+| 2.8 | -1.56 dB | 0.00 dB |
+| 4.0 | -1.20 dB | 0.00 dB |
+
+[Smart detector-Q pulse response plots](smart-detector-q-report.png) · [PDF](smart-detector-q-report.pdf).
+
+
 Pulse values should be more negative than quiet-baseline values, showing detector-linked attenuation that follows the bursts. [Wideband/Split-band/Smart pulse plots](wide-split-pulse-test-report.png) · [PDF](wide-split-pulse-test-report.pdf).

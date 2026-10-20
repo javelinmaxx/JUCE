@@ -27,7 +27,7 @@ def read_results(path):
     qrows = re.findall(r"\| ([\d.]+) \| ([\d.]+)% \| ([\d.]+)% \|", text[text.find("### Smart attenuator-Q"):])
     if len(qrows) < 2:
         raise ValueError("Could not find Smart attenuator-Q sweep")
-    pulse_section = text.split("### Sibilance pulse attenuation", 1)[-1]
+    pulse_section = text.split("### Sibilance pulse attenuation", 1)[-1].split("\n###", 1)[0]
     pulse_rows = re.findall(r"\| ([\d.]+) \| (-?[\d.]+) dB \|", pulse_section)
     if len(pulse_rows) != 4:
         raise ValueError("Could not find all four sibilance pulse measurements")
@@ -340,6 +340,43 @@ def render_wide_split_comparison(source):
     plt.close(fig)
 
 
+def render_smart_detector_q(source):
+    source = Path(source)
+    report_text = source.read_text(encoding="utf-8")
+    q_section = report_text.split("### Smart detector-Q time-response test", 1)[-1]
+    rows = re.findall(r"\| ([\d.]+) \| (-?[\d.]+) dB \| (-?[\d.]+) dB \|", q_section)
+    if len(rows) != 4:
+        raise ValueError("Could not find all Smart detector-Q response measurements")
+    values = np.array(rows, dtype=float)
+    fig, ax = plt.subplots(figsize=(8.5, 4.5), facecolor="#182128")
+    ax.set_facecolor("#202c34")
+    ax.axhline(0, color="#aebbc5", linewidth=1, alpha=0.7)
+    ax.plot(values[:, 0], values[:, 1], marker="o", linewidth=2.5, markersize=7,
+            color="#e7ad5b", label="Sibilance pulse")
+    ax.plot(values[:, 0], values[:, 2], marker="o", linewidth=2, markersize=6,
+            color="#54c2d8", label="Quiet baseline")
+    for q, pulse, _quiet in values:
+        ax.annotate(f"{pulse:.2f} dB", (q, pulse), xytext=(0, -17), textcoords="offset points",
+                    ha="center", color="#f3c778", fontsize=8)
+    ax.set_title("Smart detector Q · time-varying pulse response · Attenuator Q 2.8",
+                 color="#eef2f5", loc="left", fontsize=12, fontweight="bold", pad=12)
+    ax.set_xlabel("Detector Q", color="#c6d0d8")
+    ax.set_ylabel("Integrated 4.5–12 kHz output − input (dB)", color="#c6d0d8")
+    ax.set_xticks(values[:, 0], [f"{q:.1f}" for q in values[:, 0]])
+    low = min(float(np.min(values[:, 1])) - 0.4, -0.5)
+    ax.set_ylim(low, 0.5)
+    ax.grid(True, color="#52616c", alpha=0.35, linewidth=0.7)
+    ax.tick_params(colors="#aebbc5")
+    for spine in ax.spines.values():
+        spine.set_color("#52616c")
+    ax.legend(frameon=False, labelcolor="#dce5eb", loc="lower right")
+    png_path = source.with_name("smart-detector-q-report.png")
+    pdf_path = source.with_name("smart-detector-q-report.pdf")
+    fig.savefig(png_path, dpi=180, facecolor=fig.get_facecolor())
+    fig.savefig(pdf_path, facecolor=fig.get_facecolor(), metadata={"Title": "SHUN Smart detector-Q test"})
+    plt.close(fig)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", default="projects/ShunDeEss/Tests/Reports/detector-attenuator-mock-report.md")
@@ -348,6 +385,7 @@ def main():
     args = parser.parse_args()
     render(args.input, args.png, args.pdf)
     render_wide_split_comparison(args.input)
+    render_smart_detector_q(args.input)
     print(f"Wrote {args.png} and {args.pdf}")
 
 

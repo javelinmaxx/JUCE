@@ -229,3 +229,12 @@
   pulse attenuation ranges from −1.01 to −1.95 dB.
 - Expanded the comparison heatmap and pulse-versus-quiet regression checks to
   include all three modes.
+
+### 2026-10-20 — Smart detector-Q response test
+- Added a Smart detector-Q sweep at 0.5, 1.2, 2.8, and 4.0, holding
+  Attenuator Q at 2.8 and using the same pulse-focused input with quiet baseline.
+- Added assertions that every detector-Q setting attenuates pulses relative
+  to quiet, and that the measured pulse response changes across Q.
+- Pulse changes measured −2.89, −2.36, −1.56, and −1.20 dB respectively;
+  quiet-baseline change remained 0.00 dB. Generated a dedicated line plot and
+  documented the detector-Q report outputs.
