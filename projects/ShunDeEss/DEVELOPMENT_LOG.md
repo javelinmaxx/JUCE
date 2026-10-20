@@ -20,6 +20,7 @@
 
 ### 2026-10-20 — separate detector and attenuator panels
 - Split the controls into independent Detector and Attenuator panels, aligned
-  to YinYang Compressor's two stacked lower-left sections and 12 px gap.
-- Matched panel heights and control rows; moved the lower controls and Output
-  panel down to keep the same bottom edge and extended the editor by 12 px.
+  to YinYang Compressor's two stacked lower-left sections, with a wider 24 px
+  gap to make the grouping unambiguous.
+- Rebalanced the panel heights and control rows to preserve readable headings,
+  align Output with Attenuator, and keep the shared bottom edge.
