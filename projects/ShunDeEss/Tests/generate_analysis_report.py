@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+from matplotlib.colors import TwoSlopeNorm
 import numpy as np
 
 
@@ -194,7 +195,7 @@ def render(source, png_path, pdf_path):
 
     ax = fig.add_subplot(grid[3, :])
     ax.set_facecolor("#202c34")
-    ax.set_title("Smart rolling spectrogram · swept detail + transient bursts", color="#eef2f5", loc="left",
+    ax.set_title("Smart rolling attenuator shape · measured gain change during sweep", color="#eef2f5", loc="left",
                  fontsize=12, fontweight="bold", pad=10)
     # JUCE stream writes can repeat newline-terminated rows on some platforms;
     # collapse repeated time/frequency cells before arranging FFT frames.
@@ -203,14 +204,15 @@ def render(source, png_path, pdf_path):
     rolling = rolling[np.sort(first)]
     times = np.unique(rolling["time_s"]); freqs = np.unique(rolling["frequency_hz"])
     ti = np.searchsorted(times, rolling["time_s"]); fi = np.searchsorted(freqs, rolling["frequency_hz"])
-    out = np.full((len(times), len(freqs)), np.nan)
-    out[ti, fi] = rolling["output_dbfs"]
-    if np.isnan(out).any():
-        out = np.where(np.isnan(out), np.nanmedian(out), out)
-    mesh = ax.pcolormesh(times, freqs, out.T, shading="auto", cmap="magma", vmin=-90, vmax=-24)
+    change = np.full((len(times), len(freqs)), np.nan)
+    change[ti, fi] = rolling["change_db"]
+    if np.isnan(change).any():
+        change = np.where(np.isnan(change), np.nanmedian(change), change)
+    norm = TwoSlopeNorm(vmin=-18, vcenter=0, vmax=6)
+    mesh = ax.pcolormesh(times, freqs, change.T, shading="auto", cmap="RdBu_r", norm=norm)
     ax.set_ylim(2000, 16000); ax.set_xlabel("Time (s)"); ax.set_ylabel("Frequency (Hz)")
     ax.set_yticks([2000, 4000, 6000, 8000, 10000, 12000, 14000, 16000], ["2k", "4k", "6k", "8k", "10k", "12k", "14k", "16k"])
-    cb = fig.colorbar(mesh, ax=ax, pad=0.012); cb.set_label("Smart output (dBFS)", color="#c6d0d8"); cb.ax.tick_params(colors="#aebbc5")
+    cb = fig.colorbar(mesh, ax=ax, pad=0.012); cb.set_label("Measured output − input (dB)", color="#c6d0d8"); cb.ax.tick_params(colors="#aebbc5")
     for spine in ax.spines.values(): spine.set_color("#52616c")
 
     smart_detail = results["Smart"][3]
@@ -221,7 +223,7 @@ def render(source, png_path, pdf_path):
              f"(+{delta:.1f} points).",
              color="#e7ad5b", fontsize=11, fontweight="bold")
     fig.text(0.08, 0.065,
-             f"It retains {results['Smart'][2]:.1f}% of the 500 Hz body. Bottom panel shows the measured rolling Smart output spectrum over time.",
+             f"It retains {results['Smart'][2]:.1f}% of the 500 Hz body. Bottom panel maps measured Smart gain change over frequency and time: cuts below 0 dB, restored detail above 0 dB.",
              color="#c4d0d8", fontsize=9.5)
 
     for path in (png_path, pdf_path):

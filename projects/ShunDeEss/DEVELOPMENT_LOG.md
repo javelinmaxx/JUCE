@@ -166,3 +166,8 @@
   transient high-frequency bursts over noise and a 500 Hz body tone.
 - Exported the rolling FFT frames to `smart-rolling-spectrogram.csv` for plot
   regeneration and inspection.
+
+### 2026-10-20 — rolling attenuator-shape visualization
+- Changed the rolling panel to map measured output-minus-input gain per FFT
+  frame, using a zero-centered diverging scale so attenuation cuts and restored
+  detail are visually distinct as the swept tone moves through the band.
