@@ -142,3 +142,8 @@
   length, metal cap, and focus treatment to the Detector switch. Kept Wide,
   Split, and Smart arranged vertically beside their corresponding throws.
 - Refreshed the full-editor preview.
+
+### 2026-10-20 — clean vertical-handle preview
+- Regenerated the editor preview from a clean build; the handle now visibly
+  stays on the centerline through all three throws. Rebuilt VST3, Standalone,
+  and test targets from the same clean objects.
