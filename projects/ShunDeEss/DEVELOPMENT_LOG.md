@@ -38,3 +38,8 @@
 ### 2026-10-20 — switch alignment
 - Vertically centered the Detector and Attenuator flip switches against their
   respective knob rows and refreshed the editor preview.
+
+### 2026-10-20 — remove output mix control
+- Removed the wet/dry Mix control and parameter; de-essing now always applies
+  the detector-controlled attenuation, with output gain and bypass retained.
+- Recentered Output and Stereo Link in the output section.

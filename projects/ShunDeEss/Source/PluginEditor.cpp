@@ -390,11 +390,11 @@ ShunDeEssEditor::ShunDeEssEditor (ShunDeEssProcessor& p)
     bypassAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "bypass", bypass);
     listenAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "listen", listen);
 
-    const std::array<const char*, 11> ids { "frequency", "q", "attenuationFrequency", "attenuationQ",
-        "threshold", "depth", "attack", "release", "output", "mix", "stereoLink" };
-    const std::array<const char*, 11> names { "DET FREQ", "DET Q", "ATT FREQ", "ATT Q", "THRESHOLD",
-        "RANGE", "ATTACK", "RELEASE", "OUTPUT", "MIX", "ST LINK" };
-    const std::array<const char*, 11> units { " Hz", " Q", " Hz", " Q", " dB", " dB", " ms", " ms", " dB", " %", " %" };
+    const std::array<const char*, 10> ids { "frequency", "q", "attenuationFrequency", "attenuationQ",
+        "threshold", "depth", "attack", "release", "output", "stereoLink" };
+    const std::array<const char*, 10> names { "DET FREQ", "DET Q", "ATT FREQ", "ATT Q", "THRESHOLD",
+        "RANGE", "ATTACK", "RELEASE", "OUTPUT", "ST LINK" };
+    const std::array<const char*, 10> units { " Hz", " Q", " Hz", " Q", " dB", " dB", " ms", " ms", " dB", " %" };
     for (size_t i = 0; i < sliders.size(); ++i)
     {
         auto& slider = sliders[i];
@@ -544,9 +544,8 @@ void ShunDeEssEditor::resized()
     place (1, 122, 550, 76, 60);
     place (2, 30, 682, 76, 64);
     place (3, 122, 682, 76, 64);
-    place (8, 350, 682, 54, 56);
-    place (9, 410, 682, 54, 56);
-    place (10, 470, 682, 54, 56);
+    place (8, 374, 682, 64, 56);
+    place (9, 446, 682, 64, 56);
     listen.setBounds (230, up (550) + 11, 68, 76);
     modeSwitch.setBounds (230, up (682) + 11, 68, 76);
 }

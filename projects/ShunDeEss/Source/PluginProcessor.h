@@ -40,7 +40,7 @@ private:
     struct BiquadCoefficients { float b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0; };
     struct BiquadState { float x1 = 0, x2 = 0, y1 = 0, y2 = 0; };
     static float filterSample (float, BiquadState&, const BiquadCoefficients&) noexcept;
-    std::array<std::atomic<float>*, 14> raw {};
+    std::array<std::atomic<float>*, 13> raw {};
     std::array<BiquadState, 2> detectorState {}, shelfState {}, bellState {};
     std::array<float, 2> envelopes {};
     BiquadCoefficients detectorFilter, shelfFilter, bellFilter;

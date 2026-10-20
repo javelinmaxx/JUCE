@@ -11,8 +11,7 @@ The first build provides:
   while Split-band applies a bell-shaped cut around the selected attenuation band.
 - Independent detector frequency/bandwidth and attenuation frequency/Q controls,
   plus threshold and maximum reduction (0–18 dB).
-- Attack, release, output, wet/dry mix, stereo linking, detector listen, and
-  bypass controls.
+- Attack, release, output, stereo linking, detector listen, and bypass controls.
 - A timestamped three-second gain-reduction trace and a vertical GR meter.
 - VST3 and Standalone targets; AU is also enabled when built on macOS.
 

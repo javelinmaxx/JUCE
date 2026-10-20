@@ -3,9 +3,8 @@
 
 namespace
 {
-constexpr std::array<const char*, 14> parameterIds { "mode", "frequency", "q", "attenuationFrequency",
-    "attenuationQ", "threshold", "depth", "attack", "release", "output", "mix", "stereoLink",
-    "bypass", "listen" };
+constexpr std::array<const char*, 13> parameterIds { "mode", "frequency", "q", "attenuationFrequency",
+    "attenuationQ", "threshold", "depth", "attack", "release", "output", "stereoLink", "bypass", "listen" };
 constexpr float pi = 3.14159265358979323846f;
 }
 
@@ -32,7 +31,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout ShunDeEssProcessor::createPa
     addFloat ("attack", "Attack", 0.1f, 20, 0.01f, 1, 2, "ms");
     addFloat ("release", "Release", 10, 500, 1, 80, 100, "ms");
     addFloat ("output", "Output", -18, 18, 0.1f, 0, 0, "dB");
-    addFloat ("mix", "Mix", 0, 100, 0.1f, 100, 50, "%");
     addFloat ("stereoLink", "Stereo link", 0, 100, 1, 100, 50, "%");
     layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "bypass", 1 }, "Bypass", false));
     layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "listen", 1 }, "Listen", false));
@@ -177,10 +175,9 @@ void ShunDeEssProcessor::process (juce::AudioBuffer<float>& buffer, bool hostByp
     const auto attackMs = value (7);
     const auto releaseMs = value (8);
     const auto outputGain = std::pow (10.0f, value (9) / 20.0f);
-    const auto mix = value (10) * 0.01f;
-    const auto stereoLink = value (11) * 0.01f;
-    const auto bypass = hostBypassed || value (12) >= 0.5f;
-    const auto listen = value (13) >= 0.5f;
+    const auto stereoLink = value (10) * 0.01f;
+    const auto bypass = hostBypassed || value (11) >= 0.5f;
+    const auto listen = value (12) >= 0.5f;
     if (std::abs (detectorFrequency - lastDetectorFrequency) > 0.1f
         || std::abs (detectorQ - lastDetectorQ) > 0.001f
         || std::abs (attenuationFrequency - lastAttenuationFrequency) > 0.1f
@@ -218,8 +215,7 @@ void ShunDeEssProcessor::process (juce::AudioBuffer<float>& buffer, bool hostByp
             const auto bellOutput = filterSample (dry[c], bellState[c], bellFilter);
             const auto shaped = splitBand ? bellOutput : shelfOutput;
             const auto wet = listen ? detected[c] : dry[c] + amount * (shaped - dry[c]);
-            const auto mixed = listen ? wet : dry[c] + mix * (wet - dry[c]);
-            buffer.setSample (ch, i, bypass ? dry[c] : mixed * outputGain);
+            buffer.setSample (ch, i, bypass ? dry[c] : wet * outputGain);
         }
     }
     reduction.store (bypass ? 0.0f : blockReduction, std::memory_order_relaxed);

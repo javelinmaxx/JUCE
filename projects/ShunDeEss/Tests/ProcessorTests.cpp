@@ -66,7 +66,7 @@ int main (int argc, char** argv)
     {
         juce::ScopedJuceInitialiser_GUI gui;
         ShunDeEssProcessor processor;
-        check (processor.getParameters().size() == 14, "all de-esser parameters are registered");
+        check (processor.getParameters().size() == 13, "all de-esser parameters are registered");
         check (processor.getName() == "SHUN DE-ESS", "plug-in identity is SHUN DE-ESS");
         processor.prepareToPlay (48000, 256);
         set (processor, "threshold", -42);
@@ -115,7 +115,6 @@ int main (int argc, char** argv)
         ShunDeEssProcessor listen;
         listen.prepareToPlay (48000, 256);
         set (listen, "listen", 1);
-        set (listen, "mix", 0);
         juce::AudioBuffer<float> lowListen (2, 8192);
         renderSine (listen, lowListen, 500, 0.5f);
         check (measureRms (lowListen) < 0.03f, "listen mode auditions the detector band");
