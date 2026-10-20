@@ -24,3 +24,9 @@
   gap to make the grouping unambiguous.
 - Rebalanced the panel heights and control rows to preserve readable headings,
   align Output with Attenuator, and keep the shared bottom edge.
+
+### 2026-10-20 — suite-aligned vertical layout
+- Shifted the SHUN panels and meter to YinYang Compressor's 30 px content offset
+  and restored the 726 px editor height.
+- Matched the lower panel positions and 18 px bottom margin so the interface
+  fits without clipping.

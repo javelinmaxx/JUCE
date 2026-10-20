@@ -421,7 +421,7 @@ ShunDeEssEditor::ShunDeEssEditor (ShunDeEssProcessor& p)
     listen.snapToState();
     applyTheme();
     lastTick = juce::Time::getMillisecondCounterHiRes() * 0.001;
-    setSize (548, 738);
+    setSize (548, 726);
     startTimerHz (30);
 }
 
@@ -436,19 +436,22 @@ void ShunDeEssEditor::paint (juce::Graphics& g)
     g.setColour (theme.text);
     g.setFont (juce::FontOptions (27.0f));
     g.drawText ("SHUN DE-ESS", 24, 38, 410, 38, juce::Justification::centredLeft);
+    g.saveState();
+    g.addTransform (juce::AffineTransform::translation (0.0f, -30.0f));
     drawBrushedMetalPanel (g, { 24, 140, 300, 342 }, 10, theme.card, theme.grid);
-    drawAnalogPanel (g, { 24, 494, 300, 108 }, 10, theme.card, theme.grid);
-    drawAnalogPanel (g, { 24, 626, 300, 112 }, 10, theme.card, theme.grid);
-    drawAnalogPanel (g, { 344, 626, 180, 112 }, 10, theme.card, theme.grid);
+    drawAnalogPanel (g, { 24, 494, 300, 116 }, 10, theme.card, theme.grid);
+    drawAnalogPanel (g, { 24, 622, 300, 116 }, 10, theme.card, theme.grid);
+    drawAnalogPanel (g, { 344, 622, 180, 116 }, 10, theme.card, theme.grid);
     g.setColour (theme.text);
     g.setFont (juce::FontOptions (13.0f).withStyle ("bold"));
     g.drawText ("DE-ESSER", 38, 148, 250, 20, juce::Justification::centredLeft);
     g.drawText ("DETECTOR", 38, 502, 250, 18, juce::Justification::centredLeft);
-    g.drawText ("ATTENUATOR", 38, 634, 250, 18, juce::Justification::centredLeft);
-    g.drawText ("OUTPUT", 358, 634, 152, 18, juce::Justification::centredLeft);
+    g.drawText ("ATTENUATOR", 38, 630, 250, 18, juce::Justification::centredLeft);
+    g.drawText ("OUTPUT", 358, 630, 152, 18, juce::Justification::centredLeft);
     g.setColour (theme.grid);
     g.drawHorizontalLine (488, 24, 324);
     paintMeter (g);
+    g.restoreState();
 }
 
 void ShunDeEssEditor::paintMeter (juce::Graphics& g)
@@ -525,8 +528,8 @@ void ShunDeEssEditor::paintMeter (juce::Graphics& g)
 
 void ShunDeEssEditor::resized()
 {
-    const auto up = [] (int y) { return y - 30; };
-    bypass.setBounds (450, up (63), 74, 28);
+    const auto up = [] (int y) { return y - 60; };
+    bypass.setBounds (450, 33, 74, 28);
     const auto place = [this, &up] (size_t index, int x, int y, int width, int height)
     {
         labels[index].setBounds (x, up (y + 3), width, 17);
