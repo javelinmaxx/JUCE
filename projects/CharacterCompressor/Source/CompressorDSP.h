@@ -280,9 +280,14 @@ public:
                 // then apply output gain. Transformer coloration follows both.
                 const auto mixed = (dry[c] + values[mix] * (driven[c] * combinedGain[c] - dry[c]))
                                  * values[output];
-                // Keep the oversampler warm even when disabled; the clean and
-                // bypass paths retain the same fixed latency during automation.
-                const auto coloured = transformers[c].process (mixed, values[drive], values[evenHarmonics]);
+                // Skip the 4x oversampler, hysteresis, and transformer filters
+                // while its host parameter is off. The clean path keeps the
+                // existing fixed latency, and re-enabling warms the simulation
+                // while the wet control ramps back in.
+                const auto transformerEnabled = targets[transformer] > 0.5f;
+                const auto coloured = transformerEnabled
+                    ? transformers[c].process (mixed, values[drive], values[evenHarmonics])
+                    : 0.0f;
                 // Delay the clean branch to match the oversampler's 64 samples.
                 // Bypass has its own equally delayed original-input line.
                 const auto clean = cleanDelay[c][delayPosition];
@@ -291,7 +296,9 @@ public:
                 bypassDelay[c][delayPosition] = dry[c];
                 // Blend transformer coloration independently, after the mix
                 // and output gain. High Tilt changes detector sensitivity only.
-                const auto wet = clean + values[transformer] * (coloured - clean);
+                const auto wet = transformerEnabled
+                    ? clean + values[transformer] * (coloured - clean)
+                    : clean;
                 // Snap the last fraction to ensure settled bypass is sample exact.
                 channels[ch][sample] = values[bypass] > 0.99999f ? delayedDry
                                     : wet + values[bypass] * (delayedDry - wet);
