@@ -1,7 +1,7 @@
 # Multi-Compressor
 
 A JUCE-based audio plug-in repository with YinYang Compressor, SHUN DE-ESS,
-and Kuo Stereo. YinYang provides feed-forward FET, feedback VCA, variable-mu,
+Kuo Stereo, and Zao Drive. YinYang provides feed-forward FET, feedback VCA, variable-mu,
 and optical compression models, optional transformer coloration, and a
 high-frequency sidechain tilt. Each project builds as VST3 for Windows and
 macOS, and as an Audio Unit (AU) for macOS.
@@ -74,16 +74,20 @@ through. Closely spaced notes can keep the slower recovery component engaged.
 
 ## Get the source and build scripts
 
-This repository includes the JUCE framework and three independent plug-in
+This repository includes the JUCE framework and four independent plug-in
 projects: [`projects/CharacterCompressor`](projects/CharacterCompressor),
-[`projects/ShunDeEss`](projects/ShunDeEss), and
-[`projects/KuoStereo`](projects/KuoStereo). SHUN DE-ESS and Kuo Stereo share
-the compressor's analog visual style while keeping independent processors and
+[`projects/ShunDeEss`](projects/ShunDeEss),
+[`projects/KuoStereo`](projects/KuoStereo), and
+[`projects/ZaoDrive`](projects/ZaoDrive). Zao Drive models a common-emitter BJT
+amplifier and an op-amp feedback diode clipper, with an expected-output display
+and YinYang's optional transformer stage. All four projects share
+an analog visual style while keeping independent processors and
 build targets. You do not need another JUCE download. All build commands below
 run from the repository root.
 
-Build SHUN DE-ESS and Kuo Stereo with CMake using their
-[SHUN](projects/ShunDeEss/README.md) and [Kuo](projects/KuoStereo/README.md)
+Build SHUN DE-ESS, Kuo Stereo, and Zao Drive with CMake using their
+[SHUN](projects/ShunDeEss/README.md), [Kuo](projects/KuoStereo/README.md), and
+[Zao](projects/ZaoDrive/README.md)
 instructions. The platform scripts below build YinYang Compressor; the Windows
 GitHub workflow builds YinYang Compressor and SHUN DE-ESS.
 
