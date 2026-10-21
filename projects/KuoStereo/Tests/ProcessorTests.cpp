@@ -645,7 +645,10 @@ int main (int argc, char** argv)
         limited.prepareToPlay (48000, 256);
         set (limited, "haasCenter", 20);
         buffer.clear();
-        for (int block = 0; block < 100; ++block)
+        limited.processBlock (buffer, midi);
+        check (std::abs (limited.getSelectedDelayMs() - 20.0f) < 0.01f,
+               "zero variability follows Center Delay automation without waiting for a search");
+        for (int block = 1; block < 100; ++block)
             limited.processBlock (buffer, midi);
         const auto slowDelay = limited.getCurrentDelayMs();
         check (std::abs (limited.getSelectedDelayMs() - 20.0f) < 0.01f,

@@ -228,7 +228,7 @@ void KuoStereoProcessor::analyzeMidSpectrum (float centerDelayMs, float variabil
         score += 0.35f * std::max (0.0f, 1.0f - sideRatio / targetSideRatio);
         auto& initialized = candidateScoreInitialized[static_cast<size_t> (candidate)];
         const auto elapsedFrames = scoreFrame - candidateLastScoreFrame[static_cast<size_t> (candidate)];
-        const auto scoreAlpha = 1.0f - std::exp (-static_cast<float> (elapsedFrames * (fftSize / 2))
+        const auto scoreAlpha = 1.0f - std::exp (-static_cast<float> (elapsedFrames * analysisHop)
                                                  / (0.25f * sampleRate));
         average = initialized ? average + scoreAlpha * (score - average) : score;
         initialized = true;
@@ -344,6 +344,23 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     if (buffer.getNumChannels() < 2 || rightHistory.empty()) return;
     const auto centerDelay = parameters.getRawParameterValue ("haasCenter")->load();
     const auto variability = parameters.getRawParameterValue ("haasRange")->load();
+    if (variability <= 0.0f)
+    {
+        // Fixed Center Delay needs no spectrum search. Update it immediately
+        // on automation and reset the survey before adaptive mode resumes.
+        if (std::abs (previousVariabilityMs) > 0.0001f)
+        {
+            selectedCandidate = -1;
+            candidateScoreInitialized = {};
+            coarseSurveyCursor = 0;
+            coarseSurveyComplete = false;
+            previousVariabilityMs = 0.0f;
+        }
+        previousCenterDelayMs = centerDelay;
+        targetDelaySamples = centerDelay * 0.001f * sampleRate;
+        selectedDelayMs.store (centerDelay, std::memory_order_relaxed);
+        analysisCounter = 0;
+    }
     const auto maxRate = parameters.getRawParameterValue ("haasRate")->load();
     const auto maxDelayStep = maxRate * 0.001f; // Samples per sample equals ms per second.
     const auto keepTransient = parameters.getRawParameterValue ("haasKeepTransient")->load() * 0.01f;
@@ -453,7 +470,7 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         writePosition = (writePosition + 1) % static_cast<int> (rightHistory.size());
         if (sampleCount < static_cast<int> (sampleRate * 0.03f) + fftSize)
             ++sampleCount;
-        if (++analysisCounter >= fftSize / 2)
+        if (variability > 0.0f && ++analysisCounter >= analysisHop)
         {
             analysisCounter = 0;
             analyzeMidSpectrum (centerDelay, variability);

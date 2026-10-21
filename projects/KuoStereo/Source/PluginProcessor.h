@@ -38,6 +38,7 @@ public:
 
 private:
     static constexpr int fftOrder = 11, fftSize = 1 << fftOrder;
+    static constexpr int analysisHop = fftSize;
     static constexpr int maxCandidates = 241, velvetTaps = 16;
     struct ScopePoint { std::atomic<float> left { 0 }, right { 0 }; };
     static juce::AudioProcessorValueTreeState::ParameterLayout layout();
