@@ -13,9 +13,11 @@ The first build provides:
   Smooth reverses that restoration to suppress those peaks further.
 - Independent detector frequency/bandwidth and attenuation frequency/Q controls,
   plus threshold and maximum reduction (0–18 dB).
-- Attack, release, output, stereo linking, detector listen, and bypass controls.
+- Attack, release, output, stereo linking, a three-way detector switch, and bypass controls.
 - A timestamped three-second gain-reduction trace and a vertical GR meter.
 - VST3 and Standalone targets; AU is also enabled when built on macOS.
+
+The detector switch selects **Off** for a fixed absolute threshold, **Listen** to audition the selected sibilance band, or **Relative** to compare that band's energy with the full signal's energy. In Relative, Threshold sets the required band-to-full-signal difference in dB, so changes to overall input level do not change when de-essing begins.
 
 The band-pass detector is normalized to unity at its selected center frequency.
 Listen auditions its detector signal. In Brilliant and Smooth, Detector Frequency
@@ -25,7 +27,7 @@ while Attenuator Q controls the width of the narrow detail bands. The FFT update
 in overlapping windows and drives the zero-latency filterbank. Existing sessions
 retain their Wideband, Split-band, or former Smart (now Brilliant) setting.
 
-An editor preview is available at [Previews/shun-de-ess.png](Previews/shun-de-ess.png).
+Editor previews show [Off](Previews/shun-de-ess.png) and [Relative](Previews/shun-relative.png) detector modes.
 The editor resizes from 50% to 120% with a fixed aspect ratio.
 Six examples show the live response plot with different detector/attenuator
 settings: [Wideband default](Previews/ResponseExamples/wideband-default.png),

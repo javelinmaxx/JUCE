@@ -38,6 +38,16 @@ private:
     juce::String onCaption { "ON" }, offCaption { "OFF" };
 };
 
+class DetectorModeSwitch final : public juce::Slider
+{
+public:
+    DetectorModeSwitch();
+    void setTheme (const CompressorTheme& nextTheme) { theme = nextTheme; repaint(); }
+    void paint (juce::Graphics&) override;
+private:
+    CompressorTheme theme {};
+};
+
 class CompressorLookAndFeel final : public juce::LookAndFeel_V4
 {
 public:
@@ -70,15 +80,17 @@ private:
     ShunDeEssProcessor& processor;
     CompressorLookAndFeel look;
     juce::TooltipWindow tooltipWindow { this };
-    AnimatedSwitch bypass { "BYPASS", true, false, true }, listen { "LISTEN" };
+    AnimatedSwitch bypass { "BYPASS", true, false, true };
+    DetectorModeSwitch detectorMode;
     juce::Slider algorithm;
     juce::Label algorithmLabel;
     std::array<juce::Slider, 10> sliders;
     std::array<juce::Label, 10> labels;
     using State = juce::AudioProcessorValueTreeState;
     std::array<std::unique_ptr<State::SliderAttachment>, 10> attachments;
-    std::unique_ptr<State::ButtonAttachment> bypassAttachment, listenAttachment;
+    std::unique_ptr<State::ButtonAttachment> bypassAttachment;
     bool lastSpectralMode = false, lastSplitMode = false;
+    int lastDetectorMode = 0;
     GainReductionHistory history;
     juce::Rectangle<int> meterBounds { 344, 140, 180, 490 };
     double lastTick = 0;

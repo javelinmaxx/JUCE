@@ -42,9 +42,9 @@ private:
     struct BiquadState { float x1 = 0, x2 = 0, y1 = 0, y2 = 0; };
     static float filterSample (float, BiquadState&, const BiquadCoefficients&) noexcept;
     void analyseSpectralDetail (float detectorFrequency, float detectorQ, float attenuationQ) noexcept;
-    std::array<std::atomic<float>*, 14> raw {};
+    std::array<std::atomic<float>*, 15> raw {};
     std::array<BiquadState, 2> detectorState {}, shelfState {}, bellState {};
-    std::array<float, 2> envelopes {};
+    std::array<float, 2> envelopes {}, bandPowers {}, fullPowers {};
     BiquadCoefficients detectorFilter, shelfFilter, bellFilter;
     juce::dsp::FFT spectralFft { 10 };
     std::array<float, 2048> fftData {};

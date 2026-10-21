@@ -5,8 +5,8 @@ namespace
 {
 // Keep this order aligned with raw[] and the positional reads in process().
 // The IDs themselves are persisted in host automation and saved sessions.
-constexpr std::array<const char*, 14> parameterIds { "mode", "frequency", "q", "attenuationFrequency",
-    "attenuationQ", "threshold", "depth", "attack", "release", "output", "stereoLink", "bypass", "listen", "smart" };
+constexpr std::array<const char*, 15> parameterIds { "mode", "frequency", "q", "attenuationFrequency",
+    "attenuationQ", "threshold", "depth", "attack", "release", "output", "stereoLink", "bypass", "listen", "smart", "relative" };
 constexpr float pi = 3.14159265358979323846f;
 }
 
@@ -39,6 +39,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout ShunDeEssProcessor::createPa
     // Keep the legacy IDs: mode=0/1 selects Wideband/Split or Brilliant/Smooth,
     // while smart=0/1 selects the conventional or spectral pair.
     layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "smart", 1 }, "Brilliant / Smooth", false));
+    layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "relative", 1 }, "Relative detector", false));
     return layout;
 }
 
@@ -58,6 +59,7 @@ void ShunDeEssProcessor::prepareToPlay (double rate, int)
     shelfState = {};
     bellState = {};
     envelopes = {};
+    bandPowers = fullPowers = {};
     analysisRing = {}; meanSpectrum = {}; sparkleStates = {}; sparkleWeights = {};
     analysisPosition = hopCounter = 0; spectralFlatness = spectralAttenuation = 0;
     lastDetectorFrequency = lastDetectorQ = lastAttenuationFrequency = lastAttenuationQ = lastDepth = -1;
@@ -273,8 +275,9 @@ void ShunDeEssProcessor::process (juce::AudioBuffer<float>& buffer, bool hostByp
     const auto outputGain = std::pow (10.0f, value (9) / 20.0f);
     const auto stereoLink = value (10) * 0.01f;
     const auto bypass = hostBypassed || value (11) >= 0.5f;
-    const auto listen = value (12) >= 0.5f;
     spectralMode = value (13) >= 0.5f;
+    const auto relative = value (14) >= 0.5f;
+    const auto listen = ! relative && value (12) >= 0.5f;
     const auto smoothMode = spectralMode && splitBand;
     if (std::abs (detectorFrequency - lastDetectorFrequency) > 0.1f
         || std::abs (detectorQ - lastDetectorQ) > 0.001f
@@ -310,7 +313,22 @@ void ShunDeEssProcessor::process (juce::AudioBuffer<float>& buffer, bool hostByp
             auto& envelope = envelopes[c];
             const auto coefficient = magnitude > envelope ? attack : release;
             envelope = magnitude + coefficient * (envelope - magnitude);
-            detectorLevel[c] = 20.0f * std::log10 (std::max (envelope, 1.0e-9f));
+            // Track actual band and full-signal energy even while Relative is
+            // off so switching modes never starts from an empty denominator.
+            const auto bandEnergy = detected[c] * detected[c];
+            const auto fullEnergy = dry[c] * dry[c];
+            auto& bandPower = bandPowers[c];
+            auto& fullPower = fullPowers[c];
+            bandPower = bandEnergy + (bandEnergy > bandPower ? attack : release) * (bandPower - bandEnergy);
+            fullPower = fullEnergy + (fullEnergy > fullPower ? attack : release) * (fullPower - fullEnergy);
+            if (relative)
+            {
+                detectorLevel[c] = fullPower > 1.0e-12f
+                    ? 10.0f * std::log10 (std::max (bandPower, 1.0e-18f) / fullPower)
+                    : -120.0f;
+            }
+            else
+                detectorLevel[c] = 20.0f * std::log10 (std::max (envelope, 1.0e-9f));
         }
         const auto linkedLevel = channels == 2 ? std::max (detectorLevel[0], detectorLevel[1]) : detectorLevel[0];
         for (int ch = 0; ch < channels; ++ch)

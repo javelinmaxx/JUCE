@@ -6,12 +6,12 @@
 | --- | --- |
 | Mode | Selects Wideband, Split, Brilliant, or Smooth de-essing. |
 | Bypass | Bypasses de-essing for a direct comparison. |
-| Listen | Auditions the detector signal while you tune its frequency and focus. |
+| Detector mode | Selects fixed-threshold detection, detector listening, or energy-relative detection. |
 | Detector frequency | Sets the frequency emphasized by the sibilance detector. |
 | Detector Q | Adjusts detector focus or spectral averaging, depending on the mode. |
 | Attenuator frequency | Sets the center of the frequency region being attenuated. |
 | Attenuator Q | Adjusts how narrowly attenuation focuses around the selected frequency. |
-| Threshold | Sets the level where sibilance attenuation begins. |
+| Threshold | Sets the detector level or band-to-full-signal difference where attenuation begins. |
 | Range | Limits the maximum amount of sibilance attenuation. |
 | Attack | Sets how quickly attenuation engages after sibilance is detected. |
 | Release | Sets how quickly attenuation fades after sibilance ends. |

@@ -271,6 +271,46 @@ void AnimatedSwitch::paintButton (juce::Graphics& g, bool highlighted, bool down
     }
 }
 
+DetectorModeSwitch::DetectorModeSwitch()
+{
+    setSliderStyle (juce::Slider::LinearHorizontal);
+    setRange (0.0, 2.0, 1.0);
+    setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+    setName ("DETECTOR MODE");
+    setTitle ("Detector mode");
+    setDoubleClickReturnValue (true, 0.0);
+}
+
+void DetectorModeSwitch::paint (juce::Graphics& g)
+{
+    const auto width = static_cast<float> (getWidth());
+    const auto position = std::clamp (juce::roundToInt (getValue()), 0, 2);
+    g.setColour (theme.secondary);
+    g.setFont (juce::FontOptions (9.0f));
+    g.drawText ("DETECTOR", 0, 0, getWidth(), 16, juce::Justification::centred);
+    const auto track = juce::Rectangle<float> (15.0f, 24.0f, width - 30.0f, 19.0f);
+    drawAnalogPanel (g, track, 9.0f, theme.switchSurface, theme.grid);
+    const auto left = track.getX() + 10.0f;
+    const auto step = (track.getWidth() - 20.0f) * 0.5f;
+    for (int index = 0; index < 3; ++index)
+    {
+        g.setColour (index == position ? theme.control : theme.secondary.withAlpha (0.6f));
+        g.fillEllipse (left + step * static_cast<float> (index) - 2.0f, track.getCentreY() - 2.0f, 4.0f, 4.0f);
+    }
+    const auto centreX = left + step * static_cast<float> (position);
+    g.setGradientFill (juce::ColourGradient (juce::Colour (0xffe0e3e5), centreX, track.getY(),
+                                             juce::Colour (0xff777f86), centreX, track.getBottom(), false));
+    g.fillEllipse (centreX - 8.0f, track.getCentreY() - 8.0f, 16.0f, 16.0f);
+    g.setColour (theme.control);
+    g.drawEllipse (centreX - 8.0f, track.getCentreY() - 8.0f, 16.0f, 16.0f, 1.0f);
+    constexpr std::array<const char*, 3> captions { "OFF", "LISTEN", "RELATIVE" };
+    g.setColour (theme.control);
+    g.setFont (juce::FontOptions (9.5f).withStyle ("bold"));
+    g.drawText (captions[static_cast<size_t> (position)], 0, 52, getWidth(), 16, juce::Justification::centred);
+    if (hasKeyboardFocus (true))
+        g.drawRoundedRectangle (track.expanded (2.0f), 11.0f, 1.0f);
+}
+
 void CompressorLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int width, int height,
                                               float value, float start, float end, juce::Slider& slider)
 {
@@ -347,9 +387,26 @@ ShunDeEssEditor::ShunDeEssEditor (ShunDeEssProcessor& p)
     addAndMakeVisible (algorithm);
     addAndMakeVisible (algorithmLabel);
     addAndMakeVisible (bypass);
-    addAndMakeVisible (listen);
+    addAndMakeVisible (detectorMode);
     lastSpectralMode = p.parameters.getRawParameterValue ("smart")->load() >= 0.5f;
     lastSplitMode = p.parameters.getRawParameterValue ("mode")->load() >= 0.5f;
+    lastDetectorMode = p.parameters.getRawParameterValue ("relative")->load() >= 0.5f ? 2
+                     : p.parameters.getRawParameterValue ("listen")->load() >= 0.5f ? 1 : 0;
+    detectorMode.setValue (lastDetectorMode, juce::dontSendNotification);
+    detectorMode.setTooltip ("Selects fixed-threshold detection, detector listening, or energy-relative detection.");
+    detectorMode.onValueChange = [this]
+    {
+        const auto selected = juce::roundToInt (detectorMode.getValue());
+        auto* listenParameter = processor.parameters.getParameter ("listen");
+        auto* relativeParameter = processor.parameters.getParameter ("relative");
+        listenParameter->beginChangeGesture();
+        relativeParameter->beginChangeGesture();
+        listenParameter->setValueNotifyingHost (selected == 1 ? 1.0f : 0.0f);
+        relativeParameter->setValueNotifyingHost (selected == 2 ? 1.0f : 0.0f);
+        relativeParameter->endChangeGesture();
+        listenParameter->endChangeGesture();
+        lastDetectorMode = selected;
+    };
     algorithm.setLookAndFeel (&look);
     algorithm.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
     algorithm.setRange (0.0, 3.0, 1.0);
@@ -394,9 +451,7 @@ ShunDeEssEditor::ShunDeEssEditor (ShunDeEssProcessor& p)
     editorTooltips::setHint (algorithm, algorithmLabel,
         "Selects Wideband, Split, Brilliant, or Smooth de-essing.");
     bypass.setTooltip ("Bypasses de-essing for a direct comparison.");
-    listen.setTooltip ("Auditions the detector signal while you tune its frequency and focus.");
     bypassAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "bypass", bypass);
-    listenAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "listen", listen);
 
     const std::array<const char*, 10> ids { "frequency", "q", "attenuationFrequency", "attenuationQ",
         "threshold", "depth", "attack", "release", "output", "stereoLink" };
@@ -408,7 +463,7 @@ ShunDeEssEditor::ShunDeEssEditor (ShunDeEssProcessor& p)
         "Adjusts detector focus or spectral averaging, depending on the mode.",
         "Sets the center of the frequency region being attenuated.",
         "Adjusts how narrowly attenuation focuses around the selected frequency.",
-        "Sets the level where sibilance attenuation begins.",
+        "Sets the detector level or band-to-full-signal difference where attenuation begins.",
         "Limits the maximum amount of sibilance attenuation.",
         "Sets how quickly attenuation engages after sibilance is detected.",
         "Sets how quickly attenuation fades after sibilance ends.",
@@ -436,10 +491,7 @@ ShunDeEssEditor::ShunDeEssEditor (ShunDeEssProcessor& p)
         slider.onValueChange = [this] { repaint (24, 340, 300, 125); };
         slider.setColour (juce::Slider::textBoxTextColourId, theme.text);
     }
-    listen.setStateCaptions ("LISTEN", "OFF");
-    listen.setFunctionLabelVisible (false);
     bypass.snapToState();
-    listen.snapToState();
     applyTheme();
     lastTick = juce::Time::getMillisecondCounterHiRes() * 0.001;
     editorScaling::enable (*this, designWidth, designHeight);
@@ -668,13 +720,13 @@ void ShunDeEssEditor::resized()
     place (3, 122, 702, 76, 64);
     place (8, 358, 702, 76, 64);
     place (9, 434, 702, 76, 64);
-    listen.setBounds (230, up (570) + 14, 68, 76);
+    detectorMode.setBounds (207, up (570) + 14, 112, 76);
     algorithmLabel.setBounds (205, up (702) + 3, 112, 16);
     algorithm.setBounds (205, up (702) + 19, 112, 65);
 
     const auto scale = editorScaling::transform (*this, designWidth, designHeight);
     bypass.setTransform (scale);
-    listen.setTransform (scale);
+    detectorMode.setTransform (scale);
     algorithm.setTransform (scale);
     algorithmLabel.setTransform (scale);
     for (auto& slider : sliders) slider.setTransform (scale);
@@ -687,9 +739,15 @@ void ShunDeEssEditor::timerCallback()
     const auto elapsed = static_cast<float> (std::max (0.0, now - lastTick));
     lastTick = now;
     bypass.advance (elapsed);
-    listen.advance (elapsed);
     const auto spectral = processor.parameters.getRawParameterValue ("smart")->load() >= 0.5f;
     const auto split = processor.parameters.getRawParameterValue ("mode")->load() >= 0.5f;
+    const auto detector = processor.parameters.getRawParameterValue ("relative")->load() >= 0.5f ? 2
+                        : processor.parameters.getRawParameterValue ("listen")->load() >= 0.5f ? 1 : 0;
+    if (detector != lastDetectorMode)
+    {
+        detectorMode.setValue (detector, juce::dontSendNotification);
+        lastDetectorMode = detector;
+    }
     if (spectral != lastSpectralMode || split != lastSplitMode)
     {
         algorithm.setValue (spectral ? (split ? 3 : 2) : (split ? 1 : 0), juce::dontSendNotification);
@@ -723,7 +781,7 @@ void ShunDeEssEditor::applyTheme()
     for (auto& label : labels)
         label.setColour (juce::Label::textColourId, theme.text);
     bypass.setTheme (theme);
-    listen.setTheme (theme);
+    detectorMode.setTheme (theme);
     algorithm.setColour (juce::Slider::textBoxTextColourId, theme.text);
     algorithmLabel.setColour (juce::Label::textColourId, theme.text);
     algorithm.repaint();

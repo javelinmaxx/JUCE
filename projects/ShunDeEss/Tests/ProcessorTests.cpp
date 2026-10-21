@@ -608,7 +608,7 @@ int main (int argc, char** argv)
             return 0;
         }
         ShunDeEssProcessor processor;
-        check (processor.getParameters().size() == 14, "all de-esser parameters are registered");
+        check (processor.getParameters().size() == 15, "all de-esser parameters are registered");
         check (processor.getName() == "SHUN DE-ESS", "plug-in identity is SHUN DE-ESS");
         for (int mode = 0; mode < 4; ++mode)
         {
@@ -687,6 +687,48 @@ int main (int argc, char** argv)
         juce::AudioBuffer<float> lowListen (2, 8192);
         renderSine (listen, lowListen, 500, 0.5f);
         check (measureRms (lowListen) < 0.03f, "listen mode auditions the detector band");
+
+        const auto detectorReduction = [pi] (bool relativeMode, float body, float sibilance)
+        {
+            ShunDeEssProcessor measured;
+            measured.prepareToPlay (48000, 256);
+            set (measured, "relative", relativeMode ? 1.0f : 0.0f);
+            set (measured, "threshold", -12.0f);
+            set (measured, "depth", 12.0f);
+            set (measured, "attack", 0.2f);
+            set (measured, "release", 10.0f);
+            juce::MidiBuffer midi;
+            // Warm the energy envelopes before measuring the sustained mix.
+            for (int block = 0; block < 2; ++block)
+            {
+                juce::AudioBuffer<float> signal (2, 16384);
+                for (int i = 0; i < signal.getNumSamples(); ++i)
+                {
+                    const auto sample = body * std::sin (2.0 * pi * 500.0 * i / 48000.0)
+                                      + sibilance * std::sin (2.0 * pi * 6500.0 * i / 48000.0);
+                    for (int ch = 0; ch < signal.getNumChannels(); ++ch)
+                        signal.setSample (ch, i, static_cast<float> (sample));
+                }
+                measured.processBlock (signal, midi);
+            }
+            return measured.reduction.load();
+        };
+        const auto relativeLoud = detectorReduction (true, 0.18f, 0.08f);
+        const auto relativeQuiet = detectorReduction (true, 0.018f, 0.008f);
+        const auto relativeBody = detectorReduction (true, 0.24f, 0.01f);
+        const auto absoluteQuiet = detectorReduction (false, 0.018f, 0.008f);
+        check (relativeLoud > 2.0f && std::abs (relativeLoud - relativeQuiet) < 0.2f,
+               "Relative detection responds to sibilance independently of overall input level");
+        check (relativeBody < 0.5f && relativeQuiet > absoluteQuiet + 1.0f,
+               "Relative detection compares band energy with full-signal energy rather than an absolute threshold");
+        ShunDeEssProcessor savedRelative;
+        set (savedRelative, "relative", 1.0f);
+        juce::MemoryBlock relativeState;
+        savedRelative.getStateInformation (relativeState);
+        ShunDeEssProcessor restoredRelative;
+        restoredRelative.setStateInformation (relativeState.getData(), static_cast<int> (relativeState.getSize()));
+        check (restoredRelative.parameters.getRawParameterValue ("relative")->load() >= 0.5f,
+               "Relative detector setting survives a session state round trip");
 
         ShunDeEssProcessor bypass;
         bypass.prepareToPlay (48000, 256);
@@ -767,9 +809,49 @@ int main (int argc, char** argv)
             check (tooltipWindows == 1 && hintedControls == 24,
                    "Shun has one tooltip window and hints for every control and caption");
             juce::Slider* modeKnob = nullptr;
+            juce::Slider* detectorSwitch = nullptr;
             for (auto* child : editor->getChildren())
-                if (auto* slider = dynamic_cast<juce::Slider*> (child); slider && slider->getName() == "MODE")
-                    modeKnob = slider;
+                if (auto* slider = dynamic_cast<juce::Slider*> (child))
+                {
+                    if (slider->getName() == "MODE") modeKnob = slider;
+                    if (slider->getName() == "DETECTOR MODE") detectorSwitch = slider;
+                }
+            check (detectorSwitch != nullptr && juce::roundToInt (detectorSwitch->getValue()) == 0
+                   && std::abs (detectorSwitch->getMinimum()) < 1.0e-6
+                   && std::abs (detectorSwitch->getMaximum() - 2.0) < 1.0e-6,
+                   "three-way detector switch initializes in fixed-threshold Off mode");
+            if (detectorSwitch != nullptr)
+            {
+                detectorSwitch->setValue (1.0, juce::sendNotificationSync);
+                check (editorProcessor.parameters.getRawParameterValue ("listen")->load() >= 0.5f
+                       && editorProcessor.parameters.getRawParameterValue ("relative")->load() < 0.5f,
+                       "detector switch Listen position auditions the legacy detector path");
+                detectorSwitch->setValue (2.0, juce::sendNotificationSync);
+                check (editorProcessor.parameters.getRawParameterValue ("listen")->load() < 0.5f
+                       && editorProcessor.parameters.getRawParameterValue ("relative")->load() >= 0.5f,
+                       "detector switch Relative position enables energy comparison");
+                editorProcessor.parameters.getParameter ("relative")->setValueNotifyingHost (0.0f);
+                editorProcessor.parameters.getParameter ("listen")->setValueNotifyingHost (1.0f);
+                for (int attempt = 0; attempt < 10 && juce::roundToInt (detectorSwitch->getValue()) != 1; ++attempt)
+                {
+                    juce::Thread::sleep (20);
+                    juce::Timer::callPendingTimersSynchronously();
+                }
+                check (juce::roundToInt (detectorSwitch->getValue()) == 1,
+                       "three-way detector switch follows legacy Listen host automation");
+                editorProcessor.parameters.getParameter ("relative")->setValueNotifyingHost (1.0f);
+                for (int attempt = 0; attempt < 10 && juce::roundToInt (detectorSwitch->getValue()) != 2; ++attempt)
+                {
+                    juce::Thread::sleep (20);
+                    juce::Timer::callPendingTimersSynchronously();
+                }
+                check (juce::roundToInt (detectorSwitch->getValue()) == 2,
+                       "three-way detector switch follows Relative host automation");
+                detectorSwitch->setValue (0.0, juce::sendNotificationSync);
+                check (editorProcessor.parameters.getRawParameterValue ("listen")->load() < 0.5f
+                       && editorProcessor.parameters.getRawParameterValue ("relative")->load() < 0.5f,
+                       "detector switch Off position restores fixed-threshold detection");
+            }
             check (modeKnob != nullptr && modeKnob->getSliderStyle() == juce::Slider::RotaryHorizontalVerticalDrag,
                    "four-mode selector is a rotary knob");
             juce::Label* modeValueLabel = nullptr;
@@ -825,6 +907,8 @@ int main (int argc, char** argv)
                    "the rotary mode selector returns to Wideband after host automation");
             for (auto* child : editor->getChildren())
                 check (editor->getLocalBounds().contains (child->getBounds()), "editor control fits the shared layout");
+            if (argc > 3 && juce::String (argv[3]) == "--relative-preview" && detectorSwitch != nullptr)
+                detectorSwitch->setValue (2.0, juce::sendNotificationSync);
             if (argc > 3 && juce::String (argv[3]) == "--tooltip")
             {
                 juce::TooltipWindow* tooltip = nullptr;
