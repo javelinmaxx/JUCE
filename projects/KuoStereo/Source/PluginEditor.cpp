@@ -153,7 +153,7 @@ KuoStereoEditor::KuoStereoEditor (KuoStereoProcessor& p)
     constexpr std::array<const char*, 8> units { " ms", " ms", " ms/s", " %", " %", " %", " ms", " dB" };
     constexpr std::array<const char*, 8> hints {
         "Sets the center Haas delay, with positive values delaying right and negative values delaying left.",
-        "Sets how far adaptive Haas timing may move, with OFF fixing it at the center delay.",
+        "Saves CPU when Off by fixing Haas timing at the center delay; otherwise, sets how far adaptive timing may move.",
         "Limits how quickly the active Haas delay changes to avoid chorus-like movement.",
         "Shortens Haas delay during detected transients to keep attacks tight.",
         "Sets the amount of stereo side signal added by Velvet convolution.",

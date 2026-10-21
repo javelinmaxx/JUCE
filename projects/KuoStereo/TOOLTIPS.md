@@ -6,7 +6,7 @@
 | --- | --- |
 | Bypass | Bypasses the stereo widening for a direct comparison. |
 | Center Delay | Sets the center Haas delay, with positive values delaying right and negative values delaying left. |
-| Variability | Sets how far adaptive Haas timing may move, with OFF fixing it at the center delay. |
+| Variability | Saves CPU when Off by fixing Haas timing at the center delay; otherwise, sets how far adaptive timing may move. |
 | Max Rate | Limits how quickly the active Haas delay changes to avoid chorus-like movement. |
 | Dynamic | Shortens Haas delay during detected transients to keep attacks tight. |
 | Velvet Width | Sets the amount of stereo side signal added by Velvet convolution. |

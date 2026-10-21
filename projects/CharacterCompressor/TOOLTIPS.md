@@ -1,11 +1,11 @@
 # YinYang Compressor hover hints
 
-![YinYang Compressor with the Threshold hint visible](Previews/yinyang-tooltip.png)
+![YinYang Compressor with the Output transformer hint visible](Previews/yinyang-tooltip.png)
 
 | Control | Hover hint |
 | --- | --- |
 | Compressor model | Selects the compressor model used for detection and gain reduction. |
-| Output transformer | Adds oversampled transformer coloration to the output. |
+| Output transformer | Saves CPU when Off; adds transformer color when On. |
 | Bypass | Bypasses compression and coloration for a direct comparison. |
 | Yin/Yang mode | Switches between Yang compression above threshold and Yin boosting below threshold. |
 | Mid/Side mode | Processes stereo as mid and side before decoding it back to left and right. |

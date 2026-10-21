@@ -406,11 +406,11 @@ int runTests (int argc, char** argv)
             juce::TooltipWindow* tooltip = nullptr;
             for (auto* child : editor->getChildren())
                 if (auto* window = dynamic_cast<juce::TooltipWindow*> (child)) tooltip = window;
-            check (tooltip != nullptr && threshold != nullptr, "YinYang tooltip preview has its components");
-            if (tooltip != nullptr && threshold != nullptr)
+            check (tooltip != nullptr && transformer != nullptr, "YinYang tooltip preview has its components");
+            if (tooltip != nullptr && transformer != nullptr)
             {
-                const auto point = editor->getLocalArea (threshold, threshold->getLocalBounds()).getCentre();
-                tooltip->displayTip (editor->localPointToGlobal (point), threshold->getTooltip());
+                const auto point = editor->getLocalArea (transformer, transformer->getLocalBounds()).getCentre();
+                tooltip->displayTip (editor->localPointToGlobal (point), transformer->getTooltip());
                 check (tooltip->isVisible(), "YinYang tooltip is visible in the preview");
             }
         }

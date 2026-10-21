@@ -22,7 +22,7 @@ CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcess
     bypassAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "bypass", bypass);
     upwardAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "upward", upward);
     midSideAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "midSide", midSide);
-    transformer.setTooltip ("Adds oversampled transformer coloration to the output.");
+    transformer.setTooltip ("Saves CPU when Off; adds transformer color when On.");
     bypass.setTooltip ("Bypasses compression and coloration for a direct comparison.");
     upward.setTooltip ("Switches between Yang compression above threshold and Yin boosting below threshold.");
     midSide.setTooltip ("Processes stereo as mid and side before decoding it back to left and right.");
