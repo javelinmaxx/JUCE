@@ -15,6 +15,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout KuoStereoProcessor::layout()
     add ("haasCenter", "Haas center delay", 3, 30, 0.1f, 12, "ms");
     add ("haasRange", "Haas variability", 0, 12, 0.1f, 6, "ms");
     add ("haasRate", "Haas maximum variation rate", 0.1f, 10, 0.1f, 1, "ms/s");
+    add ("haasKeepTransient", "Haas keep transient", 0, 100, 0.1f, 0, "%");
     add ("width", "Velvet width", 0, 100, 0.1f, 35, "%");
     add ("transientProtect", "Transient protection", 0, 100, 0.1f, 80, "%");
     add ("output", "Output", -12, 12, 0.1f, 0, "dB");
@@ -39,7 +40,7 @@ void KuoStereoProcessor::prepareToPlay (double rate, int)
     midHistory.assign (historySize, 0);
     writePosition = sampleCount = analysisCounter = scopeCounter = transientHold = 0;
     lowState = upperState = {};
-    fastEnvelope = slowEnvelope = 0;
+    fastEnvelope = slowEnvelope = haasTransientEnvelope = 0;
     widthBlend = 0;
     protectionGain = 1;
     const auto centerDelayMs = parameters.getRawParameterValue ("haasCenter")->load();
@@ -217,6 +218,8 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     const auto variability = parameters.getRawParameterValue ("haasRange")->load();
     const auto maxRate = parameters.getRawParameterValue ("haasRate")->load();
     const auto maxDelayStep = maxRate * 0.001f; // Samples per sample equals ms per second.
+    const auto keepTransient = parameters.getRawParameterValue ("haasKeepTransient")->load() * 0.01f;
+    const auto transientReleaseStep = 1.0f / (0.05f * sampleRate);
     const auto widthTarget = parameters.getRawParameterValue ("width")->load() * 0.01f;
     const auto protection = parameters.getRawParameterValue ("transientProtect")->load() * 0.01f;
     const auto gain = juce::Decibels::decibelsToGain (parameters.getRawParameterValue ("output")->load());
@@ -245,13 +248,26 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
             transientHold = juce::roundToInt (0.032f * sampleRate);
         else if (transientHold > 0)
             --transientHold;
+        // The same onset and hold signal protects Velvet Width and temporarily shortens Haas.
+        if (transientHold > 0)
+            haasTransientEnvelope = 1.0f;
+        else
+            haasTransientEnvelope = std::max (0.0f, haasTransientEnvelope - transientReleaseStep);
         const auto protectionTarget = transientHold > 0 ? 1.0f - protection : 1.0f;
         protectionGain += (protectionTarget - protectionGain)
             * (protectionTarget < protectionGain ? 0.1f : 0.001f);
         smoothDelaySamples += std::clamp (targetDelaySamples - smoothDelaySamples,
                                          -maxDelayStep, maxDelayStep);
         widthBlend += (widthTarget - widthBlend) * 0.001f;
-        const auto delayedRight = readAgoInterpolated (rightHistory, smoothDelaySamples);
+        const auto regularRight = readAgoInterpolated (rightHistory, smoothDelaySamples);
+        auto delayedRight = regularRight;
+        if (keepTransient > 0.0f && haasTransientEnvelope > 0.0f)
+        {
+            const auto transientDelaySamples = smoothDelaySamples * (1.0f - keepTransient);
+            const auto transientRight = readAgoInterpolated (rightHistory, transientDelaySamples);
+            // Crossfade between fixed taps on release instead of sweeping the read position.
+            delayedRight += haasTransientEnvelope * (transientRight - regularRight);
+        }
         float velvet = 0;
         for (int tap = 0; tap < velvetTaps; ++tap)
             velvet += tapWeights[static_cast<size_t> (tap)]
@@ -263,7 +279,8 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         right[i] = bypass ? dryRight : (processedMid - widenedSide) * gain;
         pushScope (left[i], right[i]);
     }
-    currentDelayMs.store (smoothDelaySamples * 1000.0f / sampleRate, std::memory_order_relaxed);
+    currentDelayMs.store (smoothDelaySamples * (1.0f - keepTransient * haasTransientEnvelope)
+                          * 1000.0f / sampleRate, std::memory_order_relaxed);
 }
 
 void KuoStereoProcessor::getStateInformation (juce::MemoryBlock& data)

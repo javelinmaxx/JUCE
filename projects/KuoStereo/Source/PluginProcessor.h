@@ -57,7 +57,8 @@ private:
     std::array<float, 2> lowState {}, upperState {};
     int writePosition = 0, sampleCount = 0, analysisCounter = 0, scopeCounter = 0, transientHold = 0;
     float sampleRate = 48000.0f, targetDelaySamples = 576.0f, smoothDelaySamples = 576.0f;
-    float widthBlend = 0, protectionGain = 1, fastEnvelope = 0, slowEnvelope = 0;
+    float widthBlend = 0, protectionGain = 1, haasTransientEnvelope = 0;
+    float fastEnvelope = 0, slowEnvelope = 0;
     float lowCoefficient = 0, upperCoefficient = 0, fastCoefficient = 0, slowCoefficient = 0;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (KuoStereoProcessor)
 };

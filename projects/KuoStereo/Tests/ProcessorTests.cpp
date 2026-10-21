@@ -51,6 +51,42 @@ float impulseSideEnergy (float guard)
     return energy;
 }
 
+struct HaasTransientResult
+{
+    float activeDelayMs = 0, recoveredDelayMs = 0;
+    int rightPeakOffset = -1;
+};
+
+HaasTransientResult haasTransientResponse (float keep)
+{
+    KuoStereoProcessor processor;
+    set (processor, "haasCenter", 12);
+    set (processor, "haasRange", 0);
+    set (processor, "haasKeepTransient", keep);
+    set (processor, "width", 0);
+    processor.prepareToPlay (48000, 256);
+    juce::AudioBuffer<float> buffer (2, 256);
+    juce::MidiBuffer midi;
+    HaasTransientResult result;
+    for (int block = 0; block < 30; ++block)
+    {
+        buffer.clear();
+        if (block == 4)
+        {
+            buffer.setSample (0, 0, 1.0f);
+            buffer.setSample (1, 0, 1.0f);
+        }
+        processor.processBlock (buffer, midi);
+        if (block == 4)
+            result.activeDelayMs = processor.getCurrentDelayMs();
+        for (int i = 0; i < buffer.getNumSamples(); ++i)
+            if (block >= 4 && buffer.getSample (1, i) > 0.9f && result.rightPeakOffset < 0)
+                result.rightPeakOffset = (block - 4) * 256 + i;
+    }
+    result.recoveredDelayMs = processor.getCurrentDelayMs();
+    return result;
+}
+
 float scopePeak (KuoStereoProcessor& processor, int band)
 {
     std::array<juce::Point<float>, KuoStereoProcessor::scopePoints> points;
@@ -71,7 +107,7 @@ int main (int argc, char** argv)
         check (processor.getName() == "Kuo Stereo", "plug-in identity is Kuo Stereo");
         check (std::abs (processor.getCurrentDelayMs() - 12.0f) < 0.001f,
                "active delay initially displays the default center before audio starts");
-        check (processor.getParameters().size() == 7, "all seven host parameters are registered");
+        check (processor.getParameters().size() == 8, "all eight host parameters are registered");
         auto buses = processor.getBusesLayout();
         check (processor.isBusesLayoutSupported (buses), "stereo layout is supported");
         buses.outputBuses.set (0, juce::AudioChannelSet::mono());
@@ -79,6 +115,7 @@ int main (int argc, char** argv)
         set (processor, "haasCenter", 15.0f);
         set (processor, "haasRange", 8.0f);
         set (processor, "haasRate", 2.5f);
+        set (processor, "haasKeepTransient", 67.0f);
         set (processor, "width", 71.0f);
         set (processor, "transientProtect", 91.0f);
         juce::MemoryBlock state;
@@ -196,6 +233,18 @@ int main (int argc, char** argv)
         check (fastStep > 0.04f && fastStep < 0.06f,
                "maximum rate control changes the delay slew limit");
 
+        const auto noKeep = haasTransientResponse (0);
+        const auto halfKeep = haasTransientResponse (50);
+        const auto fullKeep = haasTransientResponse (100);
+        check (std::abs (noKeep.activeDelayMs - 12.0f) < 0.01f && noKeep.rightPeakOffset == 576,
+               "zero Keep Transient leaves the 12 ms Haas delay unchanged");
+        check (std::abs (halfKeep.activeDelayMs - 6.0f) < 0.01f && halfKeep.rightPeakOffset == 288,
+               "half Keep Transient halves the delay during an onset");
+        check (fullKeep.activeDelayMs < 0.001f && fullKeep.rightPeakOffset == 0,
+               "maximum Keep Transient makes the onset's right channel undelayed");
+        check (std::abs (fullKeep.recoveredDelayMs - 12.0f) < 0.01f,
+               "the Haas delay returns after the shared transient hold and release");
+
         if (argc > 1 && juce::String (argv[1]) == "--editor")
         {
             KuoStereoProcessor preview;
@@ -224,7 +273,7 @@ int main (int argc, char** argv)
             int knobs = 0;
             for (auto* child : editor->getChildren())
                 if (dynamic_cast<juce::Slider*> (child) != nullptr) ++knobs;
-            check (knobs == 6, "editor exposes delay movement and widening controls");
+            check (knobs == 7, "editor exposes transient-aware Haas and widening controls");
             const auto image = editor->createComponentSnapshot (editor->getLocalBounds());
             check (image.isValid(), "frequency-split goniometer editor renders");
             if (argc > 2)
