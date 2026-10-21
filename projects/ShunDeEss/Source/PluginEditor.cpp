@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "../../EditorScaling.h"
 
 namespace
 {
@@ -423,15 +424,18 @@ ShunDeEssEditor::ShunDeEssEditor (ShunDeEssProcessor& p)
     listen.snapToState();
     applyTheme();
     lastTick = juce::Time::getMillisecondCounterHiRes() * 0.001;
-    setSize (548, 741);
+    editorScaling::enable (*this, designWidth, designHeight);
     startTimerHz (30);
 }
 
 void ShunDeEssEditor::paint (juce::Graphics& g)
 {
+    g.fillAll (theme.background);
+    g.saveState();
+    g.addTransform (editorScaling::transform (*this, designWidth, designHeight));
     g.setGradientFill (juce::ColourGradient (theme.background.brighter (0.035f), 0, 0,
-        theme.background.darker (0.13f), 0, static_cast<float> (getHeight()), false));
-    g.fillAll();
+        theme.background.darker (0.13f), 0, static_cast<float> (designHeight), false));
+    g.fillRect (0, 0, designWidth, designHeight);
     g.setColour (theme.secondary);
     g.setFont (juce::FontOptions (10.0f));
     g.drawText ("J-SONIC / DYNAMICS", 24, 20, 240, 18, juce::Justification::centredLeft);
@@ -452,6 +456,7 @@ void ShunDeEssEditor::paint (juce::Graphics& g)
     g.drawText ("OUTPUT", 358, 650, 152, 18, juce::Justification::centredLeft);
     paintResponseDisplay (g);
     paintMeter (g);
+    g.restoreState();
     g.restoreState();
 }
 
@@ -648,6 +653,14 @@ void ShunDeEssEditor::resized()
     listen.setBounds (230, up (570) + 14, 68, 76);
     algorithmLabel.setBounds (205, up (702) + 3, 112, 16);
     algorithm.setBounds (205, up (702) + 19, 112, 65);
+
+    const auto scale = editorScaling::transform (*this, designWidth, designHeight);
+    bypass.setTransform (scale);
+    listen.setTransform (scale);
+    algorithm.setTransform (scale);
+    algorithmLabel.setTransform (scale);
+    for (auto& slider : sliders) slider.setTransform (scale);
+    for (auto& label : labels) label.setTransform (scale);
 }
 
 void ShunDeEssEditor::timerCallback()
@@ -664,13 +677,15 @@ void ShunDeEssEditor::timerCallback()
         algorithm.setValue (spectral ? (split ? 3 : 2) : (split ? 1 : 0), juce::dontSendNotification);
         lastSpectralMode = spectral;
         lastSplitMode = split;
-        repaint (24, 340, 300, 125);
+        repaint (editorScaling::repaintArea (*this, designWidth, designHeight,
+                                            { 24, 340, 300, 125 }));
     }
     const auto rawValue = processor.reduction.load (std::memory_order_relaxed);
     const auto reduction = std::isfinite (rawValue) ? std::clamp (rawValue, 0.0f, 18.0f) : 0.0f;
     displayedReduction = std::max (reduction, displayedReduction * std::exp (-elapsed / 0.25f));
     history.push (now, reduction);
-    repaint (meterBounds);
+    repaint (editorScaling::repaintArea (*this, designWidth, designHeight,
+                                        meterBounds.translated (0, -50)));
 }
 
 void ShunDeEssEditor::applyTheme()

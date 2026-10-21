@@ -75,6 +75,7 @@ public:
     void resized() override;
 
 private:
+    static constexpr int designWidth = 548, designHeight = 726;
     void timerCallback() override;
     void paintMeter (juce::Graphics&);
     void applyTheme();

@@ -27,7 +27,8 @@ public:
     void resized() override;
 
 private:
-    void timerCallback() override { repaint (24, 90, 500, 627); }
+    static constexpr int designWidth = 548, designHeight = 721;
+    void timerCallback() override;
     void paintScope (juce::Graphics&, int, juce::Rectangle<float>);
     KuoStereoProcessor& processor;
     KuoLookAndFeel look;
