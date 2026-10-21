@@ -821,6 +821,19 @@ int main (int argc, char** argv)
                    && std::abs (preview.parameters.getRawParameterValue ("haasRange")->load()) < 1.0e-6f,
                    "the attached Variability readout shows OFF at zero");
             variability->setValue (6.0, juce::sendNotificationSync);
+            if (argc > 3 && juce::String (argv[3]) == "--tooltip")
+            {
+                juce::TooltipWindow* tooltip = nullptr;
+                for (auto* child : editor->getChildren())
+                    if (auto* window = dynamic_cast<juce::TooltipWindow*> (child)) tooltip = window;
+                check (tooltip != nullptr, "Kuo tooltip preview has its tooltip window");
+                if (tooltip != nullptr)
+                {
+                    const auto point = editor->getLocalArea (variability, variability->getLocalBounds()).getCentre();
+                    tooltip->displayTip (editor->localPointToGlobal (point), variability->getTooltip());
+                    check (tooltip->isVisible(), "Kuo tooltip is visible in the preview");
+                }
+            }
             const auto originalKnobWidth = editor->getLocalArea (firstKnob, firstKnob->getLocalBounds()).getWidth();
             const auto image = editor->createComponentSnapshot (editor->getLocalBounds());
             check (image.isValid(), "frequency-split goniometer editor renders");

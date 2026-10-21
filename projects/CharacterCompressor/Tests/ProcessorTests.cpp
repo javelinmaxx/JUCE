@@ -401,6 +401,19 @@ int runTests (int argc, char** argv)
                && reopenedRatio != nullptr
                && reopenedRatio->getTextFromValue (reopenedRatio->getValue()) == "1.33:1",
                "automated Yin ratio survives host state save, editor close, and reopen");
+        if (argc > 3 && juce::String (argv[3]) == "--tooltip")
+        {
+            juce::TooltipWindow* tooltip = nullptr;
+            for (auto* child : editor->getChildren())
+                if (auto* window = dynamic_cast<juce::TooltipWindow*> (child)) tooltip = window;
+            check (tooltip != nullptr && threshold != nullptr, "YinYang tooltip preview has its components");
+            if (tooltip != nullptr && threshold != nullptr)
+            {
+                const auto point = editor->getLocalArea (threshold, threshold->getLocalBounds()).getCentre();
+                tooltip->displayTip (editor->localPointToGlobal (point), threshold->getTooltip());
+                check (tooltip->isVisible(), "YinYang tooltip is visible in the preview");
+            }
+        }
         // Exercise actual component rendering, not only construction.
         auto image = editor->createComponentSnapshot (editor->getLocalBounds());
         check (image.isValid(), "native editor renders to an image");

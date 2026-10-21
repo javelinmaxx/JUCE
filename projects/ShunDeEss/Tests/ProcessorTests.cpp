@@ -825,6 +825,19 @@ int main (int argc, char** argv)
                    "the rotary mode selector returns to Wideband after host automation");
             for (auto* child : editor->getChildren())
                 check (editor->getLocalBounds().contains (child->getBounds()), "editor control fits the shared layout");
+            if (argc > 3 && juce::String (argv[3]) == "--tooltip")
+            {
+                juce::TooltipWindow* tooltip = nullptr;
+                for (auto* child : editor->getChildren())
+                    if (auto* window = dynamic_cast<juce::TooltipWindow*> (child)) tooltip = window;
+                check (tooltip != nullptr && modeKnob != nullptr, "Shun tooltip preview has its components");
+                if (tooltip != nullptr && modeKnob != nullptr)
+                {
+                    const auto point = editor->getLocalArea (modeKnob, modeKnob->getLocalBounds()).getCentre();
+                    tooltip->displayTip (editor->localPointToGlobal (point), modeKnob->getTooltip());
+                    check (tooltip->isVisible(), "Shun tooltip is visible in the preview");
+                }
+            }
             const auto image = editor->createComponentSnapshot (editor->getLocalBounds());
             check (image.isValid(), "de-esser editor renders to an image");
             if (argc > 2)
