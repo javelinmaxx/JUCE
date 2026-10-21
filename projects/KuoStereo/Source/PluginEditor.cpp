@@ -1,5 +1,6 @@
 #include "PluginEditor.h"
 #include "../../EditorScaling.h"
+#include "../../EditorTooltips.h"
 #include <cmath>
 
 namespace
@@ -137,7 +138,11 @@ KuoStereoEditor::KuoStereoEditor (KuoStereoProcessor& p)
 {
     setOpaque (true);
     setLookAndFeel (&look);
+    look.setColour (juce::TooltipWindow::backgroundColourId, panel);
+    look.setColour (juce::TooltipWindow::textColourId, foreground);
+    look.setColour (juce::TooltipWindow::outlineColourId, grid);
     addAndMakeVisible (bypass);
+    bypass.setTooltip ("Bypasses the stereo widening for a direct comparison.");
     bypassAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "bypass", bypass);
     constexpr std::array<const char*, 8> ids {
         "haasCenter", "haasRange", "haasRate", "haasKeepTransient",
@@ -146,6 +151,16 @@ KuoStereoEditor::KuoStereoEditor (KuoStereoProcessor& p)
         "CENTER DELAY", "VARIABILITY", "MAX RATE", "DYNAMIC",
         "VELVET WIDTH", "TRANSIENT", "ATTACK", "OUTPUT" };
     constexpr std::array<const char*, 8> units { " ms", " ms", " ms/s", " %", " %", " %", " ms", " dB" };
+    constexpr std::array<const char*, 8> hints {
+        "Sets the center Haas delay, with positive values delaying right and negative values delaying left.",
+        "Sets how far adaptive Haas timing may move, with OFF fixing it at the center delay.",
+        "Limits how quickly the active Haas delay changes to avoid chorus-like movement.",
+        "Shortens Haas delay during detected transients to keep attacks tight.",
+        "Sets the amount of stereo side signal added by Velvet convolution.",
+        "Reduces Velvet widening during detected onsets to keep transients crisp.",
+        "Sets how quickly Velvet transient protection engages after an onset.",
+        "Adjusts the final output level."
+    };
     for (size_t i = 0; i < sliders.size(); ++i)
     {
         auto& slider = sliders[i];
@@ -180,10 +195,16 @@ KuoStereoEditor::KuoStereoEditor (KuoStereoProcessor& p)
             };
             slider.updateText();
         }
+        editorTooltips::setHint (slider, labels[i], hints[i]);
     }
     constexpr std::array<const char*, 3> bandIds { "velvetLow", "velvetMid", "velvetHigh" };
     constexpr std::array<const char*, 3> bandNames {
         "LOW VELVET", "MID VELVET", "HIGH VELVET" };
+    constexpr std::array<const char*, 3> bandHints {
+        "Sets the low-frequency Velvet level from 0% to 200%.",
+        "Sets the mid-frequency Velvet level from 0% to 200%.",
+        "Sets the high-frequency Velvet level from 0% to 200%."
+    };
     for (size_t i = 0; i < bandSliders.size(); ++i)
     {
         auto& slider = bandSliders[i];
@@ -192,7 +213,7 @@ KuoStereoEditor::KuoStereoEditor (KuoStereoProcessor& p)
         slider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
         slider.setName (bandNames[i]);
         slider.setTitle (bandNames[i]);
-        slider.setTooltip (juce::String (bandNames[i]) + " LEVEL");
+        editorTooltips::setHint (slider, bandHints[i]);
         addAndMakeVisible (slider);
         bandAttachments[i] = std::make_unique<State::SliderAttachment> (
             p.parameters, bandIds[i], slider);

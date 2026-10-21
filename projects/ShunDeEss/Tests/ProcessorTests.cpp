@@ -746,6 +746,26 @@ int main (int argc, char** argv)
             check (editor && editor->getWidth() == 548 && editor->getHeight() == 741,
                    "editor matches the YinYang compressor layout dimensions");
             check (editor->getNumChildComponents() >= 20, "editor contains all de-esser controls");
+            int tooltipWindows = 0, hintedControls = 0;
+            for (auto* child : editor->getChildren())
+            {
+                if (dynamic_cast<juce::TooltipWindow*> (child) != nullptr) ++tooltipWindows;
+                if (dynamic_cast<juce::Slider*> (child) == nullptr
+                    && dynamic_cast<juce::Button*> (child) == nullptr
+                    && dynamic_cast<juce::Label*> (child) == nullptr) continue;
+                ++hintedControls;
+                auto* client = dynamic_cast<juce::TooltipClient*> (child);
+                const auto hint = client != nullptr ? client->getTooltip() : juce::String();
+                check (hint.isNotEmpty() && hint.endsWithChar ('.')
+                       && hint.dropLastCharacters (1).indexOfChar ('.') < 0,
+                       "each Shun control has a one-sentence hover hint");
+                if (auto* slider = dynamic_cast<juce::Slider*> (child))
+                    for (auto* nested : slider->getChildren())
+                        if (auto* readout = dynamic_cast<juce::Label*> (nested))
+                            check (readout->getTooltip() == hint, "Shun readout shares its control hint");
+            }
+            check (tooltipWindows == 1 && hintedControls == 24,
+                   "Shun has one tooltip window and hints for every control and caption");
             juce::Slider* modeKnob = nullptr;
             for (auto* child : editor->getChildren())
                 if (auto* slider = dynamic_cast<juce::Slider*> (child); slider && slider->getName() == "MODE")

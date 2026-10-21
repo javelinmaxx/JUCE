@@ -167,6 +167,27 @@ int runTests (int argc, char** argv)
         editor->setVisible (true);
         check (editor && editor->getWidth() == 548 && editor->getHeight() == 726, "compact editor creates at expected size");
         check (editor->getNumChildComponents() >= 25, "editor contains controls and meters");
+        int tooltipWindows = 0, hintedControls = 0;
+        for (auto* child : editor->getChildren())
+        {
+            if (dynamic_cast<juce::TooltipWindow*> (child) != nullptr) ++tooltipWindows;
+            if (dynamic_cast<juce::Slider*> (child) == nullptr
+                && dynamic_cast<juce::Button*> (child) == nullptr
+                && dynamic_cast<juce::ComboBox*> (child) == nullptr
+                && dynamic_cast<juce::Label*> (child) == nullptr) continue;
+            ++hintedControls;
+            auto* client = dynamic_cast<juce::TooltipClient*> (child);
+            const auto hint = client != nullptr ? client->getTooltip() : juce::String();
+            check (hint.isNotEmpty() && hint.endsWithChar ('.')
+                   && hint.dropLastCharacters (1).indexOfChar ('.') < 0,
+                   "each YinYang control has a one-sentence hover hint");
+            if (auto* slider = dynamic_cast<juce::Slider*> (child))
+                for (auto* nested : slider->getChildren())
+                    if (auto* readout = dynamic_cast<juce::Label*> (nested))
+                        check (readout->getTooltip() == hint, "YinYang readout shares its control hint");
+        }
+        check (tooltipWindows == 1 && hintedControls == 33,
+               "YinYang has one tooltip window and hints for every control and caption");
         juce::Slider *threshold = nullptr, *knee = nullptr, *ratio = nullptr;
         juce::Slider *attack = nullptr, *release = nullptr, *output = nullptr, *mix = nullptr;
         AnimatedSwitch *transformer = nullptr, *upward = nullptr;

@@ -1,5 +1,6 @@
 #include "PluginEditor.h"
 #include "../../EditorScaling.h"
+#include "../../EditorTooltips.h"
 #include "RatioMapping.h"
 
 CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcessor& p)
@@ -10,6 +11,7 @@ CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcess
     model.addItemList ({ "FET / Feed-forward", "VCA / Feedback", "Variable-mu", "Optical" }, 1);
     model.setAccessible (true);
     model.setTitle ("Compressor model");
+    model.setTooltip ("Selects the compressor model used for detection and gain reduction.");
     addAndMakeVisible (model);
     addAndMakeVisible (transformer);
     addAndMakeVisible (bypass);
@@ -20,7 +22,10 @@ CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcess
     bypassAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "bypass", bypass);
     upwardAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "upward", upward);
     midSideAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "midSide", midSide);
-    upward.setTooltip ("Yin boosts levels below threshold, capped at 12 dB. Its ratio range is 1:1 to 2:1.");
+    transformer.setTooltip ("Adds oversampled transformer coloration to the output.");
+    bypass.setTooltip ("Bypasses compression and coloration for a direct comparison.");
+    upward.setTooltip ("Switches between Yang compression above threshold and Yin boosting below threshold.");
+    midSide.setTooltip ("Processes stereo as mid and side before decoding it back to left and right.");
     upward.setStateCaptions ("YIN", "YANG");
 
     const std::array<const char*, 14> ids { "input", "threshold", "ratio", "attack", "release",
@@ -29,6 +34,22 @@ CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcess
         "KNEE", "OUTPUT", "MIX", "DETECTOR HPF", "CORE DRIVE", "STEREO LINK", "DC BIAS", "VARITRANSIENT", "SC HIGH TILT" };
     const std::array<const char*, 14> units { " dB", " dB", ":1", " ms", " ms",
         " dB", " dB", " %", " Hz", " dB", " %", " %", " %", " dB" };
+    const std::array<const char*, 14> hints {
+        "Adjusts the level entering the compressor and its detector.",
+        "Sets the level above which Yang compresses and below which Yin boosts.",
+        "Sets compression strength from 1:1 to 20:1 in Yang or 1:1 to 2:1 in Yin.",
+        "Sets attack timing in Yang and release timing in Yin.",
+        "Sets release timing in Yang and attack timing in Yin.",
+        "Softens the transition around the compression threshold.",
+        "Adjusts output gain after the wet and dry mix.",
+        "Blends the processed signal with the original input.",
+        "Removes low frequencies from the detector, with 0 Hz disabling the filter.",
+        "Increases saturation in the enabled output transformer.",
+        "Blends each channel's detector toward the louder channel's detector.",
+        "Adds transformer asymmetry to increase even harmonics.",
+        "Slows attack and speeds release as Yang gain reduction increases.",
+        "Boosts high frequencies in the sidechain to increase their compression sensitivity."
+    };
     for (size_t i = 0; i < sliders.size(); ++i)
     {
         auto& slider = sliders[i];
@@ -68,14 +89,8 @@ CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcess
             };
             slider.updateText();
         }
+        editorTooltips::setHint (slider, labels[i], hints[i]);
     }
-    sliders[8].setTooltip ("High-pass filter in the detector only. 0 Hz disables it.");
-    sliders[9].setTooltip ("Core drive adds saturation before the transformer filters. Generated distortion rolls off above 500 Hz; clean highs pass through.");
-    sliders[10].setTooltip ("Blends each channel's detector with the louder detector: 0% is independent, 100% is fully linked.");
-    sliders[11].setTooltip ("DC bias simulates transformer magnetizing current, increasing transfer asymmetry and even-order harmonics.");
-    sliders[12].setTooltip ("GR-dependent attack and release: 0% has no effect; 400% reaches 4x attack and 1/4 release. Ramps through a 3 dB soft knee from 3 to 6 dB gain reduction. Disabled in upward mode.");
-    sliders[13].setTooltip ("Sidechain high-shelf boost from 0 to 12 dB. The shelf midpoint is 1.5 kHz; it changes compression sensitivity only and does not EQ the output.");
-    midSide.setTooltip ("Encode stereo to Mid and Side before compression, then decode back to Left and Right.");
     midSide.setStateCaptions ("M/S", "L/R");
     midSide.setFunctionLabelVisible (false);
     transformer.setFunctionLabelVisible (false);
@@ -705,6 +720,9 @@ void CharacterCompressorEditor::timerCallback()
 void CharacterCompressorEditor::applyTheme()
 {
     look.setTheme (theme);
+    look.setColour (juce::TooltipWindow::backgroundColourId, theme.card);
+    look.setColour (juce::TooltipWindow::textColourId, theme.text);
+    look.setColour (juce::TooltipWindow::outlineColourId, theme.grid);
     look.setColour (juce::ComboBox::backgroundColourId, theme.card);
     look.setColour (juce::ComboBox::outlineColourId, theme.grid);
     look.setColour (juce::ComboBox::textColourId, theme.text);

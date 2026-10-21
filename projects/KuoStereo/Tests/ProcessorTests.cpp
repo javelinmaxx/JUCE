@@ -777,6 +777,26 @@ int main (int argc, char** argv)
             editor->setVisible (true);
             check (editor && editor->getWidth() == 548 && editor->getHeight() == 721,
                    "editor is 20 px shorter after reducing the sound field meters");
+            int tooltipWindows = 0, hintedControls = 0;
+            for (auto* child : editor->getChildren())
+            {
+                if (dynamic_cast<juce::TooltipWindow*> (child) != nullptr) ++tooltipWindows;
+                if (dynamic_cast<juce::Slider*> (child) == nullptr
+                    && dynamic_cast<juce::Button*> (child) == nullptr
+                    && dynamic_cast<juce::Label*> (child) == nullptr) continue;
+                ++hintedControls;
+                auto* client = dynamic_cast<juce::TooltipClient*> (child);
+                const auto hint = client != nullptr ? client->getTooltip() : juce::String();
+                check (hint.isNotEmpty() && hint.endsWithChar ('.')
+                       && hint.dropLastCharacters (1).indexOfChar ('.') < 0,
+                       "each Kuo control has a one-sentence hover hint");
+                if (auto* slider = dynamic_cast<juce::Slider*> (child))
+                    for (auto* nested : slider->getChildren())
+                        if (auto* readout = dynamic_cast<juce::Label*> (nested))
+                            check (readout->getTooltip() == hint, "Kuo readout shares its control hint");
+            }
+            check (tooltipWindows == 1 && hintedControls == 20,
+                   "Kuo has one tooltip window and hints for every control and caption");
             int knobs = 0;
             juce::Slider* firstKnob = nullptr;
             juce::Slider* variability = nullptr;

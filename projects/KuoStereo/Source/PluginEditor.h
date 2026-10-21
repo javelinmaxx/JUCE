@@ -32,6 +32,7 @@ private:
     void paintScope (juce::Graphics&, int, juce::Rectangle<float>);
     KuoStereoProcessor& processor;
     KuoLookAndFeel look;
+    juce::TooltipWindow tooltipWindow { this };
     KuoBypassButton bypass;
     std::array<juce::Slider, 8> sliders;
     std::array<juce::Label, 8> labels;

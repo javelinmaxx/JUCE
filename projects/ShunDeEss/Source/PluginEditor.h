@@ -69,6 +69,7 @@ private:
     void applyTheme();
     ShunDeEssProcessor& processor;
     CompressorLookAndFeel look;
+    juce::TooltipWindow tooltipWindow { this };
     AnimatedSwitch bypass { "BYPASS", true, false, true }, listen { "LISTEN" };
     juce::Slider algorithm;
     juce::Label algorithmLabel;

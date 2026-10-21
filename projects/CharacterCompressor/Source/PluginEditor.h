@@ -81,6 +81,7 @@ private:
     void applyTheme();
     CharacterCompressorProcessor& processor;
     CompressorLookAndFeel look;
+    juce::TooltipWindow tooltipWindow { this };
     juce::ComboBox model;
     AnimatedSwitch transformer { "OUTPUT TRANSFORMER" }, bypass { "BYPASS", true, false, true };
     AnimatedSwitch upward { "YIN/YANG MODE", true, false, true };

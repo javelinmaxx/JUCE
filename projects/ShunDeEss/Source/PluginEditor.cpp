@@ -1,5 +1,6 @@
 #include "PluginEditor.h"
 #include "../../EditorScaling.h"
+#include "../../EditorTooltips.h"
 
 namespace
 {
@@ -390,6 +391,10 @@ ShunDeEssEditor::ShunDeEssEditor (ShunDeEssProcessor& p)
     algorithmLabel.setText ("MODE", juce::dontSendNotification);
     algorithmLabel.setJustificationType (juce::Justification::centred);
     algorithmLabel.setFont (juce::FontOptions (10.0f));
+    editorTooltips::setHint (algorithm, algorithmLabel,
+        "Selects Wideband, Split, Brilliant, or Smooth de-essing.");
+    bypass.setTooltip ("Bypasses de-essing for a direct comparison.");
+    listen.setTooltip ("Auditions the detector signal while you tune its frequency and focus.");
     bypassAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "bypass", bypass);
     listenAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "listen", listen);
 
@@ -398,6 +403,18 @@ ShunDeEssEditor::ShunDeEssEditor (ShunDeEssProcessor& p)
     const std::array<const char*, 10> names { "DET FREQ", "DET Q", "ATT FREQ", "ATT Q", "THRESHOLD",
         "RANGE", "ATTACK", "RELEASE", "OUTPUT", "ST LINK" };
     const std::array<const char*, 10> units { " Hz", " Q", " Hz", " Q", " dB", " dB", " ms", " ms", " dB", " %" };
+    const std::array<const char*, 10> hints {
+        "Sets the frequency emphasized by the sibilance detector.",
+        "Adjusts detector focus or spectral averaging, depending on the mode.",
+        "Sets the center of the frequency region being attenuated.",
+        "Adjusts how narrowly attenuation focuses around the selected frequency.",
+        "Sets the level where sibilance attenuation begins.",
+        "Limits the maximum amount of sibilance attenuation.",
+        "Sets how quickly attenuation engages after sibilance is detected.",
+        "Sets how quickly attenuation fades after sibilance ends.",
+        "Adjusts the final output level.",
+        "Links left and right detection to keep stereo de-essing balanced."
+    };
     for (size_t i = 0; i < sliders.size(); ++i)
     {
         auto& slider = sliders[i];
@@ -415,6 +432,7 @@ ShunDeEssEditor::ShunDeEssEditor (ShunDeEssProcessor& p)
         addAndMakeVisible (slider);
         addAndMakeVisible (labels[i]);
         attachments[i] = std::make_unique<State::SliderAttachment> (p.parameters, ids[i], slider);
+        editorTooltips::setHint (slider, labels[i], hints[i]);
         slider.onValueChange = [this] { repaint (24, 340, 300, 125); };
         slider.setColour (juce::Slider::textBoxTextColourId, theme.text);
     }
@@ -691,6 +709,9 @@ void ShunDeEssEditor::timerCallback()
 void ShunDeEssEditor::applyTheme()
 {
     look.setTheme (theme);
+    look.setColour (juce::TooltipWindow::backgroundColourId, theme.card);
+    look.setColour (juce::TooltipWindow::textColourId, theme.text);
+    look.setColour (juce::TooltipWindow::outlineColourId, theme.grid);
     look.setColour (juce::PopupMenu::backgroundColourId, theme.card);
     look.setColour (juce::PopupMenu::textColourId, theme.text);
     look.setColour (juce::PopupMenu::highlightedBackgroundColourId, theme.control);
