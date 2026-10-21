@@ -482,16 +482,20 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
                 delayedRight += haasTransientEnvelope * (transientRight - regularRight);
             }
         }
-        float velvet = 0;
+        float velvetLeft = 0, velvetRight = 0;
         for (int tap = 0; tap < velvetTaps; ++tap)
-            velvet += tapWeights[static_cast<size_t> (tap)]
-                    * readAgo (velvetHistory,
-                        lookaheadSamples + tapOffsets[static_cast<size_t> (tap)]);
-        const auto widenedSide = 0.5f * (delayedLeft - delayedRight)
-                               + 0.5f * widthBlend * velvet;
-        const auto processedMid = 0.5f * (delayedLeft + delayedRight);
-        left[i] = bypass ? dryOutputLeft : (processedMid + widenedSide) * gain;
-        right[i] = bypass ? dryOutputRight : (processedMid - widenedSide) * gain;
+        {
+            const auto tapSignal = tapWeights[static_cast<size_t> (tap)]
+                * readAgo (velvetHistory,
+                    lookaheadSamples + tapOffsets[static_cast<size_t> (tap)]);
+            if ((tap & 1) == 0) velvetLeft += tapSignal;
+            else velvetRight -= tapSignal;
+        }
+        // Cross-subtraction makes Velvet's additions exactly opposite, so it
+        // changes the side while leaving the Haas-processed mid untouched.
+        const auto velvetSide = 0.5f * widthBlend * (velvetLeft - velvetRight);
+        left[i] = bypass ? dryOutputLeft : (delayedLeft + velvetSide) * gain;
+        right[i] = bypass ? dryOutputRight : (delayedRight - velvetSide) * gain;
         pushScope (left[i], right[i]);
     }
     currentDelayMs.store (smoothDelaySamples * (1.0f - keepTransient * haasTransientEnvelope)

@@ -30,8 +30,10 @@ transient protection, Velvet widening, and the frequency display.
   restoring the normal delay without a rapid delay-time sweep. The shared onset
   detector compares fast and slow magnitudes in four frequency bands and
   requires a substantial overall attack or a strong rise in one band.
-- **Velvet Width** adds a sparse, balanced-polarity convolution of the dry mid
-  channel to the side channel. Low, Mid, and High sliders beside the meters
+- **Velvet Width** splits its sparse, balanced-polarity convolution of the dry
+  mid into left and right tap signals, then cross-subtracts them at the outputs.
+  Its additions cancel in the output mid channel, leaving the Haas-processed
+  mid unchanged. Low, Mid, and High sliders beside the meters
   control how much of each 250 Hz / 2.5 kHz input band reaches the convolution.
   All three range from 0% to 200% and default to 100%. Transient uses the shared mid-channel
   onset detector to attenuate only detected onset samples before convolution;

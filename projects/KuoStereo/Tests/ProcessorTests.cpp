@@ -457,7 +457,7 @@ int main (int argc, char** argv)
         set (noWidth, "width", 0);
         noWidth.prepareToPlay (48000, 256);
         juce::AudioBuffer<float> baseline (2, 256);
-        float sideEnergy = 0;
+        float sideEnergy = 0, maxMidError = 0;
         for (int block = 0; block < 180; ++block)
         {
             for (int i = 0; i < 256; ++i)
@@ -476,9 +476,15 @@ int main (int argc, char** argv)
                     const auto side = (buffer.getSample (0, i) - buffer.getSample (1, i))
                                     - (baseline.getSample (0, i) - baseline.getSample (1, i));
                     sideEnergy += side * side;
+                    const auto mid = 0.5f * (buffer.getSample (0, i) + buffer.getSample (1, i));
+                    const auto baselineMid = 0.5f * (baseline.getSample (0, i)
+                                                     + baseline.getSample (1, i));
+                    maxMidError = std::max (maxMidError, std::abs (mid - baselineMid));
                 }
         }
         check (sideEnergy > 0.01f, "velvet convolution widens a centered sustained tone");
+        check (maxMidError < 0.000001f,
+               "Velvet cross-subtraction preserves the Haas-processed mid channel");
         const auto lowPass = velvetBandSideRms (80, 100, 0, 0);
         const auto lowReject = velvetBandSideRms (80, 0, 0, 100);
         const auto midPass = velvetBandSideRms (700, 0, 100, 0);
