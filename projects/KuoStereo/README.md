@@ -9,8 +9,8 @@ The [feature measurement report](Measurements/Report/REPORT.md) includes
 synthetic audio, plots, and quantified results for adaptive Haas delay,
 transient protection, Velvet widening, and the frequency display.
 
-- **Smart Haas** searches every 0.1 ms choice within Center Delay ± Variability,
-  clamped to −30–30 ms (up to 241 choices). Positive values delay
+- **Smart Haas** searches every 0.2 ms choice within Center Delay ± Variability,
+  clamped to −30–30 ms (up to 121 choices). Positive values delay
   the right channel; negative values delay the left channel, so the right
   arrives earlier relative to it. At 0 ms, neither channel is delayed by Haas.
   For each candidate, it compares the original mid spectrum with the spectrum
@@ -18,9 +18,9 @@ transient protection, Velvet widening, and the frequency display.
   This prevents a 0 ms delay from always winning solely because its mid is
   unchanged. A 2048-sample analysis window, 250 ms score averaging, and a
   small switching margin let the target respond to content with some movement.
-  Each analysis pass checks four rotating 0.5 ms survey points and the current
-  choice. Fine 0.1 ms neighborhoods alternate every other pass, so each is
-  checked about every 171 ms at 48 kHz. At most nine candidates are FFT-scored
+  Each analysis pass checks four rotating 0.6 ms survey points and the current
+  choice. Fine 0.2 ms neighborhoods alternate every other pass, so each is
+  checked about every 171 ms at 48 kHz. At most seven candidates are FFT-scored
   per pass; the broad survey covers the full range over several passes. The
   analysis runs every 2048 samples, and zero Variability disables it entirely.
   The active delay moves linearly toward each target at the selected Max Rate.

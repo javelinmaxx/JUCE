@@ -498,14 +498,14 @@ int main (int argc, char** argv)
                    && std::abs (velvetBandSideRms (700, 0, 200, 0) / midPass - 2.0f) < 0.02f
                    && std::abs (velvetBandSideRms (5000, 0, 0, 200) / highPass - 2.0f) < 0.02f,
                "200% band settings double the corresponding Velvet signal");
-        check (std::abs (selectedDelayAcrossZero()) >= 0.1f,
+        check (std::abs (selectedDelayAcrossZero()) >= 0.2f,
                "Smart Haas can select a useful nonzero delay when zero is in range");
         check (std::abs (selectedDelayAcrossZero (true)) < 0.01f,
                "Smart Haas may keep zero when the input already has sufficient width");
         const auto fineDelay = selectedDelayAcrossZero (false, 0.3f);
         check (std::abs (fineDelay) <= 0.3001f
-                   && std::abs (fineDelay * 10.0f - std::round (fineDelay * 10.0f)) < 0.0001f,
-               "Smart Haas selections lie on a 0.1 ms grid within the current range");
+                   && std::abs (fineDelay * 5.0f - std::round (fineDelay * 5.0f)) < 0.0001f,
+               "Smart Haas selections lie on a 0.2 ms grid within the current range");
         check (smallestDelayOnSteadyTone() > 11.9f,
                "moderate tremolo on a sustained tone does not retrigger transient protection");
         const auto positiveHaas = haasImpulseTiming (12);

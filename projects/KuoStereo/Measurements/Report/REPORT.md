@@ -11,11 +11,11 @@ A minor (A3–C4–E4) for 3 s. Detuned oscillators and harmonics give
 each note a sustained pad timbre; the chord transition crossfades over
 125 ms. The two chords share two notes and are close in overall level.
 Center is 12 ms, Variability is ±6 ms, Max Rate is 10 ms/s,
-and Velvet Width is 0%. Smart Haas can select any 0.1 ms choice in
-the range (121 here, up to 241 at maximum Variability). Every 2048
-samples, a 2048-sample window scores four rotating 0.5 ms survey
-points and the current choice. Two nearby 0.1 ms searches alternate,
-each running about every 171 ms (at most nine FFT candidates per pass).
+and Velvet Width is 0%. Smart Haas can select any 0.2 ms choice in
+the range (61 here, up to 121 at maximum Variability). Every 2048
+samples, a 2048-sample window scores four rotating 0.6 ms survey
+points and the current choice. Two nearby 0.2 ms searches alternate,
+each running about every 171 ms (at most seven FFT candidates per pass).
 The broad survey covers the full range over several passes.
 Candidate scores average over 250 ms, and a 2% improvement can
 change the selected delay. This allows modest movement with content.
@@ -37,15 +37,15 @@ Listen to the [pad input](smart-haas-pad-input.wav),
 
 | Content | Most common target | Target changes | Median active delay | Adaptive error | Fixed 12 ms error |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| C major pad | 15.4 ms | 0 | 15.40 ms | 0.148 | 0.405 |
-| A minor pad | 9.0 ms | 2 | 12.64 ms | 0.348 | 0.427 |
+| C major pad | 15.0 ms | 0 | 15.00 ms | 0.189 | 0.405 |
+| A minor pad | 9.0 ms | 2 | 12.64 ms | 0.349 | 0.427 |
 
 The C major and A minor input levels are 0.088
 and 0.086 RMS over the steady windows.
-The selected target moves from 15.4 ms on C major to 9.0 ms on A minor.
+The selected target moves from 15.0 ms on C major to 9.0 ms on A minor.
 C major has 0 target changes during its steady window; A minor has 2. The target stays inside 6–18 ms;
 the largest active-delay step is 10.0 ms/s (10 ms/s setting).
-Compared with the fixed 12 ms delay, adaptive spectral error is 63.4% lower on C major and 18.5% lower on A minor in this pad test.
+Compared with the fixed 12 ms delay, adaptive spectral error is 53.4% lower on C major and 18.3% lower on A minor in this pad test.
 
 A separate 12-to-20 ms Center Delay step shows the linear ramp used
 between selected targets. Max Rate bounds its constant slope.
@@ -67,7 +67,7 @@ Haas delay, both channels remain aligned.
 The +12 ms setting peaks at 6.5 ms left and 18.5 ms right; 0 ms peaks at 6.5 ms on both channels; −12 ms peaks at 18.5 ms left and 6.5 ms right.
 
 With Center at 0 ms and Variability at ±3 ms, a 523 Hz mono tone
-selects -1.8 ms; a stereo version with a 0.6 radian channel phase offset selects 0.0 ms. The width target therefore avoids an automatic 0 ms choice for mono
+selects 1.8 ms; a stereo version with a 0.6 radian channel phase offset selects 0.0 ms. The width target therefore avoids an automatic 0 ms choice for mono
 but permits 0 ms when the input already has enough side energy.
 
 ## Dynamic and Velvet Transient

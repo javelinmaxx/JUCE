@@ -151,9 +151,9 @@ void KuoStereoProcessor::analyzeMidSpectrum (float centerDelayMs, float variabil
         return;
     }
 
-    const auto firstTenth = static_cast<int> (std::ceil (lowDelayMs * 10.0f - 0.0001f));
-    const auto lastTenth = static_cast<int> (std::floor (highDelayMs * 10.0f + 0.0001f));
-    const auto candidateCount = lastTenth - firstTenth + 1;
+    const auto firstGridPoint = static_cast<int> (std::ceil (lowDelayMs * 5.0f - 0.0001f));
+    const auto lastGridPoint = static_cast<int> (std::floor (highDelayMs * 5.0f + 0.0001f));
+    const auto candidateCount = lastGridPoint - firstGridPoint + 1;
     if (candidateCount <= 0 || candidateCount > maxCandidates)
     {
         targetDelaySamples = centerDelayMs * 0.001f * sampleRate;
@@ -161,7 +161,7 @@ void KuoStereoProcessor::analyzeMidSpectrum (float centerDelayMs, float variabil
         return;
     }
     const auto candidateDelayMs = [=] (int candidate) noexcept
-    { return 0.1f * static_cast<float> (firstTenth + candidate); };
+    { return 0.2f * static_cast<float> (firstGridPoint + candidate); };
 
     std::fill (spectrumInput.begin(), spectrumInput.end(), 0.0f);
     for (int i = 0; i < fftSize; ++i)
@@ -237,7 +237,7 @@ void KuoStereoProcessor::analyzeMidSpectrum (float centerDelayMs, float variabil
     };
 
     if (selectedCandidate < 0)
-        selectedCandidate = std::clamp (juce::roundToInt (centerDelayMs * 10.0f) - firstTenth,
+        selectedCandidate = std::clamp (juce::roundToInt (centerDelayMs * 5.0f) - firstGridPoint,
                                         0, candidateCount - 1);
     float bestScore = std::numeric_limits<float>::max();
     int bestCandidate = selectedCandidate;
@@ -251,13 +251,14 @@ void KuoStereoProcessor::analyzeMidSpectrum (float centerDelayMs, float variabil
         }
         return average;
     };
-    // Limit expensive FFTs per call. A rotating 0.5 ms survey covers the
-    // range over several blocks while nearby 0.1 ms choices stay responsive.
+    // Limit expensive FFTs per call. A rotating 0.6 ms survey covers the
+    // range over several blocks while nearby 0.2 ms choices stay responsive.
     constexpr int coarseScoresPerPass = 4;
-    const auto coarseCount = (candidateCount + 3) / 5 + 1;
+    constexpr int coarseStride = 3;
+    const auto coarseCount = (candidateCount + coarseStride - 2) / coarseStride + 1;
     for (int i = 0; i < coarseScoresPerPass; ++i)
     {
-        scoreCandidate (std::min (coarseSurveyCursor * 5, candidateCount - 1));
+        scoreCandidate (std::min (coarseSurveyCursor * coarseStride, candidateCount - 1));
         if (++coarseSurveyCursor >= coarseCount)
         {
             coarseSurveyCursor = 0;
@@ -268,8 +269,8 @@ void KuoStereoProcessor::analyzeMidSpectrum (float centerDelayMs, float variabil
     // Alternate fine neighborhoods; each is revisited every four analysis
     // windows, and the selected time itself is refreshed on every pass.
     if ((scoreFrame & 3u) == 0u)
-        for (int candidate = std::max (0, selectedCandidate - 2);
-             candidate <= std::min (candidateCount - 1, selectedCandidate + 2); ++candidate)
+        for (int candidate = std::max (0, selectedCandidate - 1);
+             candidate <= std::min (candidateCount - 1, selectedCandidate + 1); ++candidate)
             consider (candidate);
     if (coarseSurveyComplete && (scoreFrame & 3u) == 2u)
     {
@@ -277,7 +278,7 @@ void KuoStereoProcessor::analyzeMidSpectrum (float centerDelayMs, float variabil
         float coarseBestScore = std::numeric_limits<float>::max();
         for (int i = 0; i < coarseCount; ++i)
         {
-            const auto candidate = std::min (i * 5, candidateCount - 1);
+            const auto candidate = std::min (i * coarseStride, candidateCount - 1);
             if (candidateScoreInitialized[static_cast<size_t> (candidate)]
                 && smoothedCandidateScores[static_cast<size_t> (candidate)] < coarseBestScore)
             {
@@ -285,8 +286,8 @@ void KuoStereoProcessor::analyzeMidSpectrum (float centerDelayMs, float variabil
                 coarseBest = candidate;
             }
         }
-        for (int candidate = std::max (0, coarseBest - 2);
-             candidate <= std::min (candidateCount - 1, coarseBest + 2); ++candidate)
+        for (int candidate = std::max (0, coarseBest - 1);
+             candidate <= std::min (candidateCount - 1, coarseBest + 1); ++candidate)
             consider (candidate);
     }
     if (bestScore < switchMargin * smoothedCandidateScores[static_cast<size_t> (selectedCandidate)])
