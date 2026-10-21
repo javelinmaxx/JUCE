@@ -106,6 +106,22 @@ def main(raw_dir, report_dir):
     save_wav(report_dir / "smart-haas-pad-adaptive.wav", [adaptive_audio[:, 1]])
     save_wav(report_dir / "smart-haas-pad-fixed.wav", [adaptive_audio[:, 2]])
 
+    signed = read_csv(raw_dir / "signed_delay.csv")
+    signed_time = np.array([float(row["time_ms"]) for row in signed])
+    fig, axes = plt.subplots(1, 3, figsize=(10, 3.2), sharey=True, layout="constrained")
+    signed_peaks = {}
+    for axis, (name, title) in zip(axes, (("positive", "+12 ms"), ("zero", "0 ms"), ("negative", "−12 ms"))):
+        left = np.array([float(row[f"{name}_left"]) for row in signed])
+        right = np.array([float(row[f"{name}_right"]) for row in signed])
+        signed_peaks[name] = (signed_time[np.argmax(np.abs(left))], signed_time[np.argmax(np.abs(right))])
+        axis.plot(signed_time, left, color="#ca7939", label="left")
+        axis.plot(signed_time, right, color="#314e79", linestyle="--", label="right")
+        axis.set(xlim=(0, 30), ylim=(-0.05, 1.1), xlabel="time (ms)", title=f"Center Delay {title}")
+        axis.legend(frameon=False)
+    axes[0].set_ylabel("sample amplitude")
+    fig.savefig(report_dir / "signed-haas-delay.png", dpi=170)
+    plt.close(fig)
+
     transient = read_csv(raw_dir / "transient.csv")
     transient_time = np.array([float(row["time_ms"]) for row in transient])
     columns = {key: np.array([float(row[key]) for row in transient]) for key in transient[0]}
@@ -272,6 +288,21 @@ def main(raw_dir, report_dir):
         f'{100 * (1 - adaptive_results[0]["adaptive"] / adaptive_results[0]["fixed"]):.1f}% '
         f'on C major and {100 * (1 - adaptive_results[1]["adaptive"] / adaptive_results[1]["fixed"]):.1f}% '
         "on A minor against the fixed 12 ms delay in this pad test.",
+        "",
+        "## Smart Haas: zero and negative delay",
+        "",
+        "A mono impulse at 5 ms runs through the processor with Variability and",
+        "Velvet Width at 0%. Positive Center Delay shifts the right channel;",
+        "negative Center Delay shifts the left, so the right leads without lookahead.",
+        "At 0 ms, both channels pass through together.",
+        "",
+        "![Signed Haas delay impulse timing](signed-haas-delay.png)",
+        "",
+        f'The +12 ms setting peaks at {signed_peaks["positive"][0]:.0f} ms left and '
+        f'{signed_peaks["positive"][1]:.0f} ms right; 0 ms peaks at '
+        f'{signed_peaks["zero"][0]:.0f} ms on both channels; −12 ms peaks at '
+        f'{signed_peaks["negative"][0]:.0f} ms left and '
+        f'{signed_peaks["negative"][1]:.0f} ms right.',
         "",
         "## Keep Transient and Velvet Transient Guard",
         "",

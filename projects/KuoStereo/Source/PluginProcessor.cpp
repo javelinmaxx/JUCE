@@ -12,7 +12,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout KuoStereoProcessor::layout()
             juce::NormalisableRange<float> { lo, hi, step }, initial,
             juce::AudioParameterFloatAttributes().withLabel (unit)));
     };
-    add ("haasCenter", "Haas center delay", 3, 30, 0.1f, 12, "ms");
+    add ("haasCenter", "Haas center delay", -30, 30, 0.1f, 12, "ms");
     add ("haasRange", "Haas variability", 0, 12, 0.1f, 6, "ms");
     add ("haasRate", "Haas maximum variation rate", 0.1f, 10, 0.1f, 1, "ms/s");
     add ("haasKeepTransient", "Haas keep transient", 0, 100, 0.1f, 0, "%");
@@ -113,7 +113,7 @@ float KuoStereoProcessor::readAgoInterpolated (const std::vector<float>& history
 
 void KuoStereoProcessor::analyzeMidSpectrum (float centerDelayMs, float variabilityMs) noexcept
 {
-    const auto lowDelayMs = std::max (3.0f, centerDelayMs - variabilityMs);
+    const auto lowDelayMs = std::max (-30.0f, centerDelayMs - variabilityMs);
     const auto highDelayMs = std::min (30.0f, centerDelayMs + variabilityMs);
     if (std::abs (centerDelayMs - previousCenterDelayMs) > 0.0001f
         || std::abs (variabilityMs - previousVariabilityMs) > 0.0001f)
@@ -177,8 +177,10 @@ void KuoStereoProcessor::analyzeMidSpectrum (float centerDelayMs, float variabil
         for (int i = 0; i < fftSize; ++i)
         {
             const auto ago = fftSize - 1 - i;
+            // A negative delay makes the right channel lead by delaying the left channel.
             spectrumCandidate[static_cast<size_t> (i)] = 0.5f
-                * (readAgo (leftHistory, ago) + readAgo (rightHistory, ago + delaySamples))
+                * (readAgo (leftHistory, ago + std::max (-delaySamples, 0))
+                   + readAgo (rightHistory, ago + std::max (delaySamples, 0)))
                 * window[static_cast<size_t> (i)];
         }
         fft.performFrequencyOnlyForwardTransform (spectrumCandidate.data());
@@ -320,22 +322,37 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         smoothDelaySamples += std::clamp (targetDelaySamples - smoothDelaySamples,
                                          -maxDelayStep, maxDelayStep);
         widthBlend += (widthTarget - widthBlend) * 0.001f;
-        const auto regularRight = readAgoInterpolated (rightHistory, smoothDelaySamples);
+        const auto leftDelaySamples = std::max (-smoothDelaySamples, 0.0f);
+        const auto rightDelaySamples = std::max (smoothDelaySamples, 0.0f);
+        const auto regularLeft = leftDelaySamples > 0.0f
+            ? readAgoInterpolated (leftHistory, leftDelaySamples) : dryLeft;
+        const auto regularRight = rightDelaySamples > 0.0f
+            ? readAgoInterpolated (rightHistory, rightDelaySamples) : dryRight;
+        auto delayedLeft = regularLeft;
         auto delayedRight = regularRight;
         if (keepTransient > 0.0f && haasTransientEnvelope > 0.0f)
         {
-            const auto transientDelaySamples = smoothDelaySamples * (1.0f - keepTransient);
-            const auto transientRight = readAgoInterpolated (rightHistory, transientDelaySamples);
             // Crossfade between fixed taps on release instead of sweeping the read position.
-            delayedRight += haasTransientEnvelope * (transientRight - regularRight);
+            if (smoothDelaySamples < 0.0f)
+            {
+                const auto transientLeft = readAgoInterpolated (leftHistory,
+                    leftDelaySamples * (1.0f - keepTransient));
+                delayedLeft += haasTransientEnvelope * (transientLeft - regularLeft);
+            }
+            else
+            {
+                const auto transientRight = readAgoInterpolated (rightHistory,
+                    rightDelaySamples * (1.0f - keepTransient));
+                delayedRight += haasTransientEnvelope * (transientRight - regularRight);
+            }
         }
         float velvet = 0;
         for (int tap = 0; tap < velvetTaps; ++tap)
             velvet += tapWeights[static_cast<size_t> (tap)]
                     * readAgo (velvetHistory, tapOffsets[static_cast<size_t> (tap)]);
-        const auto widenedSide = 0.5f * (dryLeft - delayedRight)
+        const auto widenedSide = 0.5f * (delayedLeft - delayedRight)
                                + 0.5f * widthBlend * velvet;
-        const auto processedMid = 0.5f * (dryLeft + delayedRight);
+        const auto processedMid = 0.5f * (delayedLeft + delayedRight);
         left[i] = bypass ? dryLeft : (processedMid + widenedSide) * gain;
         right[i] = bypass ? dryRight : (processedMid - widenedSide) * gain;
         pushScope (left[i], right[i]);

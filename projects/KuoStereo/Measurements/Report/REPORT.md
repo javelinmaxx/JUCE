@@ -37,6 +37,17 @@ C major has 0 target changes during its steady window; A minor has 2. The target
 the largest active-delay step is 10.0 ms/s (10 ms/s setting).
 Adaptive processing reduces the spectral error by 77.5% on C major and 15.2% on A minor against the fixed 12 ms delay in this pad test.
 
+## Smart Haas: zero and negative delay
+
+A mono impulse at 5 ms runs through the processor with Variability and
+Velvet Width at 0%. Positive Center Delay shifts the right channel;
+negative Center Delay shifts the left, so the right leads without lookahead.
+At 0 ms, both channels pass through together.
+
+![Signed Haas delay impulse timing](signed-haas-delay.png)
+
+The +12 ms setting peaks at 5 ms left and 17 ms right; 0 ms peaks at 5 ms on both channels; −12 ms peaks at 17 ms left and 5 ms right.
+
 ## Keep Transient and Velvet Transient Guard
 
 The shared onset detector compares fast and slow magnitude envelopes in four

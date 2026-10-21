@@ -118,6 +118,23 @@ void measureAdaptation (const std::filesystem::path& directory)
     }
 }
 
+void measureSignedDelay (const std::filesystem::path& directory)
+{
+    Samples input (sampleRate / 25, 0);
+    input[sampleRate / 200] = 1.0f;
+    const auto positive = render (input, { 12, 0, 10, 0, 0, 0 });
+    const auto zero = render (input, { 0, 0, 10, 0, 0, 0 });
+    const auto negative = render (input, { -12, 0, 10, 0, 0, 0 });
+    std::ofstream csv (directory / "signed_delay.csv");
+    csv << "time_ms,input,positive_left,positive_right,zero_left,zero_right,"
+           "negative_left,negative_right\n" << std::fixed << std::setprecision (9);
+    for (size_t i = 0; i < input.size(); ++i)
+        csv << 1000.0 * static_cast<double> (i) / sampleRate << ',' << input[i] << ','
+            << positive.left[i] << ',' << positive.right[i] << ','
+            << zero.left[i] << ',' << zero.right[i] << ','
+            << negative.left[i] << ',' << negative.right[i] << '\n';
+}
+
 void measureTransient (const std::filesystem::path& directory)
 {
     constexpr int onset = sampleRate / 10;
@@ -246,6 +263,7 @@ int main (int argc, char** argv)
         const std::filesystem::path directory (argv[1]);
         std::filesystem::create_directories (directory);
         measureAdaptation (directory);
+        measureSignedDelay (directory);
         measureTransient (directory);
         measureSpectralOnset (directory);
         measureMonoWidth (directory);

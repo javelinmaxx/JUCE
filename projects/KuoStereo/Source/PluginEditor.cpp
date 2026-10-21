@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include <cmath>
 
 namespace
 {
@@ -204,7 +205,9 @@ void KuoStereoEditor::paint (juce::Graphics& g)
     g.drawText ("ACTIVE DELAY", 362, 104, 82, 16, juce::Justification::centredRight);
     g.setColour (amber);
     g.setFont (juce::FontOptions (17.6f));
-    g.drawText (juce::String (processor.getCurrentDelayMs(), 1) + " ms", 391, 101, 116, 22,
+    const auto activeDelayMs = processor.getCurrentDelayMs();
+    const auto displayedDelayMs = std::abs (activeDelayMs) < 0.05f ? 0.0f : activeDelayMs;
+    g.drawText (juce::String (displayedDelayMs, 1) + " ms", 391, 101, 116, 22,
                 juce::Justification::centredRight);
     paintScope (g, 0, { 39, 474, 148, 202 });
     paintScope (g, 1, { 200, 474, 148, 202 });

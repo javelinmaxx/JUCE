@@ -96,6 +96,42 @@ float noiseBedSideEnergy (float guard)
     return energy;
 }
 
+struct HaasImpulseTiming
+{
+    int leftPeakOffset = -1, rightPeakOffset = -1;
+    float activeDelayMs = 0;
+};
+
+HaasImpulseTiming haasImpulseTiming (float centerMs, float keep = 0)
+{
+    KuoStereoProcessor processor;
+    set (processor, "haasCenter", centerMs);
+    set (processor, "haasRange", 0);
+    set (processor, "haasKeepTransient", keep);
+    set (processor, "width", 0);
+    processor.prepareToPlay (48000, 256);
+    juce::AudioBuffer<float> buffer (2, 256);
+    juce::MidiBuffer midi;
+    HaasImpulseTiming result;
+    for (int block = 0; block < 6; ++block)
+    {
+        buffer.clear();
+        if (block == 0)
+            buffer.setSample (0, 0, 1.0f), buffer.setSample (1, 0, 1.0f);
+        processor.processBlock (buffer, midi);
+        if (block == 0)
+            result.activeDelayMs = processor.getCurrentDelayMs();
+        for (int i = 0; i < buffer.getNumSamples(); ++i)
+        {
+            if (buffer.getSample (0, i) > 0.9f && result.leftPeakOffset < 0)
+                result.leftPeakOffset = block * 256 + i;
+            if (buffer.getSample (1, i) > 0.9f && result.rightPeakOffset < 0)
+                result.rightPeakOffset = block * 256 + i;
+        }
+    }
+    return result;
+}
+
 struct HaasTransientResult
 {
     float activeDelayMs = 0, heldDelayMs = 0, releasingDelayMs = 0;
@@ -164,7 +200,7 @@ int main (int argc, char** argv)
         check (processor.isBusesLayoutSupported (buses), "stereo layout is supported");
         buses.outputBuses.set (0, juce::AudioChannelSet::mono());
         check (! processor.isBusesLayoutSupported (buses), "mismatched stereo layout is rejected");
-        set (processor, "haasCenter", 15.0f);
+        set (processor, "haasCenter", -15.0f);
         set (processor, "haasRange", 8.0f);
         set (processor, "haasRate", 2.5f);
         set (processor, "haasKeepTransient", 67.0f);
@@ -230,6 +266,24 @@ int main (int argc, char** argv)
                 }
         }
         check (sideEnergy > 0.01f, "velvet convolution widens a centered sustained tone");
+        const auto positiveHaas = haasImpulseTiming (12);
+        const auto zeroHaas = haasImpulseTiming (0);
+        const auto negativeHaas = haasImpulseTiming (-12);
+        const auto minimumHaas = haasImpulseTiming (-30);
+        const auto negativeKept = haasImpulseTiming (-12, 100);
+        check (positiveHaas.leftPeakOffset == 0 && positiveHaas.rightPeakOffset == 576,
+               "positive Haas delay shifts the right channel");
+        check (zeroHaas.leftPeakOffset == 0 && zeroHaas.rightPeakOffset == 0
+                   && std::abs (zeroHaas.activeDelayMs) < 0.001f,
+               "zero Haas delay leaves both channels aligned");
+        check (negativeHaas.leftPeakOffset == 576 && negativeHaas.rightPeakOffset == 0
+                   && std::abs (negativeHaas.activeDelayMs + 12.0f) < 0.001f,
+               "negative Haas delay shifts the left channel");
+        check (minimumHaas.leftPeakOffset == 1440 && minimumHaas.rightPeakOffset == 0,
+               "minimum Haas delay reaches negative 30 ms");
+        check (negativeKept.leftPeakOffset == 0 && negativeKept.rightPeakOffset == 0
+                   && std::abs (negativeKept.activeDelayMs) < 0.001f,
+               "Keep Transient protects onsets at negative Haas delays");
         const auto unguarded = impulseSideEnergy (0);
         const auto guarded = impulseSideEnergy (100);
         const auto slowGuard = impulseSideEnergy (100, 5);
@@ -315,6 +369,24 @@ int main (int argc, char** argv)
                    && std::abs (minorEndDelay - previousMinorTarget) < 0.1f,
                "rate-limited Haas delay settles at each pad chord's selected target");
         check (scopePeak (width, 1) > 0.01f, "mid-band goniometer receives processed stereo points");
+
+        for (const auto center : { 0.0f, -12.0f })
+        {
+            set (haas, "haasCenter", center);
+            for (int block = 0; block < 8; ++block)
+            {
+                for (int i = 0; i < 256; ++i)
+                {
+                    const auto sample = kuoTestSignal::padSample (kuoTestSignal::padSamples - 256 + i);
+                    buffer.setSample (0, i, sample);
+                    buffer.setSample (1, i, sample);
+                }
+                haas.processBlock (buffer, midi);
+            }
+            check (haas.getSelectedDelayMs() >= center - 6.0f
+                       && haas.getSelectedDelayMs() <= center + 6.0f,
+                   "Smart Haas searches both zero-crossing and negative delay ranges");
+        }
 
         KuoStereoProcessor limited;
         set (limited, "haasCenter", 12);
