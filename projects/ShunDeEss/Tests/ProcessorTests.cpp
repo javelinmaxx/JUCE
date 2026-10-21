@@ -819,9 +819,33 @@ int main (int argc, char** argv)
             check (detectorSwitch != nullptr && juce::roundToInt (detectorSwitch->getValue()) == 0
                    && std::abs (detectorSwitch->getMinimum()) < 1.0e-6
                    && std::abs (detectorSwitch->getMaximum() - 2.0) < 1.0e-6,
-                   "three-way detector switch initializes in fixed-threshold Off mode");
+                   "three-way detector switch initializes in Absolute mode");
             if (detectorSwitch != nullptr)
             {
+                check (detectorSwitch->getSliderStyle() == juce::Slider::LinearVertical
+                       && detectorSwitch->getTextFromValue (0) == "ABSOLUTE"
+                       && detectorSwitch->getTextFromValue (1) == "LISTEN"
+                       && detectorSwitch->getTextFromValue (2) == "RELATIVE",
+                       "vertical detector switch names all three positions");
+                const auto clickLever = [&] (float y)
+                {
+                    const juce::Point<float> point (56.0f, y);
+                    const auto now = juce::Time::getCurrentTime();
+                    detectorSwitch->mouseDown (juce::MouseEvent (
+                        juce::Desktop::getInstance().getMainMouseSource(), point,
+                        juce::ModifierKeys (juce::ModifierKeys::leftButtonModifier),
+                        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, detectorSwitch, detectorSwitch,
+                        now, point, now, 1, false));
+                };
+                clickLever (26.0f);
+                check (juce::roundToInt (detectorSwitch->getValue()) == 2,
+                       "top lever position selects Relative");
+                clickLever (38.0f);
+                check (juce::roundToInt (detectorSwitch->getValue()) == 1,
+                       "middle lever position selects Listen");
+                clickLever (51.0f);
+                check (juce::roundToInt (detectorSwitch->getValue()) == 0,
+                       "bottom lever position selects Absolute");
                 detectorSwitch->setValue (1.0, juce::sendNotificationSync);
                 check (editorProcessor.parameters.getRawParameterValue ("listen")->load() >= 0.5f
                        && editorProcessor.parameters.getRawParameterValue ("relative")->load() < 0.5f,
@@ -850,7 +874,7 @@ int main (int argc, char** argv)
                 detectorSwitch->setValue (0.0, juce::sendNotificationSync);
                 check (editorProcessor.parameters.getRawParameterValue ("listen")->load() < 0.5f
                        && editorProcessor.parameters.getRawParameterValue ("relative")->load() < 0.5f,
-                       "detector switch Off position restores fixed-threshold detection");
+                       "detector switch Absolute position restores fixed-threshold detection");
             }
             check (modeKnob != nullptr && modeKnob->getSliderStyle() == juce::Slider::RotaryHorizontalVerticalDrag,
                    "four-mode selector is a rotary knob");
@@ -914,11 +938,11 @@ int main (int argc, char** argv)
                 juce::TooltipWindow* tooltip = nullptr;
                 for (auto* child : editor->getChildren())
                     if (auto* window = dynamic_cast<juce::TooltipWindow*> (child)) tooltip = window;
-                check (tooltip != nullptr && modeKnob != nullptr, "Shun tooltip preview has its components");
-                if (tooltip != nullptr && modeKnob != nullptr)
+                check (tooltip != nullptr && detectorSwitch != nullptr, "Shun tooltip preview has its components");
+                if (tooltip != nullptr && detectorSwitch != nullptr)
                 {
-                    const auto point = editor->getLocalArea (modeKnob, modeKnob->getLocalBounds()).getCentre();
-                    tooltip->displayTip (editor->localPointToGlobal (point), modeKnob->getTooltip());
+                    const auto point = editor->getLocalArea (detectorSwitch, detectorSwitch->getLocalBounds()).getCentre();
+                    tooltip->displayTip (editor->localPointToGlobal (point), detectorSwitch->getTooltip());
                     check (tooltip->isVisible(), "Shun tooltip is visible in the preview");
                 }
             }
@@ -942,6 +966,10 @@ int main (int argc, char** argv)
                 auto* hit = editor->getComponentAt (control.getCentre());
                 check (hit == modeKnob || modeKnob->isParentOf (hit),
                        "Shun scaled controls remain clickable");
+                const auto detectorBounds = editor->getLocalArea (detectorSwitch, detectorSwitch->getLocalBounds());
+                check (editor->getLocalBounds().contains (detectorBounds)
+                       && editor->getComponentAt (detectorBounds.getCentre()) == detectorSwitch,
+                       "vertical detector switch stays clickable at both resize limits");
                 check (editor->createComponentSnapshot (editor->getLocalBounds()).isValid(),
                        "Shun renders at both resize limits");
             }

@@ -44,7 +44,11 @@ public:
     DetectorModeSwitch();
     void setTheme (const CompressorTheme& nextTheme) { theme = nextTheme; repaint(); }
     void paint (juce::Graphics&) override;
+    void mouseDown (const juce::MouseEvent&) override;
+    void mouseDrag (const juce::MouseEvent&) override;
+    void mouseUp (const juce::MouseEvent&) override {}
 private:
+    void selectAt (float y);
     CompressorTheme theme {};
 };
 
