@@ -22,10 +22,10 @@ transient protection, Velvet widening, and the frequency display.
   A zero Variability setting fixes the target at Center Delay. Keep Transient
   uses the same onset detector as Velvet Width to
   temporarily shorten the effective Haas delay. At 0% it has no effect; at
-  100% the delay reaches 0 ms during detected transients. After a
-  1 ms crossfade brings tonal onsets into protection without a tap-switch click;
-  sharp impulses remain sample-aligned. After a 10 ms hold, an exponential
-  tap crossfade decays to 1% protection over 65 ms,
+  100% the Haas delay reaches 0 ms during detected transients. A 1.5 ms
+  lookahead lets its 1 ms tonal-onset crossfade finish before the attack
+  reaches the output; sharp impulses remain sample-aligned. After a 10 ms
+  hold, an exponential tap crossfade decays to 1% protection over 65 ms,
   restoring the normal delay without a rapid delay-time sweep. The shared onset
   detector compares fast and slow magnitudes in four frequency bands rather
   than the overall mid-channel level.
@@ -45,8 +45,8 @@ The controls are Center Delay, Variability, Max Rate, Keep Transient, Velvet
 Width, Transient Guard, Guard Attack, Output, and Bypass. All are host
 parameters and survive state recall.
 The plug-in accepts stereo input and output, offers VST3 and Standalone builds,
-and also builds as an Audio Unit on macOS. It reports no added host latency;
-the delay and velvet paths keep up to about 30 ms of internal history.
+and also builds as an Audio Unit on macOS. It reports 1.5 ms of lookahead
+latency to the host; the delay and velvet paths share that latency.
 
 From the repository root, build and test with:
 

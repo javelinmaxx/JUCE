@@ -1,7 +1,6 @@
 #include "../Source/PluginProcessor.h"
 #include "../Measurements/SynthPad.h"
 #include <cmath>
-#include <cstring>
 #include <iostream>
 #include <stdexcept>
 
@@ -210,7 +209,7 @@ HaasTransientResult haasTransientResponse (float keep)
     return result;
 }
 
-float haasTonalOnsetMaxStep()
+float haasTonalOnsetMaxStep (float& attackError)
 {
     KuoStereoProcessor processor;
     set (processor, "haasCenter", 12);
@@ -221,6 +220,7 @@ float haasTonalOnsetMaxStep()
     juce::AudioBuffer<float> buffer (2, 256);
     juce::MidiBuffer midi;
     float previous = 0, maxStep = 0;
+    attackError = 0;
     for (int block = 0; block < 2; ++block)
     {
         for (int i = 0; i < 256; ++i)
@@ -236,10 +236,56 @@ float haasTonalOnsetMaxStep()
         {
             const auto value = buffer.getSample (1, i);
             maxStep = std::max (maxStep, std::abs (value - previous));
+            const auto sample = block * 256 + i;
+            if (sample >= 72 && sample < 120)
+            {
+                const auto alignedInput = 0.2f * std::sin (juce::MathConstants<float>::twoPi
+                    * 1000.0f * static_cast<float> (sample - 72) / 48000.0f);
+                attackError = std::max (attackError, std::abs (value - alignedInput));
+            }
             previous = value;
         }
     }
     return maxStep;
+}
+
+float haasBurstAttackError()
+{
+    KuoStereoProcessor processor;
+    set (processor, "haasCenter", 12);
+    set (processor, "haasRange", 0);
+    set (processor, "haasKeepTransient", 100);
+    set (processor, "width", 0);
+    processor.prepareToPlay (48000, 256);
+    juce::AudioBuffer<float> buffer (2, 256);
+    juce::MidiBuffer midi;
+    float maxError = 0;
+    constexpr int onset = 256, duration = 160, latency = 72;
+    const auto burst = [] (int relative) -> float
+    {
+        if (relative == 0) return 1.0f;
+        return 0.2f * std::exp (-static_cast<float> (relative) / 45.0f)
+            * std::sin (0.41f * static_cast<float> (relative));
+    };
+    for (int block = 0; block < 5; ++block)
+    {
+        for (int i = 0; i < 256; ++i)
+        {
+            const auto relative = block * 256 + i - onset;
+            const auto value = relative >= 0 && relative < duration ? burst (relative) : 0.0f;
+            buffer.setSample (0, i, value);
+            buffer.setSample (1, i, value);
+        }
+        processor.processBlock (buffer, midi);
+        for (int i = 0; i < 256; ++i)
+        {
+            const auto relative = block * 256 + i - onset - latency;
+            if (relative >= 0 && relative < duration)
+                maxError = std::max (maxError,
+                    std::abs (buffer.getSample (1, i) - burst (relative)));
+        }
+    }
+    return maxError;
 }
 
 float scopePeak (KuoStereoProcessor& processor, int band)
@@ -287,6 +333,8 @@ int main (int argc, char** argv)
         }
 
         restored.prepareToPlay (48000, 256);
+        check (restored.getLatencySamples() == 72,
+               "1.5 ms lookahead is reported as 72 samples at 48 kHz");
         juce::AudioBuffer<float> buffer (2, 256);
         juce::MidiBuffer midi;
         set (restored, "bypass", 1);
@@ -297,11 +345,15 @@ int main (int argc, char** argv)
         }
         juce::AudioBuffer<float> original (buffer);
         restored.processBlock (buffer, midi);
-        bool identical = true;
+        bool aligned = true;
         for (int ch = 0; ch < 2; ++ch)
-            identical = identical && std::memcmp (buffer.getReadPointer (ch), original.getReadPointer (ch),
-                256 * sizeof (float)) == 0;
-        check (identical, "bypass preserves both input channels exactly");
+            for (int i = 0; i < 256; ++i)
+                aligned = aligned && std::abs (buffer.getSample (ch, i)
+                    - (i < 72 ? 0.0f : original.getSample (ch, i - 72))) < 0.0000001f;
+        check (aligned, "bypass preserves both input channels with reported latency");
+        restored.prepareToPlay (96000, 256);
+        check (restored.getLatencySamples() == 144,
+               "1.5 ms lookahead scales with the sample rate");
 
         KuoStereoProcessor width;
         set (width, "width", 100);
@@ -338,17 +390,17 @@ int main (int argc, char** argv)
         const auto negativeHaas = haasImpulseTiming (-12);
         const auto minimumHaas = haasImpulseTiming (-30);
         const auto negativeKept = haasImpulseTiming (-12, 100);
-        check (positiveHaas.leftPeakOffset == 0 && positiveHaas.rightPeakOffset == 576,
+        check (positiveHaas.leftPeakOffset == 72 && positiveHaas.rightPeakOffset == 648,
                "positive Haas delay shifts the right channel");
-        check (zeroHaas.leftPeakOffset == 0 && zeroHaas.rightPeakOffset == 0
+        check (zeroHaas.leftPeakOffset == 72 && zeroHaas.rightPeakOffset == 72
                    && std::abs (zeroHaas.activeDelayMs) < 0.001f,
                "zero Haas delay leaves both channels aligned");
-        check (negativeHaas.leftPeakOffset == 576 && negativeHaas.rightPeakOffset == 0
+        check (negativeHaas.leftPeakOffset == 648 && negativeHaas.rightPeakOffset == 72
                    && std::abs (negativeHaas.activeDelayMs + 12.0f) < 0.001f,
                "negative Haas delay shifts the left channel");
-        check (minimumHaas.leftPeakOffset == 1440 && minimumHaas.rightPeakOffset == 0,
+        check (minimumHaas.leftPeakOffset == 1512 && minimumHaas.rightPeakOffset == 72,
                "minimum Haas delay reaches negative 30 ms");
-        check (negativeKept.leftPeakOffset == 0 && negativeKept.rightPeakOffset == 0
+        check (negativeKept.leftPeakOffset == 72 && negativeKept.rightPeakOffset == 72
                    && std::abs (negativeKept.activeDelayMs) < 0.001f,
                "Keep Transient protects onsets at negative Haas delays");
         const auto unguarded = impulseSideEnergy (0);
@@ -509,12 +561,12 @@ int main (int argc, char** argv)
         const auto noKeep = haasTransientResponse (0);
         const auto halfKeep = haasTransientResponse (50);
         const auto fullKeep = haasTransientResponse (100);
-        check (std::abs (noKeep.activeDelayMs - 12.0f) < 0.01f && noKeep.rightPeakOffset == 576,
+        check (std::abs (noKeep.activeDelayMs - 12.0f) < 0.01f && noKeep.rightPeakOffset == 648,
                "zero Keep Transient leaves the 12 ms Haas delay unchanged");
-        check (std::abs (halfKeep.activeDelayMs - 6.0f) < 0.01f && halfKeep.rightPeakOffset == 288,
+        check (std::abs (halfKeep.activeDelayMs - 6.0f) < 0.01f && halfKeep.rightPeakOffset == 360,
                "half Keep Transient halves the delay during an onset");
-        check (fullKeep.activeDelayMs < 0.001f && fullKeep.rightPeakOffset == 0,
-               "maximum Keep Transient makes the onset's right channel undelayed");
+        check (fullKeep.activeDelayMs < 0.001f && fullKeep.rightPeakOffset == 72,
+               "maximum Keep Transient aligns the onset after lookahead latency");
         constexpr float releaseIntervalSeconds = 4.0f * 256.0f / 48000.0f;
         const auto expectedRemainingRatio = std::exp (std::log (0.01f)
             * releaseIntervalSeconds / 0.065f);
@@ -526,8 +578,13 @@ int main (int argc, char** argv)
                "Haas protection holds for 10 ms then decays exponentially to 1% over 65 ms");
         check (std::abs (fullKeep.recoveredDelayMs - 12.0f) < 0.01f,
                "the Haas delay returns after its transient hold and release");
-        check (haasTonalOnsetMaxStep() < 0.04f,
+        float tonalAttackError = 0;
+        check (haasTonalOnsetMaxStep (tonalAttackError) < 0.04f,
                "Haas Keep Transient crossfades tonal onsets without a click");
+        check (tonalAttackError < 0.003f,
+               "Haas lookahead protects the first samples of a tonal attack");
+        check (haasBurstAttackError() < 0.00001f,
+               "Haas lookahead preserves the entire sharp transient burst");
 
         KuoStereoProcessor spectralOnset;
         set (spectralOnset, "haasCenter", 12);

@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 FS = 48_000
+LOOKAHEAD_SAMPLES = round(0.0015 * FS)
 SEGMENT_SECONDS = 3
 LABELS = ["C major pad", "A minor pad"]
 
@@ -79,6 +80,8 @@ def main(raw_dir, report_dir):
         end = SEGMENT_SECONDS * (segment + 1) - 0.2
         steady = (times >= start) & (times < end)
         source = adaptive_audio[int(start * FS) : int(end * FS)]
+        aligned = adaptive_audio[int(start * FS) + LOOKAHEAD_SAMPLES
+                                 : int(end * FS) + LOOKAHEAD_SAMPLES]
         adaptive_results.append(
             {
                 "label": label,
@@ -86,8 +89,8 @@ def main(raw_dir, report_dir):
                 "median": float(np.median(active[steady])),
                 "target_changes": int(np.count_nonzero(np.diff(target[steady]))),
                 "input_rms": rms(source[:, 0]),
-                "adaptive": spectral_distance(source[:, 0], source[:, 1]),
-                "fixed": spectral_distance(source[:, 0], source[:, 2]),
+                "adaptive": spectral_distance(source[:, 0], aligned[:, 1]),
+                "fixed": spectral_distance(source[:, 0], aligned[:, 2]),
             }
         )
     max_rate = float(np.max(np.abs(np.diff(active) / np.diff(times))))
@@ -152,7 +155,11 @@ def main(raw_dir, report_dir):
     guard = rms(columns["velvet_side_guard"][tail])
     guard_half_ms = rms(columns["velvet_side_attack_half_ms"][tail])
     guard_five_ms = rms(columns["velvet_side_attack_five_ms"][tail])
-    onset_index = int(np.argmin(np.abs(transient_time)))
+    input_onset_index = int(np.argmin(np.abs(transient_time)))
+    onset_index = int(np.argmin(np.abs(transient_time - 1.5)))
+    attack_error = float(np.max(np.abs(
+        columns["right_kept"][onset_index : onset_index + 160]
+        - columns["input"][input_onset_index : input_onset_index + 160])))
     delay = read_csv(raw_dir / "transient_delay.csv")
     delay_time = np.array([float(row["time_ms"]) for row in delay])
     normal_delay = np.array([float(row["normal_ms"]) for row in delay])
@@ -163,6 +170,7 @@ def main(raw_dir, report_dir):
     axes[0].plot(transient_time, columns["input"], color="0.4", lw=0.9, label="input noise + transient")
     axes[0].plot(transient_time, columns["right_normal"], color="#314e79", lw=1, label="right, Keep 0%")
     axes[0].plot(transient_time, columns["right_kept"], color="#ca7939", lw=1, label="right, Keep 100%")
+    axes[0].axvline(1.5, color="0.4", ls=":", lw=0.9, label="output onset")
     axes[0].set(xlim=(-1, 20), ylabel="sample amplitude", title="Haas transient alignment")
     axes[0].legend(frameon=False, ncol=3)
     axes[1].plot(delay_time, normal_delay, color="#314e79", label="Keep 0%")
@@ -327,7 +335,8 @@ def main(raw_dir, report_dir):
         "The fixed comparison uses the same processor with Variability at 0 ms.",
         "The first 0.5 s and final 0.2 s of each chord are excluded from the steady-state table.",
         "The error is the mean of weighted absolute log FFT-magnitude ratios",
-        "between input and processed mid, over 512-sample Hann windows; lower is better.",
+        "between input and latency-aligned processed mid, over 512-sample Hann",
+        "windows; lower is better.",
         "",
         "![Smart Haas delay and spectrum comparison](smart-haas.png)",
         "",
@@ -367,16 +376,17 @@ def main(raw_dir, report_dir):
         "",
         "A mono impulse at 5 ms runs through the processor with Variability and",
         "Velvet Width at 0%. Positive Center Delay shifts the right channel;",
-        "negative Center Delay shifts the left, so the right leads without lookahead.",
-        "At 0 ms, both channels pass through together.",
+        "negative Center Delay shifts the left, so the right leads. Both channels",
+        "also receive the fixed 1.5 ms lookahead reported to the host. At 0 ms",
+        "Haas delay, both channels remain aligned.",
         "",
         "![Signed Haas delay impulse timing](signed-haas-delay.png)",
         "",
-        f'The +12 ms setting peaks at {signed_peaks["positive"][0]:.0f} ms left and '
-        f'{signed_peaks["positive"][1]:.0f} ms right; 0 ms peaks at '
-        f'{signed_peaks["zero"][0]:.0f} ms on both channels; −12 ms peaks at '
-        f'{signed_peaks["negative"][0]:.0f} ms left and '
-        f'{signed_peaks["negative"][1]:.0f} ms right.',
+        f'The +12 ms setting peaks at {signed_peaks["positive"][0]:.1f} ms left and '
+        f'{signed_peaks["positive"][1]:.1f} ms right; 0 ms peaks at '
+        f'{signed_peaks["zero"][0]:.1f} ms on both channels; −12 ms peaks at '
+        f'{signed_peaks["negative"][0]:.1f} ms left and '
+        f'{signed_peaks["negative"][1]:.1f} ms right.',
         "",
         "## Keep Transient and Velvet Transient Guard",
         "",
@@ -385,12 +395,14 @@ def main(raw_dir, report_dir):
         "and above 8 kHz. It triggers on a sharp rise in any one band rather than",
         "on the total mid-channel level. As an equal-amplitude check, a 100 Hz",
         "tone switches to 5 kHz after 1 s; both tones are 0.18 peak amplitude.",
-        "Haas Keep holds for 10 ms after the last detected onset, then decays",
+        "Haas Keep holds for 10 ms after the last detected onset reaches the output, then decays",
         "exponentially to 1% protection over 65 ms.",
         "Haas fades into protection over 1 ms for tonal onsets. High-crest",
         "impulses still switch immediately to keep their channels aligned.",
-        "Velvet Guard attenuates",
-        "convolution input only while the detector reports an onset. Its depth",
+        "The audio path waits 1.5 ms while the detector reads ahead, so the",
+        "tonal crossfade completes before the first output attack samples.",
+        "Velvet Guard attenuates convolution input only while the detector",
+        "reports an onset. Its depth",
         "fades smoothly near the onset threshold, with no fixed suppression interval.",
         "Guard Attack sets a 0–10 ms linear ramp into attenuation while the",
         "detector remains active. Values below 0.5 ms use a 0.5 ms de-click",
@@ -413,9 +425,12 @@ def main(raw_dir, report_dir):
         "",
         "![Transient timing and side-tail protection](transients.png)",
         "",
-        f'- At onset, the right sample is {columns["right_normal"][onset_index]:.4f} with Keep 0% '
+        f'- At the 1.5 ms output onset, the right sample is {columns["right_normal"][onset_index]:.4f} with Keep 0% '
         f'and {columns["right_kept"][onset_index]:.4f} with Keep 100% '
-        f'(input {columns["input"][onset_index]:.4f}).',
+        f'(input onset {columns["input"][input_onset_index]:.4f}).',
+        f'- Across the first 160 transient samples (3.33 ms), the maximum error '
+        f'between the latency-aligned input and the Keep 100% right output is '
+        f'{attack_error:.6f}.',
         "",
         "| Guard Attack | Velvet-added side RMS, 4–28 ms | Reduction vs Guard 0% |",
         "| --- | ---: | ---: |",
@@ -439,7 +454,7 @@ def main(raw_dir, report_dir):
         "",
         f"The largest right-channel step with Keep 100% is {haas_step:.4f},",
         "versus 0.1414 before the onset crossfade. A sharp impulse still",
-        "reaches the right channel at the original sample with Keep 100%.",
+        "reaches the right channel after the fixed 1.5 ms lookahead with Keep 100%.",
         "",
         "### Velvet Guard at short attacks",
         "",

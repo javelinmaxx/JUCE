@@ -59,6 +59,7 @@ private:
     int writePosition = 0, sampleCount = 0, analysisCounter = 0, scopeCounter = 0;
     int selectedCandidate = -1;
     int transientHold = 0;
+    int lookaheadSamples = 0;
     bool onsetActive = false, instantTransientOnset = false;
     float sampleRate = 48000.0f, targetDelaySamples = 576.0f, smoothDelaySamples = 576.0f;
     float slewStartDelaySamples = 576.0f, slewTargetDelaySamples = 576.0f, slewProgress = 1.0f;

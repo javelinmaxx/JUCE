@@ -35,6 +35,8 @@ KuoStereoProcessor::KuoStereoProcessor()
 void KuoStereoProcessor::prepareToPlay (double rate, int)
 {
     sampleRate = static_cast<float> (std::max (rate, 1000.0));
+    lookaheadSamples = juce::roundToInt (0.0015f * sampleRate);
+    setLatencySamples (lookaheadSamples);
     const auto historySize = static_cast<size_t> (std::ceil (sampleRate * 0.04f)) + fftSize + 4;
     leftHistory.assign (historySize, 0);
     rightHistory.assign (historySize, 0);
@@ -316,7 +318,9 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
             }
         }
         if (onset)
-            transientHold = juce::roundToInt (0.010f * sampleRate);
+            // Include the audio lookahead so protection lasts 10 ms after
+            // the detected onset reaches the output, not just the detector.
+            transientHold = juce::roundToInt (0.010f * sampleRate) + lookaheadSamples;
         else if (transientHold > 0)
             --transientHold;
         if (onset && ! onsetActive)
@@ -384,10 +388,14 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         widthBlend += (widthTarget - widthBlend) * 0.001f;
         const auto leftDelaySamples = std::max (-smoothDelaySamples, 0.0f);
         const auto rightDelaySamples = std::max (smoothDelaySamples, 0.0f);
-        const auto regularLeft = leftDelaySamples > 0.0f
-            ? readAgoInterpolated (leftHistory, leftDelaySamples) : dryLeft;
-        const auto regularRight = rightDelaySamples > 0.0f
-            ? readAgoInterpolated (rightHistory, rightDelaySamples) : dryRight;
+        // The detector reads the current input while all audible paths wait
+        // 1.5 ms, giving the Haas attack crossfade time to finish first.
+        const auto dryOutputLeft = readAgo (leftHistory, lookaheadSamples);
+        const auto dryOutputRight = readAgo (rightHistory, lookaheadSamples);
+        const auto regularLeft = readAgoInterpolated (leftHistory,
+            static_cast<float> (lookaheadSamples) + leftDelaySamples);
+        const auto regularRight = readAgoInterpolated (rightHistory,
+            static_cast<float> (lookaheadSamples) + rightDelaySamples);
         auto delayedLeft = regularLeft;
         auto delayedRight = regularRight;
         if (keepTransient > 0.0f && haasTransientEnvelope > 0.0f)
@@ -396,25 +404,28 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
             if (smoothDelaySamples < 0.0f)
             {
                 const auto transientLeft = readAgoInterpolated (leftHistory,
-                    leftDelaySamples * (1.0f - keepTransient));
+                    static_cast<float> (lookaheadSamples)
+                        + leftDelaySamples * (1.0f - keepTransient));
                 delayedLeft += haasTransientEnvelope * (transientLeft - regularLeft);
             }
             else
             {
                 const auto transientRight = readAgoInterpolated (rightHistory,
-                    rightDelaySamples * (1.0f - keepTransient));
+                    static_cast<float> (lookaheadSamples)
+                        + rightDelaySamples * (1.0f - keepTransient));
                 delayedRight += haasTransientEnvelope * (transientRight - regularRight);
             }
         }
         float velvet = 0;
         for (int tap = 0; tap < velvetTaps; ++tap)
             velvet += tapWeights[static_cast<size_t> (tap)]
-                    * readAgo (velvetHistory, tapOffsets[static_cast<size_t> (tap)]);
+                    * readAgo (velvetHistory,
+                        lookaheadSamples + tapOffsets[static_cast<size_t> (tap)]);
         const auto widenedSide = 0.5f * (delayedLeft - delayedRight)
                                + 0.5f * widthBlend * velvet;
         const auto processedMid = 0.5f * (delayedLeft + delayedRight);
-        left[i] = bypass ? dryLeft : (processedMid + widenedSide) * gain;
-        right[i] = bypass ? dryRight : (processedMid - widenedSide) * gain;
+        left[i] = bypass ? dryOutputLeft : (processedMid + widenedSide) * gain;
+        right[i] = bypass ? dryOutputRight : (processedMid - widenedSide) * gain;
         pushScope (left[i], right[i]);
     }
     currentDelayMs.store (smoothDelaySamples * (1.0f - keepTransient * haasTransientEnvelope)
