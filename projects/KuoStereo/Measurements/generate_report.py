@@ -175,6 +175,13 @@ def main(raw_dir, report_dir):
     off_corr = float(np.corrcoef(off_l, off_r)[0, 1])
     on_corr = float(np.corrcoef(on_l, on_r)[0, 1])
     mid_error = rms(on_mid - off_mid)
+    # Subtract the width-off render sample by sample, then add only Velvet's
+    # contribution to the original mono signal. The Haas path cancels exactly.
+    velvet_only_l = input_mono + (on_l - off_l)
+    velvet_only_r = input_mono + (on_r - off_r)
+    velvet_only_side = 0.5 * (velvet_only_l - velvet_only_r)
+    velvet_only_mid_error = rms(0.5 * (velvet_only_l + velvet_only_r) - input_mono)
+    velvet_only_corr = float(np.corrcoef(velvet_only_l, velvet_only_r)[0, 1])
     fig, axes = plt.subplots(1, 3, figsize=(12.5, 4.3), layout="constrained")
     points = np.arange(0, len(mono), 37)
     axes[0].scatter(off_l[points], off_r[points], s=3, alpha=0.15, color="#314e79")
@@ -189,6 +196,17 @@ def main(raw_dir, report_dir):
     save_wav(report_dir / "mono-haas-only.wav", [off_l, off_r])
     save_wav(report_dir / "mono-velvet-100.wav", [on_l, on_r])
     save_wav(report_dir / "mono-velvet-guard-100.wav", [guard_l, guard_r])
+    fig, axes = plt.subplots(1, 2, figsize=(8.5, 4.3), layout="constrained")
+    axes[0].scatter(input_mono[points], input_mono[points], s=3, alpha=0.15, color="#314e79")
+    axes[0].set(title="Dry mono, no Haas", xlabel="left", ylabel="right")
+    axes[1].scatter(velvet_only_l[points], velvet_only_r[points], s=3, alpha=0.15, color="#ca7939")
+    axes[1].set(title="Velvet 100%, Haas removed", xlabel="left", ylabel="right")
+    for axis in axes:
+        axis.set(xlim=(-0.25, 0.25), ylim=(-0.25, 0.25))
+        axis.set_aspect("equal")
+    fig.savefig(report_dir / "mono-velvet-only.png", dpi=170)
+    plt.close(fig)
+    save_wav(report_dir / "mono-velvet-only.wav", [velvet_only_l, velvet_only_r])
 
     scope = read_csv(raw_dir / "scope.csv")
     scope_rows = []
@@ -315,6 +333,19 @@ def main(raw_dir, report_dir):
         "- Listen to [mono input](mono-input.wav), [Haas only](mono-haas-only.wav),",
         "  [Haas + Velvet 100%](mono-velvet-100.wav), and",
         "  [Haas + Velvet 100% + Guard 100%](mono-velvet-guard-100.wav).",
+        "",
+        "For the Velvet-only comparison, subtract the Width 0% render from the",
+        "Width 100% render sample by sample, then add that residual to the dry",
+        "mono input. This cancels the Haas path while retaining the processor's",
+        "actual Velvet output.",
+        "",
+        "![Mono width with Haas removed](mono-velvet-only.png)",
+        "",
+        f'- With Haas removed, Velvet produces {rms(velvet_only_side):.5f} side RMS '
+        f'and left/right correlation {velvet_only_corr:.3f}; the dry input has zero side RMS.',
+        f'- The Velvet-only mid differs from the dry mono input by '
+        f'{velvet_only_mid_error:.7f} RMS.',
+        "- Listen to the [Velvet-only render](mono-velvet-only.wav).",
         "",
         "## Frequency Field: split goniometer",
         "",

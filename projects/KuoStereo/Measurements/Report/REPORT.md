@@ -95,6 +95,17 @@ The Haas-only render is the baseline; the change between renders is Velvet.
   [Haas + Velvet 100%](mono-velvet-100.wav), and
   [Haas + Velvet 100% + Guard 100%](mono-velvet-guard-100.wav).
 
+For the Velvet-only comparison, subtract the Width 0% render from the
+Width 100% render sample by sample, then add that residual to the dry
+mono input. This cancels the Haas path while retaining the processor's
+actual Velvet output.
+
+![Mono width with Haas removed](mono-velvet-only.png)
+
+- With Haas removed, Velvet produces 0.03158 side RMS and left/right correlation 0.602; the dry input has zero side RMS.
+- The Velvet-only mid differs from the dry mono input by 0.0000000 RMS.
+- Listen to the [Velvet-only render](mono-velvet-only.wav).
+
 ## Frequency Field: split goniometer
 
 An 80 Hz, 700 Hz, and 5 kHz stereo tone mix feeds the processor. The three
