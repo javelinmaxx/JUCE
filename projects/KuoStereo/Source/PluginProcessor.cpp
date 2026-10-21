@@ -43,12 +43,12 @@ void KuoStereoProcessor::prepareToPlay (double rate, int)
     const auto historySize = static_cast<size_t> (std::ceil (sampleRate * 0.04f)) + fftSize + 4;
     leftHistory.assign (historySize, 0);
     rightHistory.assign (historySize, 0);
-    midHistory.assign (historySize, 0);
     velvetHistory.assign (historySize, 0);
     writePosition = sampleCount = analysisCounter = scopeCounter = transientHold = 0;
     selectedCandidate = -1;
     previousCenterDelayMs = previousVariabilityMs = -1;
     smoothedCandidateScores = {};
+    candidateScoreInitialized = {};
     lowState = upperState = {};
     detectorLowStates = {};
     detectorFastEnvelopes = detectorSlowEnvelopes = {};
@@ -131,27 +131,40 @@ void KuoStereoProcessor::analyzeMidSpectrum (float centerDelayMs, float variabil
     if (std::abs (centerDelayMs - previousCenterDelayMs) > 0.0001f
         || std::abs (variabilityMs - previousVariabilityMs) > 0.0001f)
     {
-        // Automation moves the search grid, so old candidate scores no longer describe its delays.
+        // Automation moves the grid, so old scores no longer describe its choices.
         selectedCandidate = -1;
+        candidateScoreInitialized = {};
         previousCenterDelayMs = centerDelayMs;
         previousVariabilityMs = variabilityMs;
     }
-    if (sampleCount < static_cast<int> (sampleRate * 0.03f) + fftSize)
+    if (sampleCount < static_cast<int> (sampleRate * 0.03f) + fftSize
+        || highDelayMs - lowDelayMs < 0.0001f)
     {
         targetDelaySamples = centerDelayMs * 0.001f * sampleRate;
         selectedDelayMs.store (centerDelayMs, std::memory_order_relaxed);
         return;
     }
-    if (highDelayMs - lowDelayMs < 0.0001f)
+
+    const auto firstTenth = static_cast<int> (std::ceil (lowDelayMs * 10.0f - 0.0001f));
+    const auto lastTenth = static_cast<int> (std::floor (highDelayMs * 10.0f + 0.0001f));
+    const auto candidateCount = lastTenth - firstTenth + 1;
+    if (candidateCount <= 0 || candidateCount > maxCandidates)
     {
-        targetDelaySamples = lowDelayMs * 0.001f * sampleRate;
-        selectedDelayMs.store (lowDelayMs, std::memory_order_relaxed);
+        targetDelaySamples = centerDelayMs * 0.001f * sampleRate;
+        selectedDelayMs.store (centerDelayMs, std::memory_order_relaxed);
         return;
     }
+    const auto candidateDelayMs = [=] (int candidate) noexcept
+    { return 0.1f * static_cast<float> (firstTenth + candidate); };
+
     std::fill (spectrumInput.begin(), spectrumInput.end(), 0.0f);
     for (int i = 0; i < fftSize; ++i)
-        spectrumInput[static_cast<size_t> (i)] = readAgo (midHistory, fftSize - 1 - i)
-                                                 * window[static_cast<size_t> (i)];
+    {
+        const auto ago = fftSize - 1 - i;
+        spectrumInput[static_cast<size_t> (i)] = 0.5f
+            * (readAgo (leftHistory, ago) + readAgo (rightHistory, ago))
+            * window[static_cast<size_t> (i)];
+    }
     fft.performFrequencyOnlyForwardTransform (spectrumInput.data());
     float referenceLevel = 0;
     for (int bin = 2; bin < fftSize / 2; ++bin)
@@ -159,41 +172,31 @@ void KuoStereoProcessor::analyzeMidSpectrum (float centerDelayMs, float variabil
     if (referenceLevel < 0.001f)
     {
         selectedCandidate = -1;
+        candidateScoreInitialized = {};
         targetDelaySamples = centerDelayMs * 0.001f * sampleRate;
         selectedDelayMs.store (centerDelayMs, std::memory_order_relaxed);
         return;
     }
 
-    constexpr float switchMargin = 0.95f;
+    constexpr float switchMargin = 0.98f;
     const auto scoreAlpha = 1.0f - std::exp (-static_cast<float> (fftSize / 2)
-                                             / (0.6f * sampleRate));
-    const auto candidateDelayMs = [=] (int candidate) noexcept
+                                             / (0.30f * sampleRate));
+    std::array<bool, maxCandidates> scored {};
+    const auto scoreCandidate = [&] (int candidate) noexcept
     {
-        if (candidate == candidates - 1)
-            return centerDelayMs;
-        constexpr int lowerCandidates = candidates / 2;
-        if (candidate < lowerCandidates)
-            return lowDelayMs + (centerDelayMs - lowDelayMs)
-                              * static_cast<float> (candidate) / lowerCandidates;
-        constexpr int upperCandidates = candidates - lowerCandidates - 1;
-        return centerDelayMs + (highDelayMs - centerDelayMs)
-                             * static_cast<float> (candidate - lowerCandidates + 1) / upperCandidates;
-    };
-    float bestScore = std::numeric_limits<float>::max();
-    int bestCandidate = 0;
-    for (int candidate = 0; candidate < candidates; ++candidate)
-    {
-        // Sample both sides of Center without scoring its delay twice.
-        const auto delayMs = candidateDelayMs (candidate);
-        const auto delaySamples = juce::roundToInt (delayMs * 0.001f * sampleRate);
+        auto& average = smoothedCandidateScores[static_cast<size_t> (candidate)];
+        if (scored[static_cast<size_t> (candidate)]) return average;
+        scored[static_cast<size_t> (candidate)] = true;
+        const auto delaySamples = candidateDelayMs (candidate) * 0.001f * sampleRate;
+        const auto leftDelay = std::max (-delaySamples, 0.0f);
+        const auto rightDelay = std::max (delaySamples, 0.0f);
         std::fill (spectrumCandidate.begin(), spectrumCandidate.end(), 0.0f);
         float sideEnergy = 0, midEnergy = 0;
         for (int i = 0; i < fftSize; ++i)
         {
-            const auto ago = fftSize - 1 - i;
-            // A negative delay makes the right channel lead by delaying the left channel.
-            const auto candidateLeft = readAgo (leftHistory, ago + std::max (-delaySamples, 0));
-            const auto candidateRight = readAgo (rightHistory, ago + std::max (delaySamples, 0));
+            const auto ago = static_cast<float> (fftSize - 1 - i);
+            const auto candidateLeft = readAgoInterpolated (leftHistory, ago + leftDelay);
+            const auto candidateRight = readAgoInterpolated (rightHistory, ago + rightDelay);
             const auto candidateMid = 0.5f * (candidateLeft + candidateRight);
             const auto candidateSide = 0.5f * (candidateLeft - candidateRight);
             const auto weight = window[static_cast<size_t> (i)];
@@ -212,20 +215,50 @@ void KuoStereoProcessor::analyzeMidSpectrum (float centerDelayMs, float variabil
             weightSum += weight;
         }
         score /= std::max (weightSum, 1.0f);
-        // Spectral error alone makes 0 ms unbeatable (its mid is unchanged).
-        // Reward enough stereo side energy to meet a modest width target, while
-        // still letting 0 ms win if the source is already wide or delays color it.
+        // Zero delay has perfect mid preservation; require useful side energy too.
         constexpr float targetSideRatio = 0.20f;
         const auto sideRatio = std::sqrt (sideEnergy / std::max (midEnergy, 0.000001f));
         score += 0.35f * std::max (0.0f, 1.0f - sideRatio / targetSideRatio);
-        auto& average = smoothedCandidateScores[static_cast<size_t> (candidate)];
-        average = selectedCandidate < 0 ? score : average + scoreAlpha * (score - average);
+        auto& initialized = candidateScoreInitialized[static_cast<size_t> (candidate)];
+        average = initialized ? average + scoreAlpha * (score - average) : score;
+        initialized = true;
+        return average;
+    };
+
+    float bestScore = std::numeric_limits<float>::max();
+    int bestCandidate = 0, coarseBest = 0;
+    float coarseBestScore = bestScore;
+    const auto consider = [&] (int candidate)
+    {
+        const auto average = scoreCandidate (candidate);
         if (average < bestScore)
         {
             bestScore = average;
             bestCandidate = candidate;
         }
+        return average;
+    };
+    // A 0.5 ms survey locates promising regions, then 0.1 ms choices are
+    // scored with the original windowed FFT near both the best and current time.
+    for (int candidate = 0; candidate < candidateCount; candidate += 5)
+    {
+        const auto average = consider (candidate);
+        if (average < coarseBestScore)
+        {
+            coarseBestScore = average;
+            coarseBest = candidate;
+        }
     }
+    const auto lastAverage = consider (candidateCount - 1);
+    if (lastAverage < coarseBestScore)
+        coarseBest = candidateCount - 1;
+    for (int candidate = std::max (0, coarseBest - 5);
+         candidate <= std::min (candidateCount - 1, coarseBest + 5); ++candidate)
+        consider (candidate);
+    if (selectedCandidate >= 0)
+        for (int candidate = std::max (0, selectedCandidate - 5);
+             candidate <= std::min (candidateCount - 1, selectedCandidate + 5); ++candidate)
+            consider (candidate);
     if (selectedCandidate < 0
         || bestScore < switchMargin * smoothedCandidateScores[static_cast<size_t> (selectedCandidate)])
         selectedCandidate = bestCandidate;
@@ -387,7 +420,6 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
             + velvetBandGains[2] * (velvetInput - velvetBandLowStates[1]);
         leftHistory[static_cast<size_t> (writePosition)] = dryLeft;
         rightHistory[static_cast<size_t> (writePosition)] = dryRight;
-        midHistory[static_cast<size_t> (writePosition)] = mid;
         velvetHistory[static_cast<size_t> (writePosition)] = velvetBands;
         writePosition = (writePosition + 1) % static_cast<int> (rightHistory.size());
         if (sampleCount < static_cast<int> (sampleRate * 0.03f) + fftSize)

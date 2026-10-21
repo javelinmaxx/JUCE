@@ -94,6 +94,9 @@ def main(raw_dir, report_dir):
             }
         )
     max_rate = float(np.max(np.abs(np.diff(active) / np.diff(times))))
+    def error_comparison(row):
+        change = 100 * (row["adaptive"] / row["fixed"] - 1)
+        return f'{abs(change):.1f}% {"higher" if change > 0 else "lower"}'
 
     plt.rcParams.update({"font.size": 9, "axes.spines.top": False, "axes.spines.right": False})
     fig, (ax, score_ax) = plt.subplots(2, 1, figsize=(10, 6.3), layout="constrained")
@@ -364,9 +367,12 @@ def main(raw_dir, report_dir):
         "each note a sustained pad timbre; the chord transition crossfades over",
         "125 ms. The two chords share two notes and are close in overall level.",
         "Center is 12 ms, Variability is ±6 ms, Max Rate is 10 ms/s,",
-        "and Velvet Width is 0%. Smart Haas scores 30 delays in 2048-sample",
-        "windows every 1024 samples, averages candidate scores over 600 ms,",
-        "and requires a 5% improvement before changing its selected delay.",
+        "and Velvet Width is 0%. Smart Haas can select any 0.1 ms choice in",
+        "the range (121 here, up to 241 at maximum Variability). Every 1024",
+        "samples, a 2048-sample window is scored with a 0.5 ms survey followed",
+        "by exact windowed FFT scores on nearby 0.1 ms choices.",
+        "Candidate scores average over 300 ms, and a 2% improvement can",
+        "change the selected delay. This allows modest movement with content.",
         "The score also rewards side energy up to a 0.20 side/mid RMS target,",
         "so an unchanged mid at 0 ms does not automatically beat every widening",
         "candidate. Spectral error still limits how far the delay may move.",
@@ -397,10 +403,9 @@ def main(raw_dir, report_dir):
         f'C major has {adaptive_results[0]["target_changes"]} target changes during its steady window; '
         f'A minor has {adaptive_results[1]["target_changes"]}. The target stays inside 6–18 ms;',
         f"the largest active-delay step is {max_rate:.1f} ms/s (10 ms/s setting).",
-        f'Adaptive processing reduces the spectral error by '
-        f'{100 * (1 - adaptive_results[0]["adaptive"] / adaptive_results[0]["fixed"]):.1f}% '
-        f'on C major and {100 * (1 - adaptive_results[1]["adaptive"] / adaptive_results[1]["fixed"]):.1f}% '
-        "on A minor against the fixed 12 ms delay in this pad test.",
+        f'Compared with the fixed 12 ms delay, adaptive spectral error is '
+        f'{error_comparison(adaptive_results[0])} on C major and '
+        f'{error_comparison(adaptive_results[1])} on A minor in this pad test.',
         "",
         "A separate 12-to-20 ms Center Delay step shows the linear ramp used",
         "between selected targets. Max Rate bounds its constant slope.",

@@ -323,11 +323,11 @@ float velvetBandSideRms (float frequency, float low, float mid, float high)
     return static_cast<float> (std::sqrt (sideEnergy / (40 * 256)));
 }
 
-float selectedDelayAcrossZero (bool alreadyWide = false)
+float selectedDelayAcrossZero (bool alreadyWide = false, float rangeMs = 3.0f)
 {
     KuoStereoProcessor processor;
     set (processor, "haasCenter", 0);
-    set (processor, "haasRange", 3);
+    set (processor, "haasRange", rangeMs);
     set (processor, "width", 0);
     processor.prepareToPlay (48000, 256);
     juce::AudioBuffer<float> buffer (2, 256);
@@ -496,6 +496,10 @@ int main (int argc, char** argv)
                "Smart Haas can select a useful nonzero delay when zero is in range");
         check (std::abs (selectedDelayAcrossZero (true)) < 0.01f,
                "Smart Haas may keep zero when the input already has sufficient width");
+        const auto fineDelay = selectedDelayAcrossZero (false, 0.3f);
+        check (std::abs (fineDelay) <= 0.3001f
+                   && std::abs (fineDelay * 10.0f - std::round (fineDelay * 10.0f)) < 0.0001f,
+               "Smart Haas selections lie on a 0.1 ms grid within the current range");
         check (smallestDelayOnSteadyTone() > 11.9f,
                "moderate tremolo on a sustained tone does not retrigger transient protection");
         const auto positiveHaas = haasImpulseTiming (12);
@@ -603,8 +607,8 @@ int main (int argc, char** argv)
         check (majorBlocks > 0 && minorBlocks > 0
                    && std::abs (majorTargetSum / majorBlocks - minorTargetSum / minorBlocks) > 0.5f,
                "Smart Haas target responds differently to C major and A minor pad chords");
-        check (majorSwitches == 0 && minorSwitches <= 2,
-               "Smart Haas target avoids repeated switching while each pad chord sustains");
+        check (majorSwitches <= 8 && minorSwitches <= 8,
+               "Smart Haas allows limited movement while each pad chord sustains");
         check (std::abs (majorEndDelay - previousMajorTarget) < 0.1f
                    && std::abs (minorEndDelay - previousMinorTarget) < 0.1f,
                "rate-limited Haas delay settles at each pad chord's selected target");
