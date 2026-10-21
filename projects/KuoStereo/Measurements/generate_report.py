@@ -30,6 +30,15 @@ def rms(samples):
     return float(np.sqrt(np.mean(np.square(samples, dtype=np.float64))))
 
 
+def band_rms(samples, low_hz, high_hz):
+    window = np.hanning(len(samples))
+    spectrum = np.fft.rfft(samples * window)
+    frequencies = np.fft.rfftfreq(len(samples), 1 / FS)
+    band = (frequencies >= low_hz) & (frequencies <= high_hz)
+    return float(np.sqrt(2 * np.sum(np.abs(spectrum[band]) ** 2)
+                         / (len(samples) * np.sum(window ** 2))))
+
+
 def spectral_distance(reference, processed):
     """Match the processor's weighted, log-magnitude FFT score on steady windows."""
     window = np.hanning(512)
@@ -122,6 +131,19 @@ def main(raw_dir, report_dir):
     fig.savefig(report_dir / "signed-haas-delay.png", dpi=170)
     plt.close(fig)
 
+    slew = read_csv(raw_dir / "haas_slew.csv")
+    slew_time = np.array([float(row["time_s"]) for row in slew])
+    slew_delay = np.array([float(row["active_ms"]) for row in slew])
+    slew_peak_rate = float(np.max(np.diff(slew_delay) / np.diff(slew_time)))
+    fig, axis = plt.subplots(figsize=(8, 3.3), layout="constrained")
+    axis.plot(slew_time, slew_delay, color="#ca7939", lw=2, label="sigmoid active delay")
+    axis.axhline(20, color="#314e79", ls="--", lw=1, label="20 ms target")
+    axis.set(xlim=(0, 1.5), ylim=(11.5, 20.5), xlabel="time after Center Delay change (s)",
+             ylabel="active Haas delay (ms)", title="12 to 20 ms with Max Rate 10 ms/s")
+    axis.legend(frameon=False)
+    fig.savefig(report_dir / "haas-sigmoid.png", dpi=170)
+    plt.close(fig)
+
     transient = read_csv(raw_dir / "transient.csv")
     transient_time = np.array([float(row["time_ms"]) for row in transient])
     columns = {key: np.array([float(row[key]) for row in transient]) for key in transient[0]}
@@ -160,6 +182,34 @@ def main(raw_dir, report_dir):
                 ylabel="added side RMS", title="Velvet-generated side tail")
     axes[2].legend(frameon=False)
     fig.savefig(report_dir / "transients.png", dpi=170)
+    plt.close(fig)
+
+    guard_noise = read_csv(raw_dir / "guard_noise.csv")
+    guard_time = np.array([float(row["time_ms"]) for row in guard_noise])
+    guard_window = (guard_time >= 15) & (guard_time < 40)
+    guard_columns = {key: np.array([float(row[key]) for row in guard_noise])
+                     for key in guard_noise[0] if key != "time_ms"}
+    guard_hf = {key: band_rms(values[guard_window], 8000, 20000)
+                for key, values in guard_columns.items()}
+    fig, axes = plt.subplots(1, 2, figsize=(10, 3.4), layout="constrained")
+    for key, label, color in (
+        ("instant_guard_side", "0 ms", "#ca7939"),
+        ("fast_guard_side", "0.5 ms", "#569477"),
+        ("medium_guard_side", "2 ms", "#9869a7"),
+        ("slow_guard_side", "3 ms", "#314e79"),
+    ):
+        axes[0].plot(guard_time[guard_window], guard_columns[key][guard_window],
+                     color=color, lw=0.8, alpha=0.8, label=label)
+    axes[0].set(xlim=(15, 30), xlabel="time from tone start (ms)", ylabel="Velvet side amplitude",
+                title="Guard Attack around onset release")
+    axes[0].legend(frameon=False)
+    labels = ["Guard 0%", "0 ms", "0.5 ms", "2 ms", "3 ms"]
+    keys = ["unguarded_side", "instant_guard_side", "fast_guard_side",
+            "medium_guard_side", "slow_guard_side"]
+    axes[1].bar(labels, [guard_hf[key] for key in keys],
+                color=["#77717a", "#ca7939", "#569477", "#9869a7", "#314e79"])
+    axes[1].set(ylabel="8–20 kHz side RMS", title="High-frequency side energy, 15–40 ms")
+    fig.savefig(report_dir / "guard-short-attack.png", dpi=170)
     plt.close(fig)
 
     spectral_onset = read_csv(raw_dir / "spectral_onset.csv")
@@ -289,6 +339,14 @@ def main(raw_dir, report_dir):
         f'on C major and {100 * (1 - adaptive_results[1]["adaptive"] / adaptive_results[1]["fixed"]):.1f}% '
         "on A minor against the fixed 12 ms delay in this pad test.",
         "",
+        "A separate 12-to-20 ms Center Delay step shows the cubic sigmoid used",
+        "between selected targets. It eases in and out while Max Rate bounds its",
+        "steepest point.",
+        "",
+        "![Sigmoid Haas delay transition](haas-sigmoid.png)",
+        "",
+        f'The measured peak movement is {slew_peak_rate:.1f} ms/s with Max Rate at 10 ms/s.',
+        "",
         "## Smart Haas: zero and negative delay",
         "",
         "A mono impulse at 5 ms runs through the processor with Variability and",
@@ -313,11 +371,13 @@ def main(raw_dir, report_dir):
         "tone switches to 5 kHz after 1 s; both tones are 0.18 peak amplitude.",
         "Haas Keep holds for 10 ms after the last detected onset, then decays",
         "exponentially to 1% protection over 65 ms. Velvet Guard attenuates",
-        "convolution input only while the detector reports an onset, with no",
-        "fixed suppression interval.",
+        "convolution input only while the detector reports an onset. Its depth",
+        "fades smoothly near the onset threshold, with no fixed suppression interval.",
         "Guard Attack sets a 0–10 ms linear ramp into attenuation while the",
-        "detector remains active. At 0 ms the guard acts immediately; longer",
-        "settings let more of a brief attack into Velvet's convolution history.",
+        "detector remains active. Values below 0.5 ms use a 0.5 ms de-click",
+        "ramp for tonal onsets; high-crest transients use the selected attack,",
+        "including immediate 0 ms. Longer settings let more of a brief attack",
+        "into Velvet's convolution history.",
         "",
         "![Equal-amplitude spectral onset](spectral-onset.png)",
         "",
@@ -349,6 +409,21 @@ def main(raw_dir, report_dir):
         "  exponentially after its 10 ms hold; normal Haas stays at 12 ms.",
         f'- At {delay_time[release_end_index]:.1f} ms after the transient, the active delay is '
         f'{kept_delay[release_end_index]:.2f} ms, leaving {remaining_protection:.1f}% protection.',
+        "",
+        "### Velvet Guard at short attacks",
+        "",
+        "A steady 1 kHz mono tone starts at 0 ms with Haas Center and Variability",
+        "at 0 ms, Velvet Width and Transient Guard at 100%. The detector crosses",
+        "its onset threshold near 13 ms. The plot compares 0, 0.5, 2, and 3 ms",
+        "Guard Attack settings and measures 8–20 kHz side energy from 15–40 ms.",
+        "",
+        "![Velvet Guard short-attack noise check](guard-short-attack.png)",
+        "",
+        f'At 0.5 ms attack, high-frequency side RMS is {guard_hf["fast_guard_side"]:.6f}; '
+        f'at 3 ms it is {guard_hf["slow_guard_side"]:.6f} '
+        f'({100 * (guard_hf["fast_guard_side"] / guard_hf["slow_guard_side"] - 1):.1f}% higher). '
+        f'At 0 ms it is {guard_hf["instant_guard_side"]:.6f}; at 2 ms it is '
+        f'{guard_hf["medium_guard_side"]:.6f}.',
         "",
         "## Velvet Width: widening a mono signal",
         "",

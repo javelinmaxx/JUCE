@@ -135,6 +135,29 @@ void measureSignedDelay (const std::filesystem::path& directory)
             << negative.left[i] << ',' << negative.right[i] << '\n';
 }
 
+void measureHaasSlew (const std::filesystem::path& directory)
+{
+    KuoStereoProcessor processor;
+    set (processor, "haasCenter", 12);
+    set (processor, "haasRange", 0);
+    set (processor, "haasRate", 10);
+    set (processor, "width", 0);
+    processor.prepareToPlay (sampleRate, blockSize);
+    set (processor, "haasCenter", 20);
+    juce::AudioBuffer<float> buffer (2, blockSize);
+    juce::MidiBuffer midi;
+    std::ofstream csv (directory / "haas_slew.csv");
+    csv << "time_s,active_ms\n" << std::fixed << std::setprecision (9)
+        << "0.000000000,12.000000000\n";
+    for (int block = 0; block < 300; ++block)
+    {
+        buffer.clear();
+        processor.processBlock (buffer, midi);
+        csv << static_cast<double> ((block + 1) * blockSize) / sampleRate << ','
+            << processor.getCurrentDelayMs() << '\n';
+    }
+}
+
 void measureTransient (const std::filesystem::path& directory)
 {
     constexpr int onset = sampleRate / 10;
@@ -174,6 +197,30 @@ void measureTransient (const std::filesystem::path& directory)
         if (time >= -10 && time <= 120)
             delay << time << ',' << baseline.active[block] << ',' << kept.active[block] << '\n';
     }
+}
+
+void measureGuardNoise (const std::filesystem::path& directory)
+{
+    Samples input (sampleRate / 8);
+    for (size_t i = 0; i < input.size(); ++i)
+        input[i] = 0.2f * std::sin (juce::MathConstants<float>::twoPi * 1000.0f
+                                   * static_cast<float> (i) / sampleRate);
+    const auto unguarded = render (input, { 0, 0, 10, 0, 100, 0 });
+    const auto instant = render (input, { 0, 0, 10, 0, 100, 100, 0 });
+    const auto fast = render (input, { 0, 0, 10, 0, 100, 100, 0.5f });
+    const auto medium = render (input, { 0, 0, 10, 0, 100, 100, 2.0f });
+    const auto slow = render (input, { 0, 0, 10, 0, 100, 100, 3.0f });
+    std::ofstream csv (directory / "guard_noise.csv");
+    csv << "time_ms,unguarded_side,instant_guard_side,fast_guard_side,"
+           "medium_guard_side,slow_guard_side\n"
+        << std::fixed << std::setprecision (10);
+    for (size_t i = 0; i < input.size(); ++i)
+        csv << 1000.0 * static_cast<double> (i) / sampleRate << ','
+            << 0.5f * (unguarded.left[i] - unguarded.right[i]) << ','
+            << 0.5f * (instant.left[i] - instant.right[i]) << ','
+            << 0.5f * (fast.left[i] - fast.right[i]) << ','
+            << 0.5f * (medium.left[i] - medium.right[i]) << ','
+            << 0.5f * (slow.left[i] - slow.right[i]) << '\n';
 }
 
 void measureSpectralOnset (const std::filesystem::path& directory)
@@ -264,7 +311,9 @@ int main (int argc, char** argv)
         std::filesystem::create_directories (directory);
         measureAdaptation (directory);
         measureSignedDelay (directory);
+        measureHaasSlew (directory);
         measureTransient (directory);
+        measureGuardNoise (directory);
         measureSpectralOnset (directory);
         measureMonoWidth (directory);
         measureScope (directory);

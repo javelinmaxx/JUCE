@@ -17,9 +17,10 @@ transient protection, Velvet widening, and the frequency display.
   that would result from that signed delay. A 2048-sample analysis window,
   averaged candidate scores, and a switching margin keep the least different
   target stable.
-  Max Rate limits movement toward that target, reducing pitch modulation and
-  chorus-like motion. A zero Variability setting fixes the delay at Center
-  Delay. Keep Transient uses the same onset detector as Velvet Width to
+  The active delay follows a cubic sigmoid toward each target; Max Rate limits
+  its steepest movement, reducing pitch modulation and chorus-like motion.
+  A zero Variability setting fixes the target at Center Delay. Keep Transient
+  uses the same onset detector as Velvet Width to
   temporarily shorten the effective Haas delay. At 0% it has no effect; at
   100% the delay reaches 0 ms during detected transients. After a
   10 ms hold, an exponential tap crossfade decays to 1% protection over 65 ms,
@@ -29,9 +30,11 @@ transient protection, Velvet widening, and the frequency display.
 - **Velvet Width** adds a sparse, balanced-polarity convolution of the dry mid
   channel to the side channel. Transient Guard uses the shared mid-channel
   onset detector to attenuate only detected onset samples before convolution;
-  existing sustained side texture continues while the attack stays focused.
-  Guard Attack controls how quickly that attenuation reaches full depth, from
-  immediate to 10 ms; a longer attack lets more of a brief transient through.
+  its depth fades toward zero near the detector threshold to avoid abrupt
+  switches. Existing sustained side texture continues while the attack stays
+  focused. Guard Attack controls how quickly attenuation reaches full depth,
+  up to 10 ms. Values below 0.5 ms use a 0.5 ms de-click ramp on tonal onsets;
+  high-crest transients use the selected attack, including immediate 0 ms.
 - **Frequency Field** shows three goniometers fed by the processed stereo
   output, split below 250 Hz, from 250 Hz to 2.5 kHz, and above 2.5 kHz.
   Each display scales its points automatically so quieter bands remain visible.

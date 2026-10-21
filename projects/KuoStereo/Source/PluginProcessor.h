@@ -59,7 +59,9 @@ private:
     int writePosition = 0, sampleCount = 0, analysisCounter = 0, scopeCounter = 0;
     int selectedCandidate = -1;
     int transientHold = 0;
+    bool velvetOnsetActive = false, instantVelvetOnset = false;
     float sampleRate = 48000.0f, targetDelaySamples = 576.0f, smoothDelaySamples = 576.0f;
+    float slewStartDelaySamples = 576.0f, slewTargetDelaySamples = 576.0f, slewProgress = 1.0f;
     float previousCenterDelayMs = -1, previousVariabilityMs = -1;
     float widthBlend = 0, haasTransientEnvelope = 0, velvetGuardEnvelope = 0;
     std::array<float, 3> detectorLowStates {}, detectorCoefficients {};

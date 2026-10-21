@@ -27,15 +27,23 @@ Listen to the [pad input](smart-haas-pad-input.wav),
 
 | Content | Most common target | Target changes | Median active delay | Adaptive error | Fixed 12 ms error |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| C major pad | 15.4 ms | 0 | 15.43 ms | 0.091 | 0.405 |
-| A minor pad | 18.0 ms | 2 | 15.85 ms | 0.362 | 0.427 |
+| C major pad | 15.4 ms | 0 | 15.43 ms | 0.090 | 0.405 |
+| A minor pad | 18.0 ms | 2 | 15.43 ms | 0.366 | 0.427 |
 
 The C major and A minor input levels are 0.088
 and 0.086 RMS over the steady windows.
 The selected target moves from 15.4 ms on C major to 18.0 ms on A minor.
 C major has 0 target changes during its steady window; A minor has 2. The target stays inside 6–18 ms;
 the largest active-delay step is 10.0 ms/s (10 ms/s setting).
-Adaptive processing reduces the spectral error by 77.5% on C major and 15.2% on A minor against the fixed 12 ms delay in this pad test.
+Adaptive processing reduces the spectral error by 77.8% on C major and 14.3% on A minor against the fixed 12 ms delay in this pad test.
+
+A separate 12-to-20 ms Center Delay step shows the cubic sigmoid used
+between selected targets. It eases in and out while Max Rate bounds its
+steepest point.
+
+![Sigmoid Haas delay transition](haas-sigmoid.png)
+
+The measured peak movement is 10.0 ms/s with Max Rate at 10 ms/s.
 
 ## Smart Haas: zero and negative delay
 
@@ -57,11 +65,13 @@ on the total mid-channel level. As an equal-amplitude check, a 100 Hz
 tone switches to 5 kHz after 1 s; both tones are 0.18 peak amplitude.
 Haas Keep holds for 10 ms after the last detected onset, then decays
 exponentially to 1% protection over 65 ms. Velvet Guard attenuates
-convolution input only while the detector reports an onset, with no
-fixed suppression interval.
+convolution input only while the detector reports an onset. Its depth
+fades smoothly near the onset threshold, with no fixed suppression interval.
 Guard Attack sets a 0–10 ms linear ramp into attenuation while the
-detector remains active. At 0 ms the guard acts immediately; longer
-settings let more of a brief attack into Velvet's convolution history.
+detector remains active. Values below 0.5 ms use a 0.5 ms de-click
+ramp for tonal onsets; high-crest transients use the selected attack,
+including immediate 0 ms. Longer settings let more of a brief attack
+into Velvet's convolution history.
 
 ![Equal-amplitude spectral onset](spectral-onset.png)
 
@@ -83,13 +93,24 @@ Separately, Velvet Width is 100% and Transient Guard is compared at 0% and
 | Guard Attack | Velvet-added side RMS, 4–28 ms | Reduction vs Guard 0% |
 | --- | ---: | ---: |
 | Guard 0% | 0.03363 | — |
-| 0 ms | 0.00111 | 96.7% |
-| 0.5 ms | 0.02992 | 11.0% |
+| 0 ms | 0.00116 | 96.6% |
+| 0.5 ms | 0.02994 | 11.0% |
 | 5 ms | 0.03308 | 1.6% |
 
 - The protected Haas path reaches 0 ms during the onset and returns
   exponentially after its 10 ms hold; normal Haas stays at 12 ms.
 - At 76.0 ms after the transient, the active delay is 11.86 ms, leaving 1.1% protection.
+
+### Velvet Guard at short attacks
+
+A steady 1 kHz mono tone starts at 0 ms with Haas Center and Variability
+at 0 ms, Velvet Width and Transient Guard at 100%. The detector crosses
+its onset threshold near 13 ms. The plot compares 0, 0.5, 2, and 3 ms
+Guard Attack settings and measures 8–20 kHz side energy from 15–40 ms.
+
+![Velvet Guard short-attack noise check](guard-short-attack.png)
+
+At 0.5 ms attack, high-frequency side RMS is 0.000152; at 3 ms it is 0.000150 (1.5% higher). At 0 ms it is 0.000152; at 2 ms it is 0.000150.
 
 ## Velvet Width: widening a mono signal
 
@@ -102,7 +123,7 @@ The Haas-only render is the baseline; the change between renders is Velvet.
 
 - Side RMS rises from 0.04476 to 0.05488 (22.6% increase).
 - Velvet itself adds 0.03158 side RMS while the mid difference between renders is 0.0000000 RMS.
-- With Guard 100%, side RMS is 0.05486 and the Velvet-added side RMS is 0.03155; sustained width remains audible.
+- With Guard 100%, side RMS is 0.05488 and the Velvet-added side RMS is 0.03158; sustained width remains audible.
 - Left/right correlation changes from 0.003 to -0.198.
 - Listen to [mono input](mono-input.wav), [Haas only](mono-haas-only.wav),
   [Haas + Velvet 100%](mono-velvet-100.wav), and

@@ -47,11 +47,14 @@ void KuoStereoProcessor::prepareToPlay (double rate, int)
     lowState = upperState = {};
     detectorLowStates = {};
     detectorFastEnvelopes = detectorSlowEnvelopes = {};
+    velvetOnsetActive = instantVelvetOnset = false;
     haasTransientEnvelope = 0;
     velvetGuardEnvelope = 0;
     widthBlend = 0;
     const auto centerDelayMs = parameters.getRawParameterValue ("haasCenter")->load();
     targetDelaySamples = smoothDelaySamples = centerDelayMs * 0.001f * sampleRate;
+    slewStartDelaySamples = slewTargetDelaySamples = smoothDelaySamples;
+    slewProgress = 1.0f;
     selectedDelayMs.store (centerDelayMs, std::memory_order_relaxed);
     currentDelayMs.store (centerDelayMs, std::memory_order_relaxed);
     const auto coefficient = [this] (float hz)
@@ -266,7 +269,9 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     const auto widthTarget = parameters.getRawParameterValue ("width")->load() * 0.01f;
     const auto protection = parameters.getRawParameterValue ("transientProtect")->load() * 0.01f;
     const auto guardAttackMs = parameters.getRawParameterValue ("guardAttack")->load();
-    const auto guardAttackStep = guardAttackMs <= 0.0f ? 1.0f
+    const auto tonalGuardAttackStep = 1.0f
+        / (std::max (guardAttackMs, 0.5f) * 0.001f * sampleRate);
+    const auto transientGuardAttackStep = guardAttackMs <= 0.0f ? 1.0f
         : 1.0f / (guardAttackMs * 0.001f * sampleRate);
     const auto gain = juce::Decibels::decibelsToGain (parameters.getRawParameterValue ("output")->load());
     const auto bypass = parameters.getRawParameterValue ("bypass")->load() >= 0.5f;
@@ -285,22 +290,43 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
             mid - detectorLowStates[2]
         };
         bool onset = false;
+        float onsetStrength = 0.0f;
+        float fastEnvelopeSum = 0.0f;
         for (size_t band = 0; band < spectralBands.size(); ++band)
         {
             const auto level = std::abs (spectralBands[band]);
             detectorFastEnvelopes[band] += fastCoefficient * (level - detectorFastEnvelopes[band]);
             detectorSlowEnvelopes[band] += slowCoefficient * (level - detectorSlowEnvelopes[band]);
             // Positive per-band spectral change detects attacks even when total level stays steady.
-            onset |= detectorFastEnvelopes[band] > 0.004f
-                  && detectorFastEnvelopes[band] > detectorSlowEnvelopes[band] * 2.2f;
+            const auto fast = detectorFastEnvelopes[band];
+            const auto slow = detectorSlowEnvelopes[band];
+            fastEnvelopeSum += fast;
+            const auto bandOnset = fast > 0.004f && fast > slow * 2.2f;
+            onset |= bandOnset;
+            if (bandOnset)
+            {
+                // Fade near both onset thresholds so detector chatter cannot switch
+                // the convolution input abruptly, even with a short Guard Attack.
+                const auto ratioStrength = std::clamp ((fast - slow * 2.2f)
+                    / (0.004f + slow * 0.5f), 0.0f, 1.0f);
+                const auto levelStrength = std::clamp ((fast - 0.004f) / 0.004f, 0.0f, 1.0f);
+                const auto strength = ratioStrength * levelStrength;
+                onsetStrength = std::max (onsetStrength, strength * strength * (3.0f - 2.0f * strength));
+            }
         }
         if (onset)
             transientHold = juce::roundToInt (0.010f * sampleRate);
         else if (transientHold > 0)
             --transientHold;
-        // Guard only detector-active samples; Attack controls how quickly attenuation reaches its set depth.
-        velvetGuardEnvelope = onset ? std::min (1.0f, velvetGuardEnvelope + guardAttackStep) : 0.0f;
-        const auto velvetInput = mid * (1.0f - protection * velvetGuardEnvelope);
+        if (onset && ! velvetOnsetActive)
+            instantVelvetOnset = std::abs (mid) > 25.0f * (fastEnvelopeSum + 0.001f);
+        velvetOnsetActive = onset;
+        // Sharp transients use the chosen attack (including immediate 0 ms);
+        // tonal onsets get at least a 0.5 ms de-click ramp.
+        const auto attackStep = instantVelvetOnset
+            ? transientGuardAttackStep : tonalGuardAttackStep;
+        velvetGuardEnvelope = onset ? std::min (1.0f, velvetGuardEnvelope + attackStep) : 0.0f;
+        const auto velvetInput = mid * (1.0f - protection * velvetGuardEnvelope * onsetStrength);
         leftHistory[static_cast<size_t> (writePosition)] = dryLeft;
         rightHistory[static_cast<size_t> (writePosition)] = dryRight;
         midHistory[static_cast<size_t> (writePosition)] = mid;
@@ -319,8 +345,24 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
             haasTransientEnvelope = 1.0f;
         else
             haasTransientEnvelope *= transientReleaseCoefficient;
-        smoothDelaySamples += std::clamp (targetDelaySamples - smoothDelaySamples,
-                                         -maxDelayStep, maxDelayStep);
+        if (std::abs (targetDelaySamples - slewTargetDelaySamples) > 0.0001f)
+        {
+            slewStartDelaySamples = smoothDelaySamples;
+            slewTargetDelaySamples = targetDelaySamples;
+            slewProgress = 0.0f;
+        }
+        const auto slewDistance = slewTargetDelaySamples - slewStartDelaySamples;
+        if (slewProgress < 1.0f && std::abs (slewDistance) > 0.0f)
+        {
+            // Smoothstep is sigmoid-shaped. Its peak slope is 1.5, so the
+            // transition duration keeps instantaneous movement under Max Rate.
+            slewProgress = std::min (1.0f, slewProgress
+                + maxDelayStep / (1.5f * std::abs (slewDistance)));
+            const auto shaped = slewProgress * slewProgress * (3.0f - 2.0f * slewProgress);
+            smoothDelaySamples = slewStartDelaySamples + slewDistance * shaped;
+        }
+        else
+            smoothDelaySamples = slewTargetDelaySamples;
         widthBlend += (widthTarget - widthBlend) * 0.001f;
         const auto leftDelaySamples = std::max (-smoothDelaySamples, 0.0f);
         const auto rightDelaySamples = std::max (smoothDelaySamples, 0.0f);

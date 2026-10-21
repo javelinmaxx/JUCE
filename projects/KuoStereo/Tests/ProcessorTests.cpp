@@ -96,6 +96,41 @@ float noiseBedSideEnergy (float guard)
     return energy;
 }
 
+float shortAttackGuardMaxStep (float attackMs)
+{
+    KuoStereoProcessor processor;
+    set (processor, "haasCenter", 0);
+    set (processor, "haasRange", 0);
+    set (processor, "width", 100);
+    set (processor, "transientProtect", 100);
+    set (processor, "guardAttack", attackMs);
+    processor.prepareToPlay (48000, 256);
+    juce::AudioBuffer<float> buffer (2, 256);
+    juce::MidiBuffer midi;
+    float previousSide = 0, maxStep = 0;
+    for (int block = 0; block < 24; ++block)
+    {
+        for (int i = 0; i < 256; ++i)
+        {
+            const auto sampleIndex = block * 256 + i;
+            const auto sample = 0.2f * std::sin (juce::MathConstants<float>::twoPi
+                * 1000.0f * static_cast<float> (sampleIndex) / 48000.0f);
+            buffer.setSample (0, i, sample);
+            buffer.setSample (1, i, sample);
+        }
+        processor.processBlock (buffer, midi);
+        for (int i = 0; i < 256; ++i)
+        {
+            const auto sampleIndex = block * 256 + i;
+            const auto side = 0.5f * (buffer.getSample (0, i) - buffer.getSample (1, i));
+            if (sampleIndex > 720 && sampleIndex < 1920)
+                maxStep = std::max (maxStep, std::abs (side - previousSide));
+            previousSide = side;
+        }
+    }
+    return maxStep;
+}
+
 struct HaasImpulseTiming
 {
     int leftPeakOffset = -1, rightPeakOffset = -1;
@@ -298,6 +333,14 @@ int main (int argc, char** argv)
         const auto unguardedBed = noiseBedSideEnergy (0);
         check (guardedBed > 0.0001f && guardedBed < unguardedBed * 0.25f,
                "full transient guard retains sustained texture while suppressing the attack");
+        const auto instantGuardStep = shortAttackGuardMaxStep (0.0f);
+        const auto fastGuardStep = shortAttackGuardMaxStep (0.5f);
+        const auto mediumGuardStep = shortAttackGuardMaxStep (2.0f);
+        const auto slowGuardStep = shortAttackGuardMaxStep (3.0f);
+        check (instantGuardStep < 0.0085f && instantGuardStep < slowGuardStep * 1.25f
+                   && fastGuardStep < 0.0085f && fastGuardStep < slowGuardStep * 1.25f
+                   && mediumGuardStep < slowGuardStep * 1.25f,
+               "short Guard Attack avoids abrupt side-signal steps at onset threshold");
 
         KuoStereoProcessor haas;
         set (haas, "haasCenter", 12);
@@ -400,13 +443,36 @@ int main (int argc, char** argv)
         const auto slowDelay = limited.getCurrentDelayMs();
         check (std::abs (limited.getSelectedDelayMs() - 20.0f) < 0.01f,
                "zero variability fixes the selected delay at the center");
-        check (slowDelay > 12.4f && slowDelay < 12.55f,
-               "one ms per second rate limit bounds the active delay movement");
+        check (slowDelay > 12.03f && slowDelay < 12.07f,
+               "sigmoid delay movement starts gently under a one ms/s peak rate");
         set (limited, "haasRate", 10);
         limited.processBlock (buffer, midi);
         const auto fastStep = limited.getCurrentDelayMs() - slowDelay;
-        check (fastStep > 0.04f && fastStep < 0.06f,
-               "maximum rate control changes the delay slew limit");
+        check (fastStep > 0.005f && fastStep < 0.02f,
+               "maximum rate control changes the sigmoid transition speed");
+
+        KuoStereoProcessor curved;
+        set (curved, "haasCenter", 12);
+        set (curved, "haasRange", 0);
+        set (curved, "haasRate", 10);
+        curved.prepareToPlay (48000, 256);
+        set (curved, "haasCenter", 20);
+        buffer.clear();
+        float earlyStep = 0, middleStep = 0, lateStep = 0, peakStep = 0;
+        for (int block = 0; block < 225; ++block)
+        {
+            const auto previous = curved.getCurrentDelayMs();
+            curved.processBlock (buffer, midi);
+            const auto step = curved.getCurrentDelayMs() - previous;
+            peakStep = std::max (peakStep, step);
+            if (block == 20) earlyStep = step;
+            if (block == 112) middleStep = step;
+            if (block == 205) lateStep = step;
+        }
+        check (middleStep > earlyStep * 2.0f && middleStep > lateStep * 2.0f
+                   && peakStep < 10.0f * 256.0f / 48000.0f + 0.001f
+                   && std::abs (curved.getCurrentDelayMs() - 20.0f) < 0.01f,
+               "Haas delay follows a sigmoid with a bounded peak rate");
 
         const auto noKeep = haasTransientResponse (0);
         const auto halfKeep = haasTransientResponse (50);
