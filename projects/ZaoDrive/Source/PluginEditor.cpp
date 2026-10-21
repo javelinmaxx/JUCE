@@ -171,7 +171,7 @@ ZaoDriveEditor::ZaoDriveEditor (ZaoDriveProcessor& p) : AudioProcessorEditor (&p
     constexpr std::array<const char*, 7> units { " dB", " dB", " Hz", " dB", " %", " dB", " %" };
     constexpr std::array<const char*, 7> hints {
         "Adjusts the level entering the selected overdrive circuit.",
-        "Increases the signal driving the transistor or op-amp feedback circuit.",
+        "Increases the signal driving the selected transistor, op-amp, or diode circuit.",
         "Sets the low-pass cutoff after the overdrive circuit.",
         "Adjusts gain after the wet and dry mix and before the output transformer.",
         "Blends the overdriven signal with the latency-aligned original input.",
@@ -197,6 +197,7 @@ ZaoDriveEditor::ZaoDriveEditor (ZaoDriveProcessor& p) : AudioProcessorEditor (&p
         editorTooltips::setHint (slider, labels[i], hints[i]);
     }
     model.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
+    model.setRange (0.0, static_cast<double> (zao::circuitCount - 1), 1.0);
     model.setTextBoxStyle (juce::Slider::TextBoxBelow, true, 100, 18);
     model.setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
     model.setColour (juce::Slider::textBoxTextColourId, foreground);
@@ -206,11 +207,30 @@ ZaoDriveEditor::ZaoDriveEditor (ZaoDriveProcessor& p) : AudioProcessorEditor (&p
     modelLabel.setFont (juce::FontOptions (10.0f));
     modelLabel.setColour (juce::Label::textColourId, secondary);
     addAndMakeVisible (model); addAndMakeVisible (modelLabel);
-    modelAttachment = std::make_unique<State::SliderAttachment> (p.parameters, "model", model);
-    model.textFromValueFunction = [] (double value) { return value < 0.5 ? "BJT CE" : "OPAMP FB"; };
+    model.textFromValueFunction = [] (double value)
+    {
+        return juce::String (zao::circuitNames[static_cast<size_t> (std::clamp (juce::roundToInt (value), 0, 3))]);
+    };
+    model.valueFromTextFunction = [] (const juce::String& text)
+    {
+        for (size_t mode = 0; mode < zao::circuitCount; ++mode)
+            if (text.equalsIgnoreCase (zao::circuitNames[mode])) return static_cast<double> (mode);
+        return 0.0;
+    };
+    model.setValue (p.getSettings().model, juce::dontSendNotification);
     model.updateText();
+    model.onValueChange = [this]
+    {
+        const auto selected = juce::roundToInt (model.getValue());
+        auto* character = processor.parameters.getParameter ("model");
+        auto* diodePair = processor.parameters.getParameter ("diodeCircuit");
+        character->beginChangeGesture(); diodePair->beginChangeGesture();
+        character->setValueNotifyingHost (selected % 2 == 1 ? 1.0f : 0.0f);
+        diodePair->setValueNotifyingHost (selected >= 2 ? 1.0f : 0.0f);
+        diodePair->endChangeGesture(); character->endChangeGesture();
+    };
     editorTooltips::setHint (model, modelLabel,
-        "Selects the common-emitter BJT amplifier or the op-amp diode feedback clipper.");
+        "Selects BJT, op-amp feedback, diode shunt, or series-diode crossover distortion.");
     editorScaling::enable (*this, designWidth, designHeight);
     timerCallback();
     startTimerHz (5);
@@ -251,6 +271,7 @@ void ZaoDriveEditor::refreshPreview (const zao::Settings& settings)
 void ZaoDriveEditor::timerCallback()
 {
     const auto s = processor.getSettings();
+    if (juce::roundToInt (model.getValue()) != s.model) model.setValue (s.model, juce::dontSendNotification);
     const std::array<float, 10> current { s.inputDb, s.driveDb, s.toneHz, s.outputDb, s.mix,
         s.coreDriveDb, s.dcBias, static_cast<float> (s.model), s.transformer ? 1.0f : 0.0f, s.bypass ? 1.0f : 0.0f };
     if (! previewReady || current != previousSettings)
@@ -267,8 +288,8 @@ void ZaoDriveEditor::paintExpectedOutput (juce::Graphics& g)
     g.drawText ("EXPECTED OUTPUT", 38, 303, 240, 18, juce::Justification::centredLeft);
     g.setColour (secondary); g.setFont (juce::FontOptions (9.0f));
     g.drawText ("1 kHz sine  /  -12 dBFS reference", 38, 324, 280, 16, juce::Justification::centredLeft);
-    const auto scale = std::max (1.0f, std::ceil (expectedPeak * 2.0f) * 0.5f);
-    g.drawText ("SCALE +/-" + juce::String (scale, 1) + " FS", 350, 324, 154, 16, juce::Justification::centredRight);
+    const auto scale = std::max (0.25f, std::ceil (expectedPeak * 8.0f) * 0.125f);
+    g.drawText ("SCALE +/-" + juce::String (scale, 3) + " FS", 350, 324, 154, 16, juce::Justification::centredRight);
     const auto plot = juce::Rectangle<float> (44, 352, 460, 106);
     g.setColour (inset); g.fillRoundedRectangle (plot.expanded (6), 5);
     g.setColour (grid);

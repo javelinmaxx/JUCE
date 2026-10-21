@@ -29,6 +29,7 @@ public:
         for (size_t ch = 0; ch < 2; ++ch)
         {
             bjt[ch].prepare (rate * 4); opamp[ch].prepare (rate * 4);
+            shunt[ch].prepare (rate * 4); crossover[ch].prepare (rate * 4);
             transformers[ch].prepare (rate);
             dryDelay[ch].assign (static_cast<size_t> (std::max (1, circuitLatency)), 0.0f);
             bypassDelay[ch].assign (static_cast<size_t> (getLatency()), 0.0f);
@@ -38,7 +39,7 @@ public:
         for (auto* smoother : { &inputGain, &driveGain, &toneCutoff, &outputGain, &wetMix,
                                  &coreGain, &bias, &transformerBlend, &bypassBlend })
             smoother->reset (rate, 0.02);
-        modelBlend.reset (rate * 4, 0.01);
+        for (auto& weight : modelWeights) weight.reset (rate * 4, 0.01);
         firstSettings = true; transformerRunning = false; warmSamples = 0;
     }
 
@@ -64,14 +65,16 @@ public:
             auto highRate = oversampling->processSamplesUp (hostBlock);
             for (size_t i = 0; i < highRate.getNumSamples(); ++i)
             {
-                const auto blend = modelBlend.getNextValue();
+                std::array<float, circuitCount> weights;
+                for (size_t mode = 0; mode < circuitCount; ++mode) weights[mode] = modelWeights[mode].getNextValue();
                 for (int ch = 0; ch < channels; ++ch)
                 {
                     const auto c = static_cast<size_t> (ch);
                     const auto input = static_cast<double> (highRate.getSample (c, i));
-                    const auto transistor = blend < 1.0f ? bjt[c].process (input) : 0.0;
-                    const auto feedback = blend > 0.0f ? opamp[c].process (input) : 0.0;
-                    highRate.setSample (c, i, static_cast<float> (transistor + blend * (feedback - transistor)));
+                    double output = 0;
+                    for (size_t mode = 0; mode < circuitCount; ++mode)
+                        if (weights[mode] > 0.0f) output += weights[mode] * processCircuit (mode, c, input);
+                    highRate.setSample (c, i, static_cast<float> (output));
                 }
             }
             oversampling->processSamplesDown (hostBlock);
@@ -116,6 +119,29 @@ public:
     }
 
 private:
+    double processCircuit (size_t mode, size_t channel, double input) noexcept
+    {
+        switch (mode)
+        {
+            case 0: return bjt[channel].process (input);
+            case 1: return opamp[channel].process (input);
+            // Passive networks have no amplifier gain of their own. A fixed
+            // input-conditioning gain lets the default Drive reach conduction.
+            case 2: return shunt[channel].process (input * 4.0);
+            default: return crossover[channel].process (input * 4.0);
+        }
+    }
+    void resetCircuit (size_t mode) noexcept
+    {
+        for (size_t channel = 0; channel < 2; ++channel)
+            switch (mode)
+            {
+                case 0: bjt[channel].reset(); break;
+                case 1: opamp[channel].reset(); break;
+                case 2: shunt[channel].reset(); break;
+                default: crossover[channel].reset(); break;
+            }
+    }
     void setSettings (const Settings& s)
     {
         const auto set = [this] (auto& smoother, float target)
@@ -131,15 +157,15 @@ private:
         set (coreGain, juce::Decibels::decibelsToGain (std::clamp (s.coreDriveDb, 0.0f, 18.0f)));
         set (bias, std::clamp (s.dcBias, 0.0f, 1.0f));
         set (bypassBlend, s.bypass ? 1.0f : 0.0f);
-        const auto model = s.model == 0 ? 0.0f : 1.0f;
-        if (! firstSettings && (model > 0.5f) != (modelBlend.getTargetValue() > 0.5f))
+        const auto selected = static_cast<size_t> (std::clamp (s.model, 0, static_cast<int> (circuitCount - 1)));
+        for (size_t mode = 0; mode < circuitCount; ++mode)
         {
-            if (model > 0.5f && modelBlend.getCurrentValue() <= 0.0f)
-                for (auto& circuit : opamp) circuit.reset();
-            if (model < 0.5f && modelBlend.getCurrentValue() >= 1.0f)
-                for (auto& circuit : bjt) circuit.reset();
+            auto& weight = modelWeights[mode];
+            const auto target = mode == selected ? 1.0f : 0.0f;
+            if (! firstSettings && target > 0.5f && weight.getTargetValue() < 0.5f
+                && weight.getCurrentValue() <= 0.0f) resetCircuit (mode);
+            set (weight, target);
         }
-        set (modelBlend, model);
         if (s.transformer && ! transformerRunning)
         {
             for (auto& transformer : transformers) transformer.reset();
@@ -158,12 +184,15 @@ private:
     juce::AudioBuffer<float> scratch;
     std::array<BjtCommonEmitter, 2> bjt;
     std::array<OpAmpFeedbackClipper, 2> opamp;
+    std::array<DiodeShuntClipper, 2> shunt;
+    std::array<SeriesDiodeCrossover, 2> crossover;
     std::array<character::OversampledTransformer, 2> transformers;
     std::array<std::vector<float>, 2> dryDelay, bypassDelay;
     std::array<std::array<float, character::OversampledTransformer::latencySamples>, 2> cleanDelay {};
     std::array<float, 2> toneState {};
     size_t circuitPosition = 0, transformerPosition = 0, bypassPosition = 0;
     juce::SmoothedValue<float> inputGain, driveGain, toneCutoff, outputGain, wetMix;
-    juce::SmoothedValue<float> coreGain, bias, transformerBlend, bypassBlend, modelBlend;
+    juce::SmoothedValue<float> coreGain, bias, transformerBlend, bypassBlend;
+    std::array<juce::SmoothedValue<float>, circuitCount> modelWeights;
 };
 }

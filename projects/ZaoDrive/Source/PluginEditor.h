@@ -47,7 +47,6 @@ private:
     std::array<juce::Label, 7> labels;
     using State = juce::AudioProcessorValueTreeState;
     std::array<std::unique_ptr<State::SliderAttachment>, 7> attachments;
-    std::unique_ptr<State::SliderAttachment> modelAttachment;
     std::unique_ptr<State::ButtonAttachment> bypassAttachment, transformerAttachment;
     std::array<float, 10> previousSettings {};
     bool previewReady = false;

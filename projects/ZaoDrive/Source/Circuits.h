@@ -6,6 +6,8 @@
 namespace zao
 {
 constexpr double pi = 3.14159265358979323846;
+constexpr size_t circuitCount = 4;
+constexpr std::array<const char*, circuitCount> circuitNames { "BJT CE", "OPAMP FB", "DIODE SHUNT", "CROSSOVER" };
 
 // Linear continuation keeps the exponential and its derivative finite during
 // Newton iterations without introducing a flat, nonphysical current clamp.
@@ -298,5 +300,107 @@ public:
 private:
     double loopGain = 0, memory = 0, capacitorConductance = 0, slewStep = 0;
     double output = 0, feedbackVoltage = 0, capacitorCurrent = 0, residual = 0;
+};
+
+struct DiodeCurrent { double value, derivative; };
+inline DiodeCurrent antiparallelDiodes (double voltage) noexcept
+{
+    constexpr double saturation = 2.0e-9, thermal = 1.9 * 0.02585;
+    const auto positive = junctionExponential (voltage, thermal);
+    const auto negative = junctionExponential (-voltage, thermal);
+    return { saturation * (positive.value - negative.value),
+             saturation * (positive.derivative + negative.derivative) };
+}
+
+// Both passive networks reduce to a strictly increasing scalar KCL equation.
+// Bracketing prevents an overload reversal from sending Newton outside the
+// physically relevant diode-voltage range; no artificial diode knee is used.
+template <typename Equation>
+inline double solveDiodeVoltage (double previous, Equation equation) noexcept
+{
+    double lower = -1.5, upper = 1.5;
+    auto voltage = std::clamp (previous, lower, upper);
+    for (int iteration = 0; iteration < 40; ++iteration)
+    {
+        const auto f = equation (voltage);
+        if (std::abs (f.value) < 1.0e-12) break;
+        if (f.value > 0) upper = voltage; else lower = voltage;
+        const auto next = voltage - f.value / f.derivative;
+        voltage = next > lower && next < upper ? next : (lower + upper) * 0.5;
+    }
+    return voltage;
+}
+
+class DiodeShuntClipper
+{
+public:
+    static constexpr double sourceResistance = 4700, loadResistance = 100000;
+    static constexpr double capacitance = 100.0e-12;
+    void prepare (double rate) noexcept { conductance = 2.0 * rate * capacitance; reset(); }
+    void reset() noexcept { outputVoltage = capacitorCurrent = residual = 0; }
+    double process (double input) noexcept
+    {
+        const auto source = std::clamp (input, -12.0, 12.0);
+        const auto history = -conductance * outputVoltage - capacitorCurrent;
+        const auto equation = [&] (double voltage)
+        {
+            const auto diode = antiparallelDiodes (voltage);
+            return DiodeCurrent { (voltage - source) / sourceResistance + voltage / loadResistance
+                                    + conductance * voltage + history + diode.value,
+                                  1.0 / sourceResistance + 1.0 / loadResistance + conductance + diode.derivative };
+        };
+        const auto voltage = solveDiodeVoltage (outputVoltage, equation);
+        residual = std::abs (equation (voltage).value);
+        capacitorCurrent = conductance * (voltage - outputVoltage) - capacitorCurrent;
+        outputVoltage = voltage;
+        return voltage / 4.0;
+    }
+    double getResidual() const noexcept { return residual; }
+    double getOutputVolts() const noexcept { return outputVoltage; }
+private:
+    double conductance = 0, outputVoltage = 0, capacitorCurrent = 0, residual = 0;
+};
+
+class SeriesDiodeCrossover
+{
+public:
+    static constexpr double sourceResistance = 1000, loadResistance = 10000;
+    static constexpr double loadCapacitance = 100.0e-12, junctionCapacitance = 4.0e-12;
+    void prepare (double rate) noexcept
+    {
+        loadConductance = 2.0 * rate * loadCapacitance;
+        junctionConductance = 2.0 * rate * junctionCapacitance;
+        reset();
+    }
+    void reset() noexcept { outputVoltage = diodeVoltage = loadCurrent = junctionCurrent = residual = 0; }
+    double process (double input) noexcept
+    {
+        const auto source = std::clamp (input, -12.0, 12.0);
+        const auto loadHistory = -loadConductance * outputVoltage - loadCurrent;
+        const auto diodeHistory = -junctionConductance * diodeVoltage - junctionCurrent;
+        const auto load = 1.0 / loadResistance + loadConductance;
+        const auto denominator = 1.0 + sourceResistance * load;
+        const auto equation = [&] (double voltage)
+        {
+            const auto diode = antiparallelDiodes (voltage);
+            return DiodeCurrent {
+                diode.value + junctionConductance * voltage + diodeHistory
+                    - (load * (source - voltage) + loadHistory) / denominator,
+                diode.derivative + junctionConductance + load / denominator };
+        };
+        const auto voltage = solveDiodeVoltage (diodeVoltage, equation);
+        const auto nextOutput = (source - voltage - sourceResistance * loadHistory) / denominator;
+        residual = std::abs (equation (voltage).value);
+        junctionCurrent = junctionConductance * (voltage - diodeVoltage) - junctionCurrent;
+        loadCurrent = loadConductance * (nextOutput - outputVoltage) - loadCurrent;
+        diodeVoltage = voltage; outputVoltage = nextOutput;
+        return nextOutput / 4.0;
+    }
+    double getResidual() const noexcept { return residual; }
+    double getOutputVolts() const noexcept { return outputVoltage; }
+    double getDiodeVoltage() const noexcept { return diodeVoltage; }
+private:
+    double loadConductance = 0, junctionConductance = 0;
+    double outputVoltage = 0, diodeVoltage = 0, loadCurrent = 0, junctionCurrent = 0, residual = 0;
 };
 }

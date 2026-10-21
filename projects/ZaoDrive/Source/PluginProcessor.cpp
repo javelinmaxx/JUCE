@@ -3,8 +3,8 @@
 
 namespace
 {
-constexpr std::array<const char*, 10> ids {
-    "input", "drive", "tone", "output", "mix", "coreDrive", "dcBias", "model", "transformer", "bypass" };
+constexpr std::array<const char*, 11> ids {
+    "input", "drive", "tone", "output", "mix", "coreDrive", "dcBias", "model", "transformer", "bypass", "diodeCircuit" };
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout ZaoDriveProcessor::createParameterLayout()
@@ -29,6 +29,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout ZaoDriveProcessor::createPar
         "Circuit", juce::StringArray { "BJT Common Emitter", "Op-Amp Feedback" }, 0));
     layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "transformer", 1 }, "Output transformer", false));
     layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "bypass", 1 }, "Bypass", false));
+    // Keep the original two-choice parameter's normalized automation intact.
+    // Its 0/1 values select BJT/Op-Amp or Shunt/Crossover in the new diode pair.
+    layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "diodeCircuit", 1 }, "Diode circuit pair", false));
     return layout;
 }
 
@@ -44,7 +47,8 @@ zao::Settings ZaoDriveProcessor::getSettings() const noexcept
 {
     const auto value = [this] (size_t index) { return raw[index]->load (std::memory_order_relaxed); };
     return { value (0), value (1), value (2), value (3), value (4) * 0.01f,
-             value (5), value (6) * 0.01f, juce::roundToInt (value (7)), value (8) >= 0.5f, value (9) >= 0.5f };
+             value (5), value (6) * 0.01f, juce::roundToInt (value (7)) + (value (10) >= 0.5f ? 2 : 0),
+             value (8) >= 0.5f, value (9) >= 0.5f };
 }
 
 void ZaoDriveProcessor::prepareToPlay (double rate, int maximumBlock)
@@ -82,6 +86,16 @@ void ZaoDriveProcessor::getStateInformation (juce::MemoryBlock& data)
 void ZaoDriveProcessor::setStateInformation (const void* data, int size)
 {
     if (auto xml = getXmlFromBinary (data, size))
-        if (xml->hasTagName (parameters.state.getType())) parameters.replaceState (juce::ValueTree::fromXml (*xml));
+        if (xml->hasTagName (parameters.state.getType()))
+        {
+            auto state = juce::ValueTree::fromXml (*xml);
+            if (! state.getChildWithProperty ("id", "diodeCircuit").isValid())
+            {
+                auto legacyDefault = parameters.copyState().getChildWithProperty ("id", "diodeCircuit").createCopy();
+                legacyDefault.setProperty ("value", 0.0f, nullptr);
+                state.appendChild (legacyDefault, nullptr);
+            }
+            parameters.replaceState (state);
+        }
 }
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new ZaoDriveProcessor(); }

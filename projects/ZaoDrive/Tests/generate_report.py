@@ -8,13 +8,15 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.optimize import root
+from scipy.optimize import root, brentq
 
 destination = Path(__file__).resolve().parent / "Reports"
 data = np.genfromtxt(destination / "waveforms.csv", delimiter=",", names=True)
 dc = np.genfromtxt(destination / "operating-point.csv", delimiter=",", names=True)
 residuals = np.genfromtxt(destination / "solver-residuals.csv", delimiter=",", names=True)
 alias = np.genfromtxt(destination / "alias-check.csv", delimiter=",", names=True)
+diode_dc = np.genfromtxt(destination / "diode-transfer.csv", delimiter=",", names=True)
+diode_residuals = np.genfromtxt(destination / "diode-residuals.csv", delimiter=",", names=True)
 
 
 def dc_kcl(v):
@@ -39,6 +41,23 @@ actual = np.array([float(dc[name]) for name in ("base", "emitter", "collector", 
 dc_error = np.max(np.abs(actual - reference.x))
 if dc_error > 1e-6:
     raise RuntimeError(f"DC reference mismatch: {dc_error} V")
+
+
+def diode_current(voltage):
+    return 2e-9 * (np.expm1(voltage / 0.049115) - np.expm1(-voltage / 0.049115))
+
+
+shunt_reference = []
+series_reference = []
+for source in diode_dc["input_volts"]:
+    shunt_reference.append(brentq(lambda v: (v - source) / 4700 + v / 100000 + diode_current(v),
+                                  -1.5, 1.5, xtol=1e-14))
+    drop = brentq(lambda d: d + 11000 * diode_current(d) - source, -1.5, 1.5, xtol=1e-14)
+    series_reference.append((source - drop) * 10000 / 11000)
+shunt_error = np.max(np.abs(diode_dc["shunt_volts"] - shunt_reference))
+series_error = np.max(np.abs(diode_dc["series_volts"] - series_reference))
+if max(shunt_error, series_error) > 1e-6:
+    raise RuntimeError(f"Passive diode DC mismatch: {shunt_error}, {series_error} V")
 
 
 def signal(model, drive, transformer=0):
@@ -82,6 +101,37 @@ for model in range(2):
 fig.suptitle("Zao Drive circuit validation · 48 kHz / 4× circuit oversampling", fontsize=15)
 fig.savefig(destination / "circuit-report.png", dpi=170)
 fig.savefig(destination / "circuit-report.pdf")
+
+diode_fig, diode_axes = plt.subplots(3, 2, figsize=(12, 10), constrained_layout=True)
+for column, (mode, name, measured, reference_curve) in enumerate((
+    (2, "Diode shunt clipper", diode_dc["shunt_volts"], shunt_reference),
+    (3, "Series-diode crossover", diode_dc["series_volts"], series_reference),
+)):
+    ax = diode_axes[0, column]
+    ax.plot(diode_dc["input_volts"], measured, color="#b77b45", label="C++ circuit")
+    ax.plot(diode_dc["input_volts"][::12], np.asarray(reference_curve)[::12], ".", color="#333333", label="Independent DC root")
+    ax.set(title=f"{name}: static transfer", xlabel="Input voltage (V)", ylabel="Output voltage (V)")
+    ax.legend(fontsize=8)
+    ax.grid(alpha=0.15)
+    for drive, color in zip((0, 12, 24), colors):
+        rows = signal(mode, drive)
+        t = np.arange(96) / 48
+        diode_axes[1, column].plot(t, rows["output"][-96:], color=color, label=f"Drive {drive} dB")
+    diode_axes[1, column].plot(t, rows["input"][-96:], "--", color="#999999", linewidth=0.8, label="Input")
+    diode_axes[1, column].set(title="1 kHz reference output", xlabel="Time (ms)", ylabel="Output (FS)")
+    diode_axes[1, column].legend(fontsize=8, ncol=2)
+    diode_axes[1, column].grid(alpha=0.15)
+    rows = signal(mode, 24)
+    spectrum = np.abs(np.fft.rfft(rows["output"])) * 2 / len(rows)
+    frequency = np.fft.rfftfreq(len(rows), 1 / 48000)
+    bins = [np.argmin(np.abs(frequency - k * 1000)) for k in range(1, 16)]
+    levels = 20 * np.log10(np.maximum(spectrum[bins], 1e-10))
+    diode_axes[2, column].bar(np.arange(1, 16), levels + 120, bottom=-120, color="#b77b45", width=0.55)
+    diode_axes[2, column].set(title="Harmonics at Drive 24 dB", xlabel="Harmonic number", ylabel="dBFS", ylim=(-120, 6))
+    diode_axes[2, column].grid(axis="y", alpha=0.15)
+diode_fig.suptitle("Zao Drive passive diode circuits · 48 kHz / 4× oversampling", fontsize=15)
+diode_fig.savefig(destination / "diode-report.png", dpi=170)
+diode_fig.savefig(destination / "diode-report.pdf")
 
 rows = "\n".join(f"| {name} | {actual[i]:.9f} V | {reference.x[i]:.9f} V |"
                  for i, name in enumerate(("Base", "Emitter", "Collector", "Emitter bypass")))
@@ -135,6 +185,37 @@ including blocks larger than prepareToPlay's block size. Host state round trips
 retain the circuit and transformer settings. Editor tests verify named model
 initialization, parameter updates, waveform changes, tooltips, and resizing.
 
+## Diode shunt and series crossover modes
+
+![Passive diode transfer curves and waveforms](diode-report.png)
+
+The shunt pair limits peaks across its load, while the series pair creates a
+central dead zone before conducting. Both are passive networks, so their
+levels differ from the active amplifier modes. The same Input, Drive, Tone,
+Output, Mix, and transformer controls remain available.
+Both passive modes use ×4 input conditioning; the static plots specify source
+voltage after that gain, while waveform plots use the common digital reference.
+
+For DC source voltages from −3 to +3 V, independent SciPy bracketing solves
+check the settled C++ outputs against the documented resistor and Shockley
+equations. Maximum voltage disagreements are **{shunt_error:.3e} V** for shunt
+and **{series_error:.3e} V** for crossover. Broadband ±12 V noise and abrupt
+polarity reversals at 128, 192, and 384 kHz internal rates have maximum KCL
+residuals of **{max(diode_residuals['shunt_residual_amps']):.3e} A** and
+**{max(diode_residuals['series_residual_amps']):.3e} A**, respectively. Both
+networks retain odd symmetry, including their capacitor states.
+
+All four circuit positions are checked through host state recall, automation,
+and maximum-drive processing. A two-mode legacy state is also loaded after a
+diode-mode session to verify that it restores the original Op-Amp selection.
+The selector uses the original normalized two-choice parameter plus a diode-pair
+flag, preserving existing BJT/Op-Amp automation. The expected-output display
+uses these same models and scales to keep the passive circuits visible.
+
+Raw diode checks are in [diode-transfer.csv](diode-transfer.csv) and
+[diode-residuals.csv](diode-residuals.csv); the diode plots also have a
+[PDF version](diode-report.pdf).
+
 These are simulated circuit tests. The model limits are documented in
 [CIRCUITS.md](../../CIRCUITS.md); no full SPICE transient or physical-device
 calibration is claimed. Raw renders are in [waveforms.csv](waveforms.csv),
@@ -144,4 +225,5 @@ calibration is claimed. Raw renders are in [waveforms.csv](waveforms.csv),
 """
 (destination / "report.md").write_text(report)
 print(f"Independent DC error: {dc_error:.3e} V")
+print(f"Diode reference errors: shunt {shunt_error:.3e} V, crossover {series_error:.3e} V")
 print(f"Wrote {destination / 'report.md'}")

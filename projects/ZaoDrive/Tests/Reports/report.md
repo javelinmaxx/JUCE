@@ -50,6 +50,37 @@ including blocks larger than prepareToPlay's block size. Host state round trips
 retain the circuit and transformer settings. Editor tests verify named model
 initialization, parameter updates, waveform changes, tooltips, and resizing.
 
+## Diode shunt and series crossover modes
+
+![Passive diode transfer curves and waveforms](diode-report.png)
+
+The shunt pair limits peaks across its load, while the series pair creates a
+central dead zone before conducting. Both are passive networks, so their
+levels differ from the active amplifier modes. The same Input, Drive, Tone,
+Output, Mix, and transformer controls remain available.
+Both passive modes use ×4 input conditioning; the static plots specify source
+voltage after that gain, while waveform plots use the common digital reference.
+
+For DC source voltages from −3 to +3 V, independent SciPy bracketing solves
+check the settled C++ outputs against the documented resistor and Shockley
+equations. Maximum voltage disagreements are **2.235e-09 V** for shunt
+and **3.630e-09 V** for crossover. Broadband ±12 V noise and abrupt
+polarity reversals at 128, 192, and 384 kHz internal rates have maximum KCL
+residuals of **9.991e-13 A** and
+**9.997e-13 A**, respectively. Both
+networks retain odd symmetry, including their capacitor states.
+
+All four circuit positions are checked through host state recall, automation,
+and maximum-drive processing. A two-mode legacy state is also loaded after a
+diode-mode session to verify that it restores the original Op-Amp selection.
+The selector uses the original normalized two-choice parameter plus a diode-pair
+flag, preserving existing BJT/Op-Amp automation. The expected-output display
+uses these same models and scales to keep the passive circuits visible.
+
+Raw diode checks are in [diode-transfer.csv](diode-transfer.csv) and
+[diode-residuals.csv](diode-residuals.csv); the diode plots also have a
+[PDF version](diode-report.pdf).
+
 These are simulated circuit tests. The model limits are documented in
 [CIRCUITS.md](../../CIRCUITS.md); no full SPICE transient or physical-device
 calibration is claimed. Raw renders are in [waveforms.csv](waveforms.csv),

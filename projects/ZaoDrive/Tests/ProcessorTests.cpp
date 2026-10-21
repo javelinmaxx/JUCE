@@ -9,6 +9,8 @@ namespace
 int checks = 0;
 struct SolverMeasurement { double rate, level, bjtResidual, opampResidual; };
 std::vector<SolverMeasurement> solverMeasurements;
+struct DiodeMeasurement { double rate, shuntResidual, seriesResidual; };
+std::vector<DiodeMeasurement> diodeMeasurements;
 double aliasReductionDb = 0;
 void check (bool pass, const char* message)
 {
@@ -20,6 +22,11 @@ void set (ZaoDriveProcessor& processor, const char* id, float value)
     auto* parameter = processor.parameters.getParameter (id);
     if (parameter == nullptr) throw std::runtime_error (id);
     parameter->setValueNotifyingHost (parameter->convertTo0to1 (value));
+}
+void selectMode (ZaoDriveProcessor& processor, int mode)
+{
+    set (processor, "model", static_cast<float> (mode % 2));
+    set (processor, "diodeCircuit", mode >= 2 ? 1.0f : 0.0f);
 }
 bool finite (const juce::AudioBuffer<float>& buffer)
 {
@@ -116,13 +123,48 @@ void circuitTests()
            "both nonlinear solves converge through broadband noise and abrupt saturation reversals");
     check (slew <= zao::OpAmpFeedbackClipper::slewRate / 192000 + 1.0e-6,
            "op-amp output obeys its slew rate through abrupt transients");
+    for (double rate : { 128000.0, 192000.0, 384000.0 })
+    {
+        zao::DiodeShuntClipper shunt, inverseShunt;
+        zao::SeriesDiodeCrossover series, inverseSeries;
+        shunt.prepare (rate); inverseShunt.prepare (rate); series.prepare (rate); inverseSeries.prepare (rate);
+        double shuntResidual = 0, seriesResidual = 0, error = 0;
+        bool valid = true;
+        for (int i = 0; i < 8192; ++i)
+        {
+            const auto x = i < 4096 ? noise (random) : (i % 128 < 64 ? 12.0 : -12.0);
+            const auto a = shunt.process (x), b = series.process (x);
+            valid = valid && std::isfinite (a) && std::isfinite (b);
+            error = std::max ({ error, std::abs (a + inverseShunt.process (-x)), std::abs (b + inverseSeries.process (-x)) });
+            shuntResidual = std::max (shuntResidual, shunt.getResidual());
+            seriesResidual = std::max (seriesResidual, series.getResidual());
+        }
+        check (valid && shuntResidual < 1.0e-9 && seriesResidual < 1.0e-9,
+               "both passive diode networks converge through noise and overload reversals");
+        check (error < 1.0e-7, "both antiparallel diode networks retain odd symmetry");
+        diodeMeasurements.push_back ({ rate, shuntResidual, seriesResidual });
+    }
+    const auto dcOutput = [] (auto& circuit, double input)
+    {
+        circuit.reset();
+        for (int i = 0; i < 2048; ++i) circuit.process (input);
+        return circuit.getOutputVolts();
+    };
+    zao::DiodeShuntClipper shunt; shunt.prepare (192000);
+    zao::SeriesDiodeCrossover series; series.prepare (192000);
+    const auto lowShunt = dcOutput (shunt, 0.02), highShunt = dcOutput (shunt, 4.0);
+    const auto lowSeries = dcOutput (series, 0.05), highSeries = dcOutput (series, 1.0);
+    check (lowShunt > 0.018 && lowShunt < 0.020 && highShunt > 0.55 && highShunt < 0.75,
+           "diode shunt passes quiet input and limits high-amplitude peaks");
+    check (lowSeries < 0.001 && highSeries > 0.4 && highSeries < 0.6,
+           "series diodes suppress the zero-crossing region and conduct above their forward voltage");
 }
 
 void processorTests()
 {
     ZaoDriveProcessor processor;
-    check (processor.getName() == "Zao Drive" && processor.getParameters().size() == 10,
-           "fourth plugin has its own identity and ten host parameters");
+    check (processor.getName() == "Zao Drive" && processor.getParameters().size() == 11,
+           "fourth plugin registers the legacy circuit parameter and added diode pair");
     processor.prepareToPlay (48000, 64);
     const auto latency = processor.getLatencySamples();
     check (latency >= 64 && latency < 100, "host latency includes circuit oversampling and the shared transformer delay");
@@ -159,13 +201,27 @@ void processorTests()
     check (saved.model == 1 && saved.transformer && std::abs (saved.driveDb - 29) < 0.01f
            && std::abs (saved.dcBias - 0.37f) < 0.001f && std::abs (saved.toneHz - 4321) < 0.1f,
            "circuit and transformer settings survive host state recall");
+    for (int mode = 0; mode < 4; ++mode)
+    {
+        selectMode (processor, mode); processor.getStateInformation (state);
+        restored.setStateInformation (state.getData(), static_cast<int> (state.getSize()));
+        check (restored.getSettings().model == mode, "all four circuits survive saved-state round trips");
+    }
+    auto legacyState = processor.parameters.copyState();
+    legacyState.removeChild (legacyState.getChildWithProperty ("id", "diodeCircuit"), nullptr);
+    legacyState.getChildWithProperty ("id", "model").setProperty ("value", 1.0f, nullptr);
+    juce::AudioProcessor::copyXmlToBinary (*legacyState.createXml(), state);
+    restored.setStateInformation (state.getData(), static_cast<int> (state.getSize()));
+    check (restored.getSettings().model == 1, "loading an old two-mode state restores Op-Amp after a diode-mode session");
+    restored.parameters.getParameter ("model")->setValueNotifyingHost (0.0f);
+    check (restored.getSettings().model == 0, "legacy normalized circuit automation still selects BJT and Op-Amp");
     for (double rate : { 44100.0, 48000.0, 96000.0 })
     {
         ZaoDriveProcessor stress; stress.prepareToPlay (rate, 64);
         juce::MidiBuffer midi;
-        for (int mode = 0; mode < 2; ++mode)
+        for (int mode = 0; mode < 4; ++mode)
         {
-            set (stress, "model", static_cast<float> (mode)); set (stress, "drive", 36);
+            selectMode (stress, mode); set (stress, "drive", 36);
             set (stress, "input", 24); set (stress, "transformer", 1); set (stress, "dcBias", 100);
             juce::AudioBuffer<float> signal (2, 513);
             for (int block = 0; block < 5; ++block)
@@ -174,7 +230,7 @@ void processorTests()
                     for (int ch = 0; ch < 2; ++ch)
                         signal.setSample (ch, i, static_cast<float> (0.9 * std::sin (i * 0.17 + block)));
                 stress.processBlock (signal, midi);
-                check (finite (signal), "both circuits remain finite under maximum drive and transformer bias");
+                check (finite (signal), "all four circuits remain finite under maximum drive and transformer bias");
             }
         }
     }
@@ -189,7 +245,22 @@ void processorTests()
     check (amplitude (driven, 3000) > amplitude (clean, 3000) * 2.0,
            "Drive increases circuit-generated harmonics");
 
-    s.model = 1;
+    s.model = 2; s.driveDb = 0; auto shuntQuiet = render (s);
+    s.driveDb = 24; auto shuntDriven = render (s);
+    shuntQuiet.erase (shuntQuiet.begin(), shuntQuiet.end() - 4800);
+    shuntDriven.erase (shuntDriven.begin(), shuntDriven.end() - 4800);
+    check (amplitude (shuntDriven, 1000) < 4.0 * amplitude (shuntQuiet, 1000)
+           && amplitude (shuntDriven, 3000) > 0.005,
+           "shunt mode limits peak growth and generates clipping harmonics in the audio path");
+    s.model = 3; s.driveDb = 0; auto crossoverQuiet = render (s);
+    s.driveDb = 12; auto crossoverDriven = render (s);
+    crossoverQuiet.erase (crossoverQuiet.begin(), crossoverQuiet.end() - 4800);
+    crossoverDriven.erase (crossoverDriven.begin(), crossoverDriven.end() - 4800);
+    check (amplitude (crossoverDriven, 1000) > 4.0 * amplitude (crossoverQuiet, 1000)
+           && amplitude (crossoverDriven, 1000) > 0.05 && amplitude (crossoverDriven, 2000) < 1.0e-5,
+           "Drive opens series-diode conduction while preserving symmetric crossover distortion");
+
+    s.model = 1; s.driveDb = 24;
     auto oversampled = render (s, 9600, 9000);
     zao::OpAmpFeedbackClipper singleRate; singleRate.prepare (48000);
     std::vector<float> direct;
@@ -237,7 +308,7 @@ void writeReport (const juce::File& directory)
     std::ofstream csv (directory.getChildFile ("waveforms.csv").getFullPathName().toStdString());
     csv << "model,drive,transformer,sample,input,output\n";
     zao::DriveEngine latencyEngine; latencyEngine.prepare (48000, 128);
-    for (int model = 0; model < 2; ++model)
+    for (int model = 0; model < 4; ++model)
         for (float drive : { 0.0f, 12.0f, 24.0f })
             for (int transformer = 0; transformer < 2; ++transformer)
             {
@@ -260,10 +331,26 @@ void writeReport (const juce::File& directory)
         solvers << m.rate << ',' << m.level << ',' << m.bjtResidual << ',' << m.opampResidual << '\n';
     std::ofstream alias (directory.getChildFile ("alias-check.csv").getFullPathName().toStdString());
     alias << "frequency,drive,reduction_db\n9000,24," << aliasReductionDb << '\n';
+    std::ofstream diodeResiduals (directory.getChildFile ("diode-residuals.csv").getFullPathName().toStdString());
+    diodeResiduals << "rate,shunt_residual_amps,series_residual_amps\n";
+    for (const auto& m : diodeMeasurements) diodeResiduals << m.rate << ',' << m.shuntResidual << ',' << m.seriesResidual << '\n';
+    std::ofstream diodeDc (directory.getChildFile ("diode-transfer.csv").getFullPathName().toStdString());
+    diodeDc.precision (16); diodeDc << "input_volts,shunt_volts,series_volts\n";
+    zao::DiodeShuntClipper shunt; zao::SeriesDiodeCrossover series;
+    shunt.prepare (192000); series.prepare (192000);
+    for (int index = -120; index <= 120; ++index)
+    {
+        const auto input = index * 0.025;
+        // Trapezoidal integration of small, stiff parasitic capacitances can
+        // retain a Nyquist transient after a DC step; settle it before comparing
+        // this transient simulation with an independent static root solve.
+        for (int i = 0; i < 16384; ++i) { shunt.process (input); series.process (input); }
+        diodeDc << input << ',' << shunt.getOutputVolts() << ',' << series.getOutputVolts() << '\n';
+    }
     std::cout << "Measurements written to " << directory.getFullPathName() << '\n';
 }
 
-void editorTests (const juce::File& destination, bool tooltip, bool opampPreview)
+void editorTests (const juce::File& destination, bool tooltip, int previewMode)
 {
     ZaoDriveProcessor processor;
     std::unique_ptr<juce::AudioProcessorEditor> editor (processor.createEditor());
@@ -293,6 +380,15 @@ void editorTests (const juce::File& destination, bool tooltip, bool opampPreview
     model->setValue (1, juce::sendNotificationSync);
     check (processor.getSettings().model == 1 && model->getTextFromValue (1) == "OPAMP FB",
            "circuit knob updates its host choice parameter");
+    for (int mode = 0; mode < 4; ++mode)
+    {
+        model->setValue (mode, juce::sendNotificationSync);
+        check (processor.getSettings().model == mode && model->getTextFromValue (mode) == zao::circuitNames[static_cast<size_t> (mode)],
+               "all four named circuit positions update compatible host parameters");
+    }
+    selectMode (processor, 2);
+    for (int i = 0; i < 12; ++i) { juce::Thread::sleep (20); juce::Timer::callPendingTimersSynchronously(); }
+    check (juce::roundToInt (model->getValue()) == 2, "circuit selector follows diode-pair host automation");
     set (processor, "drive", 0);
     for (int i = 0; i < 12; ++i) { juce::Thread::sleep (20); juce::Timer::callPendingTimersSynchronously(); }
     const auto& expectedAfter = zaoEditor->getExpectedOutput();
@@ -300,13 +396,18 @@ void editorTests (const juce::File& destination, bool tooltip, bool opampPreview
     for (size_t i = 0; i < expectedBefore.size(); ++i) difference += std::abs (expectedBefore[i] - expectedAfter[i]);
     check (difference > 0.1, "expected-output display changes with circuit and drive settings");
     set (processor, "drive", 12); model->setValue (0, juce::sendNotificationSync);
-    if (opampPreview)
+    if (previewMode >= 0)
     {
-        model->setValue (1, juce::sendNotificationSync); set (processor, "drive", 24);
-        set (processor, "output", 0); set (processor, "transformer", 1);
+        model->setValue (previewMode, juce::sendNotificationSync);
+        set (processor, "drive", previewMode == 3 ? 12.0f : 24.0f);
+        set (processor, "output", 0); set (processor, "transformer", previewMode == 1 ? 1.0f : 0.0f);
     }
     for (int i = 0; i < 12; ++i) { juce::Thread::sleep (20); juce::Timer::callPendingTimersSynchronously(); }
-    if (tooltip) window->displayTip (editor->localPointToGlobal (transformer->getBounds().getCentre()), transformer->getTooltip());
+    if (tooltip)
+    {
+        window->displayTip (editor->localPointToGlobal (model->getBounds().getCentre()), model->getTooltip());
+        check (window->isVisible(), "four-circuit selector tooltip is visible in the preview");
+    }
     auto image = editor->createComponentSnapshot (editor->getLocalBounds());
     juce::MemoryOutputStream png;
     check (image.isValid() && juce::PNGImageFormat().writeImageToStream (image, png)
@@ -329,8 +430,12 @@ int main (int argc, char** argv)
         juce::ScopedJuceInitialiser_GUI gui;
         circuitTests(); processorTests();
         if (argc > 2 && juce::String (argv[1]) == "--editor")
-            editorTests (juce::File (argv[2]), argc > 3 && juce::String (argv[3]) == "--tooltip",
-                         argc > 3 && juce::String (argv[3]) == "--opamp-preview");
+        {
+            const auto option = argc > 3 ? juce::String (argv[3]) : juce::String();
+            const auto mode = option == "--opamp-preview" ? 1 : option == "--shunt-preview" ? 2
+                            : option == "--crossover-preview" ? 3 : -1;
+            editorTests (juce::File (argv[2]), option == "--tooltip", mode);
+        }
         if (argc > 2 && juce::String (argv[1]) == "--report") writeReport (juce::File (argv[2]));
         std::cout << checks << " Zao Drive checks passed\n";
         return 0;

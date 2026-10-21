@@ -1,0 +1,4 @@
+rate,shunt_residual_amps,series_residual_amps
+128000,9.9909e-13,9.9971e-13
+192000,9.97765e-13,9.98045e-13
+384000,9.9264e-13,9.99726e-13

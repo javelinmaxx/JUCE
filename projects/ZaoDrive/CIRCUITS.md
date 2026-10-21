@@ -69,16 +69,56 @@ again with the feedback KCL intact. Rail/slew limits do not replace the diode
 feedback equation with a post-amplifier clip operation. The dominant pole uses
 backward Euler integration; each scalar solve allows 18 iterations.
 
+## Diode shunt clipper
+
+A 4.7 kΩ source feeds an output node loaded by 100 kΩ, a 100 pF shunt
+capacitance, and an antiparallel silicon diode pair to ground. Each diode uses
+Is = 2 nA and nVt = 49.115 mV, matching the feedback clipper's nominal diodes.
+For output voltage V and source voltage Vin, the per-step KCL equation is:
+
+```
+Id(V) = Is * (exp(V / nVt) - exp(-V / nVt))
+(V - Vin) / 4700 + V / 100000 + Id(V) + Icapacitor(V) = 0
+```
+
+This produces resistive attenuation at low levels and diode-limited peaks at
+higher levels. It uses the diode equation rather than an imposed clipping knee.
+
+## Series-diode crossover distortion
+
+A 1 kΩ source feeds an antiparallel diode pair inserted in series with the
+signal, followed by a 10 kΩ output load. A 100 pF capacitor loads the output,
+and 4 pF represents the pair's total junction capacitance. The diodes have the
+same Shockley parameters as the shunt pair. With D across the pair:
+
+```
+I = Id(D) + IjunctionCap(D)
+I = Vout / 10000 + IloadCap(Vout)
+Vin = D + Vout + 1000 * I
+```
+
+The output stays close to zero until a forward-biased diode conducts, creating
+the crossover notch. Exponential leakage and junction-capacitor feedthrough
+remain present below this region. Both diode networks use a bracketed Newton
+solve of a monotonic scalar KCL equation, capped at 40 iterations and stopping
+below a 1e-12 A residual. Capacitors use trapezoidal history currents. The
+source voltage is bounded to ±12 V, as in the existing circuit models.
+
 ## Signal scaling and limitations
 
 One full-scale digital input corresponds to 0.35 V at the circuit input before
 Input and Drive gain. Four circuit-output volts correspond to one full-scale
 digital output. BJT polarity is restored after solving the physical CE circuit.
+The two passive diode modes have a fixed ×4 input-conditioning gain before
+their source resistor, bringing the default Drive setting into their useful
+conduction region. DC transfer plots specify source voltage after this gain.
 The digital Tone control is a one-pole low-pass following circuit downsampling.
 
 The circuit models omit semiconductor temperature drift, transistor avalanche,
 high-current beta rolloff, noise, component tolerances, and a particular op-amp's
-internal transistor network. The nominal op-amp's output impedance is zero
+internal transistor network. The passive diode circuits use fixed parasitic
+capacitances and omit voltage-dependent junction charge and reverse recovery.
+The nominal op-amp's output impedance is zero
 within its rail/slew constraints. Input voltage is bounded to ±12 V for overload
 stability. Supply voltage and device parameters are fixed. The DC reference check
 and residual tests establish consistency of the specified numerical models;

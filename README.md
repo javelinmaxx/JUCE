@@ -79,7 +79,8 @@ projects: [`projects/CharacterCompressor`](projects/CharacterCompressor),
 [`projects/ShunDeEss`](projects/ShunDeEss),
 [`projects/KuoStereo`](projects/KuoStereo), and
 [`projects/ZaoDrive`](projects/ZaoDrive). Zao Drive models a common-emitter BJT
-amplifier and an op-amp feedback diode clipper, with an expected-output display
+amplifier, an op-amp feedback diode clipper, a diode shunt clipper, and
+series-diode crossover distortion, with an expected-output display
 and YinYang's optional transformer stage. All four projects share
 an analog visual style while keeping independent processors and
 build targets. You do not need another JUCE download. All build commands below

@@ -1,15 +1,17 @@
 # Zao Drive
 
 Zao Drive is the fourth J-SONIC plugin in this repository, with a common-emitter
-BJT overdrive and an op-amp feedback diode clipper. It shares YinYang, Shun,
+BJT overdrive, an op-amp feedback diode clipper, a diode shunt clipper, and
+series-diode crossover distortion. It shares YinYang, Shun,
 and Kuo's ebony panels, amber controls, flip switch, and 50%–120% scalable UI.
 
 ![Zao Drive](Previews/zao-drive.png)
 
 An [op-amp mode preview](Previews/zao-opamp.png) shows the feedback clipper with
-the output transformer enabled.
+the output transformer enabled; [Diode Shunt](Previews/zao-shunt.png) and
+[Crossover](Previews/zao-crossover.png) previews show the two passive circuits.
 
-The **Circuit** knob selects BJT CE or OPAMP FB. Input adjusts the level entering
+The **Circuit** knob selects BJT CE, OPAMP FB, DIODE SHUNT, or CROSSOVER. Input adjusts the level entering
 the circuit, Drive adds up to 36 dB of excitation, and Tone filters the circuit
 output from 1.2–18 kHz. Mix blends with the original input after latency alignment;
 Output sets the level entering the optional transformer.
@@ -18,8 +20,8 @@ The **Expected Output** display renders a −12 dBFS, 1 kHz reference through a
 separate instance of the actual audio engine. Gray is the delayed input and amber
 is the predicted output, including Tone, Mix, Output, bypass, and transformer
 settings. It is a reference waveform, not a live oscilloscope or a prediction of
-arbitrary input material. The plot starts at ±1 FS and expands its labeled scale
-for higher output levels. Rendering runs on the message thread without sharing
+arbitrary input material. The labeled plot scale fits both input and output,
+starting at ±0.25 FS to keep passive diode behavior visible. Rendering runs on the message thread without sharing
 circuit state or locks with the audio callback.
 
 The optional **Transformer Stage** directly includes YinYang's
@@ -29,7 +31,7 @@ frequency response, and filtering of generated distortion. The transformer
 stops processing once its Off fade finishes; re-enabling warms its delay before
 fading in. Circuit processing uses a separate 4× oversampler. Host latency is the
 integer circuit oversampler delay plus the transformer's fixed 64 samples and
-stays constant with either model, Mix, bypass, or transformer switching.
+stays constant with every model, Mix, bypass, or transformer switching.
 
 All controls have one-sentence hover hints, listed in [TOOLTIPS.md](TOOLTIPS.md).
 
@@ -52,11 +54,25 @@ topologies, device parameters, integration method, and model limits.
   feedback leg. Antiparallel Shockley diodes and a 51 pF capacitor sit inside the
   feedback loop. The solve includes 100 dB open-loop gain, a 3 MHz gain-bandwidth
   product, ±4 V output rails, and a 1 V/µs slew limit.
+- **DIODE SHUNT:** a 4.7 kΩ source feeds a 100 kΩ load with antiparallel silicon
+  diodes shunting the output to ground. Quiet signals pass through; higher
+  voltages flatten into diode-limited peaks.
+- **CROSSOVER:** antiparallel silicon diodes sit in series between a 1 kΩ source
+  and a 10 kΩ load. Their forward-voltage drop creates a central dead zone, with
+  real leakage and capacitive feedthrough instead of a hard mathematical gate.
+  Drive brings more of the signal above that conduction region. Both passive
+  circuits use Shockley currents and trapezoidal capacitor companions, with a
+  fixed ×4 input-conditioning gain to make their default Drive setting useful.
 
-Both circuits keep independent left/right states. Parameters are smoothed;
-changing circuit crossfades over 10 ms, and the inactive circuit then stops
+All four circuits keep independent left/right states. Parameters are smoothed;
+changing circuit crossfades over 10 ms, and inactive circuits then stop
 processing. No allocation, mutex, file I/O, or preview rendering occurs in the
 audio callback.
+
+Existing two-mode sessions and normalized `model` automation remain compatible:
+the original 0/1 parameter still selects BJT/Op-Amp. The added `diodeCircuit`
+parameter selects the diode pair, where the same 0/1 parameter selects
+Shunt/Crossover. The UI combines both parameters into one four-position knob.
 
 ## Build and test
 
@@ -79,7 +95,8 @@ xvfb-run -a build-zao/ZaoDriveTests --editor /tmp/zao-drive.png
 xvfb-run -a build-zao/ZaoDriveTests --editor /tmp/zao-tooltip.png --tooltip
 ```
 
-The tests check circuit residuals through cutoff/saturation, current conservation,
+The tests check circuit residuals through cutoff/saturation, diode shunt limiting,
+series-diode dead-zone behavior, current conservation,
 op-amp rail limits and symmetry, harmonic differences, host state recall, latency,
 bypass/dry exactness, stereo isolation, and sample-for-sample transformer parity
 with YinYang. Editor checks cover the waveform display, host controls, hover hints,

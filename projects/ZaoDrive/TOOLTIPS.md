@@ -1,12 +1,12 @@
 # Zao Drive hover hints
 
-![Zao Drive with the transformer hint visible](Previews/zao-tooltip.png)
+![Zao Drive with the circuit hint visible](Previews/zao-tooltip.png)
 
 | Control | Hover hint |
 | --- | --- |
-| Circuit | Selects the common-emitter BJT amplifier or the op-amp diode feedback clipper. |
+| Circuit | Selects BJT, op-amp feedback, diode shunt, or series-diode crossover distortion. |
 | Input | Adjusts the level entering the selected overdrive circuit. |
-| Drive | Increases the signal driving the transistor or op-amp feedback circuit. |
+| Drive | Increases the signal driving the selected transistor, op-amp, or diode circuit. |
 | Tone | Sets the low-pass cutoff after the overdrive circuit. |
 | Output | Adjusts gain after the wet and dry mix and before the output transformer. |
 | Mix | Blends the overdriven signal with the latency-aligned original input. |
