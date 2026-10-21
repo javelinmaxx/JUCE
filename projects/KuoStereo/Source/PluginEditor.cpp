@@ -142,8 +142,8 @@ KuoStereoEditor::KuoStereoEditor (KuoStereoProcessor& p)
         "haasCenter", "haasRange", "haasRate", "haasKeepTransient",
         "width", "transientProtect", "guardAttack", "output" };
     constexpr std::array<const char*, 8> names {
-        "CENTER DELAY", "VARIABILITY", "MAX RATE", "KEEP TRANSIENT",
-        "VELVET WIDTH", "TRANSIENT GUARD", "GUARD ATTACK", "OUTPUT" };
+        "CENTER DELAY", "VARIABILITY", "MAX RATE", "DYNAMIC",
+        "VELVET WIDTH", "TRANSIENT", "ATTACK", "OUTPUT" };
     constexpr std::array<const char*, 8> units { " ms", " ms", " ms/s", " %", " %", " %", " ms", " dB" };
     for (size_t i = 0; i < sliders.size(); ++i)
     {

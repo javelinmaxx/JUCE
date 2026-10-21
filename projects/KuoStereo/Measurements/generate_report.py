@@ -141,12 +141,12 @@ def main(raw_dir, report_dir):
     slew_delay = np.array([float(row["active_ms"]) for row in slew])
     slew_peak_rate = float(np.max(np.diff(slew_delay) / np.diff(slew_time)))
     fig, axis = plt.subplots(figsize=(8, 3.3), layout="constrained")
-    axis.plot(slew_time, slew_delay, color="#ca7939", lw=2, label="sigmoid active delay")
+    axis.plot(slew_time, slew_delay, color="#ca7939", lw=2, label="linear active delay")
     axis.axhline(20, color="#314e79", ls="--", lw=1, label="20 ms target")
     axis.set(xlim=(0, 1.5), ylim=(11.5, 20.5), xlabel="time after Center Delay change (s)",
              ylabel="active Haas delay (ms)", title="12 to 20 ms with Max Rate 10 ms/s")
     axis.legend(frameon=False)
-    fig.savefig(report_dir / "haas-sigmoid.png", dpi=170)
+    fig.savefig(report_dir / "haas-linear.png", dpi=170)
     plt.close(fig)
 
     transient = read_csv(raw_dir / "transient.csv")
@@ -170,21 +170,21 @@ def main(raw_dir, report_dir):
     remaining_protection = 100 * (normal_delay[release_end_index] - kept_delay[release_end_index]) / normal_delay[release_end_index]
     fig, axes = plt.subplots(3, 1, figsize=(10, 8), layout="constrained")
     axes[0].plot(transient_time, columns["input"], color="0.4", lw=0.9, label="input noise + transient")
-    axes[0].plot(transient_time, columns["right_normal"], color="#314e79", lw=1, label="right, Keep 0%")
-    axes[0].plot(transient_time, columns["right_kept"], color="#ca7939", lw=1, label="right, Keep 100%")
+    axes[0].plot(transient_time, columns["right_normal"], color="#314e79", lw=1, label="right, Dynamic 0%")
+    axes[0].plot(transient_time, columns["right_kept"], color="#ca7939", lw=1, label="right, Dynamic 100%")
     axes[0].axvline(1.5, color="0.4", ls=":", lw=0.9, label="output onset")
     axes[0].set(xlim=(-1, 20), ylabel="sample amplitude", title="Haas transient alignment")
     axes[0].legend(frameon=False, ncol=3)
-    axes[1].plot(delay_time, normal_delay, color="#314e79", label="Keep 0%")
-    axes[1].plot(delay_time, kept_delay, color="#ca7939", label="Keep 100%")
+    axes[1].plot(delay_time, normal_delay, color="#314e79", label="Dynamic 0%")
+    axes[1].plot(delay_time, kept_delay, color="#ca7939", label="Dynamic 100%")
     axes[1].set(xlim=(-10, 120), ylim=(-1, 14), ylabel="effective delay (ms)", title="Haas onset hold and tap crossfade")
     axes[1].legend(frameon=False)
     kernel = np.ones(24) / 24  # 0.5 ms moving RMS at 48 kHz
     for key, label, colour in (
-        ("velvet_side_no_guard", "Velvet guard 0%", "#314e79"),
-        ("velvet_side_guard", "Guard 100%, attack 0 ms", "#ca7939"),
-        ("velvet_side_attack_half_ms", "Guard 100%, attack 0.5 ms", "#569477"),
-        ("velvet_side_attack_five_ms", "Guard 100%, attack 5 ms", "#9869a7"),
+        ("velvet_side_no_guard", "Transient 0%", "#314e79"),
+        ("velvet_side_guard", "Transient 100%, attack 0 ms", "#ca7939"),
+        ("velvet_side_attack_half_ms", "Transient 100%, attack 0.5 ms", "#569477"),
+        ("velvet_side_attack_five_ms", "Transient 100%, attack 5 ms", "#9869a7"),
     ):
         envelope = np.sqrt(np.convolve(columns[key] ** 2, kernel, mode="same"))
         axes[2].plot(transient_time, envelope, color=colour, label=label)
@@ -211,9 +211,9 @@ def main(raw_dir, report_dir):
         axes[0].plot(guard_time[guard_window], guard_columns[key][guard_window],
                      color=color, lw=0.8, alpha=0.8, label=label)
     axes[0].set(xlim=(15, 30), xlabel="time from tone start (ms)", ylabel="Velvet side amplitude",
-                title="Guard Attack around onset release")
+                title="Attack around onset release")
     axes[0].legend(frameon=False)
-    labels = ["Guard 0%", "0 ms", "0.5 ms", "2 ms", "3 ms"]
+    labels = ["Transient 0%", "0 ms", "0.5 ms", "2 ms", "3 ms"]
     keys = ["unguarded_side", "instant_guard_side", "fast_guard_side",
             "medium_guard_side", "slow_guard_side"]
     axes[1].bar(labels, [guard_hf[key] for key in keys],
@@ -230,10 +230,10 @@ def main(raw_dir, report_dir):
     haas_step = float(np.max(np.abs(np.diff(haas_kept[:480]))))
     fig, axis = plt.subplots(figsize=(9, 3.3), layout="constrained")
     axis.plot(haas_time, haas_input, color="0.6", lw=0.9, label="mono input")
-    axis.plot(haas_time, haas_normal, color="#314e79", lw=1, label="right, Keep 0%")
-    axis.plot(haas_time, haas_kept, color="#ca7939", lw=1, label="right, Keep 100%")
+    axis.plot(haas_time, haas_normal, color="#314e79", lw=1, label="right, Dynamic 0%")
+    axis.plot(haas_time, haas_kept, color="#ca7939", lw=1, label="right, Dynamic 100%")
     axis.set(xlim=(0, 4), xlabel="time from tonal onset (ms)",
-             ylabel="sample amplitude", title="Haas Keep tonal-onset de-click")
+             ylabel="sample amplitude", title="Haas Dynamic tonal-onset de-click")
     axis.legend(frameon=False, ncol=3)
     fig.savefig(report_dir / "haas-onset-declick.png", dpi=170)
     plt.close(fig)
@@ -245,8 +245,8 @@ def main(raw_dir, report_dir):
     before_switch = float(np.median(switch_kept[(switch_time >= -100) & (switch_time < 0)]))
     after_switch = float(switch_kept[np.flatnonzero(switch_time > 0)[0]])
     fig, axis = plt.subplots(figsize=(8, 3.3), layout="constrained")
-    axis.plot(switch_time, switch_normal, color="#314e79", label="Keep 0%")
-    axis.plot(switch_time, switch_kept, color="#ca7939", label="Keep 100%")
+    axis.plot(switch_time, switch_normal, color="#314e79", label="Dynamic 0%")
+    axis.plot(switch_time, switch_kept, color="#ca7939", label="Dynamic 100%")
     axis.axvline(0, color="0.4", ls=":", lw=1)
     axis.set(xlim=(-100, 120), ylim=(-0.5, 13), xlabel="time relative to equal-amplitude tone change (ms)",
              ylabel="effective Haas delay (ms)", title="100 Hz to 5 kHz: per-band spectral onset")
@@ -316,7 +316,7 @@ def main(raw_dir, report_dir):
     axes[1].scatter(on_l[points], on_r[points], s=3, alpha=0.15, color="#ca7939")
     axes[1].set(title="Same mono noise + Velvet 100%", xlabel="left", ylabel="right", xlim=(-0.25, 0.25), ylim=(-0.25, 0.25))
     axes[2].scatter(guard_l[points], guard_r[points], s=3, alpha=0.15, color="#569477")
-    axes[2].set(title="Velvet 100% + Guard 100%", xlabel="left", ylabel="right", xlim=(-0.25, 0.25), ylim=(-0.25, 0.25))
+    axes[2].set(title="Velvet 100% + Transient 100%", xlabel="left", ylabel="right", xlim=(-0.25, 0.25), ylim=(-0.25, 0.25))
     fig.savefig(report_dir / "mono-width.png", dpi=170)
     plt.close(fig)
     save_wav(report_dir / "mono-input.wav", [input_mono])
@@ -402,11 +402,10 @@ def main(raw_dir, report_dir):
         f'on C major and {100 * (1 - adaptive_results[1]["adaptive"] / adaptive_results[1]["fixed"]):.1f}% '
         "on A minor against the fixed 12 ms delay in this pad test.",
         "",
-        "A separate 12-to-20 ms Center Delay step shows the cubic sigmoid used",
-        "between selected targets. It eases in and out while Max Rate bounds its",
-        "steepest point.",
+        "A separate 12-to-20 ms Center Delay step shows the linear ramp used",
+        "between selected targets. Max Rate bounds its constant slope.",
         "",
-        "![Sigmoid Haas delay transition](haas-sigmoid.png)",
+        "![Linear Haas delay transition](haas-linear.png)",
         "",
         f'The measured peak movement is {slew_peak_rate:.1f} ms/s with Max Rate at 10 ms/s.',
         "",
@@ -432,7 +431,7 @@ def main(raw_dir, report_dir):
         "The width target therefore avoids an automatic 0 ms choice for mono",
         "but permits 0 ms when the input already has enough side energy.",
         "",
-        "## Keep Transient and Velvet Transient Guard",
+        "## Dynamic and Velvet Transient",
         "",
         "The shared onset detector compares fast and slow magnitude envelopes in four",
         "mid-channel frequency bands: below 250 Hz, 250 Hz–2.5 kHz, 2.5–8 kHz,",
@@ -440,16 +439,16 @@ def main(raw_dir, report_dir):
         "energy or a strong rise in that band; this rejects small fluctuations",
         "in sustained material. As an equal-amplitude check, a 100 Hz",
         "tone switches to 5 kHz after 1 s; both tones are 0.18 peak amplitude.",
-        "Haas Keep holds for 10 ms after the last detected onset reaches the output, then decays",
+        "Haas Dynamic holds for 10 ms after the last detected onset reaches the output, then decays",
         "exponentially to 1% protection over 65 ms.",
         "Haas fades into protection over 1 ms for tonal onsets. High-crest",
         "impulses still switch immediately to keep their channels aligned.",
         "The audio path waits 1.5 ms while the detector reads ahead, so the",
         "tonal crossfade completes before the first output attack samples.",
-        "Velvet Guard attenuates convolution input only while the detector",
+        "Velvet Transient attenuates convolution input only while the detector",
         "reports an onset. Its depth",
         "fades smoothly near the onset threshold, with no fixed suppression interval.",
-        "Guard Attack sets a 0–10 ms linear ramp into attenuation while the",
+        "Attack sets a 0–10 ms linear ramp into attenuation while the",
         "detector remains active. Values below 0.5 ms use a 0.5 ms de-click",
         "ramp for tonal onsets; high-crest transients use the selected attack,",
         "including immediate 0 ms. Longer settings let more of a brief attack",
@@ -457,13 +456,13 @@ def main(raw_dir, report_dir):
         "",
         "![Equal-amplitude spectral onset](spectral-onset.png)",
         "",
-        f"Keep Transient at 100% moves from {before_switch:.2f} ms before the switch",
-        f"to {after_switch:.2f} ms at the first measured block after it; Keep 0%",
+        f"Dynamic at 100% moves from {before_switch:.2f} ms before the switch",
+        f"to {after_switch:.2f} ms at the first measured block after it; Dynamic 0%",
         "remains at 12 ms. This checks the frequency-specific trigger independently",
         "of a broadband level increase.",
         "",
         "A 700 Hz tone with 15% amplitude modulation at 5 Hz is compared",
-        "with the same tone plus a sharp impulse at 1 s. Keep is 100%.",
+        "with the same tone plus a sharp impulse at 1 s. Dynamic is 100%.",
         "",
         "![Transient detector selectivity](detector-selectivity.png)",
         "",
@@ -473,22 +472,22 @@ def main(raw_dir, report_dir):
         "",
         "A 1.0-amplitude onset with a short decaying noise burst is placed in a",
         "0.002-amplitude white-noise bed. Haas Center is 12 ms and Variability is 0 ms.",
-        "Keep Transient is compared at 0% and 100% with Velvet Width at 0%.",
-        "Separately, Velvet Width is 100% and Transient Guard is compared at 0% and",
+        "Dynamic is compared at 0% and 100% with Velvet Width at 0%.",
+        "Separately, Velvet Width is 100% and Transient is compared at 0% and",
         "100%; the Haas-only side signal is subtracted to isolate Velvet's added side.",
         "",
         "![Transient timing and side-tail protection](transients.png)",
         "",
-        f'- At the 1.5 ms output onset, the right sample is {columns["right_normal"][onset_index]:.4f} with Keep 0% '
-        f'and {columns["right_kept"][onset_index]:.4f} with Keep 100% '
+        f'- At the 1.5 ms output onset, the right sample is {columns["right_normal"][onset_index]:.4f} with Dynamic 0% '
+        f'and {columns["right_kept"][onset_index]:.4f} with Dynamic 100% '
         f'(input onset {columns["input"][input_onset_index]:.4f}).',
         f'- Across the first 160 transient samples (3.33 ms), the maximum error '
-        f'between the latency-aligned input and the Keep 100% right output is '
+        f'between the latency-aligned input and the Dynamic 100% right output is '
         f'{attack_error:.6f}.',
         "",
-        "| Guard Attack | Velvet-added side RMS, 4–28 ms | Reduction vs Guard 0% |",
+        "| Attack | Velvet-added side RMS, 4–28 ms | Reduction vs Transient 0% |",
         "| --- | ---: | ---: |",
-        f'| Guard 0% | {no_guard:.5f} | — |',
+        f'| Transient 0% | {no_guard:.5f} | — |',
         f'| 0 ms | {guard:.5f} | {100 * (1 - guard / no_guard):.1f}% |',
         f'| 0.5 ms | {guard_half_ms:.5f} | {100 * (1 - guard_half_ms / no_guard):.1f}% |',
         f'| 5 ms | {guard_five_ms:.5f} | {100 * (1 - guard_five_ms / no_guard):.1f}% |',
@@ -498,7 +497,7 @@ def main(raw_dir, report_dir):
         f'- At {delay_time[release_end_index]:.1f} ms after the transient, the active delay is '
         f'{kept_delay[release_end_index]:.2f} ms, leaving {remaining_protection:.1f}% protection.',
         "",
-        "### Haas Keep at a tonal onset",
+        "### Haas Dynamic at a tonal onset",
         "",
         "A 0.2-amplitude 1 kHz mono sine starts at 0 ms. Haas Center is 12 ms,",
         "Variability and Velvet Width are 0%. The initial 10 ms of the right",
@@ -506,19 +505,19 @@ def main(raw_dir, report_dir):
         "",
         "![Haas tonal-onset de-click](haas-onset-declick.png)",
         "",
-        f"The largest right-channel step with Keep 100% is {haas_step:.4f},",
+        f"The largest right-channel step with Dynamic 100% is {haas_step:.4f},",
         "versus 0.1414 before the onset crossfade. A sharp impulse still",
-        "reaches the right channel after the fixed 1.5 ms lookahead with Keep 100%.",
+        "reaches the right channel after the fixed 1.5 ms lookahead with Dynamic 100%.",
         "",
-        "### Velvet Guard at short attacks",
+        "### Velvet Transient at short attacks",
         "",
         "A steady 1 kHz mono tone starts at 0 ms with Haas Center and Variability",
-        "at 0 ms, Velvet Width and Transient Guard at 100%. The plot compares",
-        "0, 0.5, 2, and 3 ms Guard Attack settings and measures 8–20 kHz",
+        "at 0 ms, Velvet Width and Transient at 100%. The plot compares",
+        "0, 0.5, 2, and 3 ms Attack settings and measures 8–20 kHz",
         "side energy from 15–40 ms. Similar results indicate the tightened",
         "detector leaves the sustained tone largely unguarded.",
         "",
-        "![Velvet Guard short-attack noise check](guard-short-attack.png)",
+        "![Velvet Transient short-attack noise check](guard-short-attack.png)",
         "",
         f'At 0.5 ms attack, high-frequency side RMS is {guard_hf["fast_guard_side"]:.6f}; '
         f'at 3 ms it is {guard_hf["slow_guard_side"]:.6f} '
@@ -530,7 +529,7 @@ def main(raw_dir, report_dir):
         "",
         "A 1.5 s mono, low-pass-filtered white-noise excerpt is processed with",
         "the same fixed 12 ms Haas delay: Velvet Width at 0%, at 100% with",
-        "Guard 0%, and at 100% with Guard 100%.",
+        "Transient 0%, and at 100% with Transient 100%.",
         "The Haas-only render is the baseline; the change between renders is Velvet.",
         "",
         "![Mono noise stereo scatter comparison](mono-width.png)",
@@ -539,12 +538,12 @@ def main(raw_dir, report_dir):
         f'({100 * (on_side_rms / off_side_rms - 1):.1f}% increase).',
         f'- Velvet itself adds {added_side_rms:.5f} side RMS while the mid difference '
         f'between renders is {mid_error:.7f} RMS.',
-        f'- With Guard 100%, side RMS is {guard_side_rms:.5f} and the Velvet-added '
+        f'- With Transient 100%, side RMS is {guard_side_rms:.5f} and the Velvet-added '
         f'side RMS is {guarded_added_rms:.5f}; sustained width remains audible.',
         f'- Left/right correlation changes from {off_corr:.3f} to {on_corr:.3f}.',
         "- Listen to [mono input](mono-input.wav), [Haas only](mono-haas-only.wav),",
         "  [Haas + Velvet 100%](mono-velvet-100.wav), and",
-        "  [Haas + Velvet 100% + Guard 100%](mono-velvet-guard-100.wav).",
+        "  [Haas + Velvet 100% + Transient 100%](mono-velvet-guard-100.wav).",
         "",
         "For the Velvet-only comparison, subtract the Width 0% render from the",
         "Width 100% render sample by sample, then add that residual to the dry",
@@ -563,10 +562,17 @@ def main(raw_dir, report_dir):
         "",
         "The input to Velvet is split below 250 Hz, from 250 Hz to 2.5 kHz,",
         "and above 2.5 kHz. The three sliders scale those bands before the",
-        "convolution. Each bar measures the side output from one slider at 100%,",
+        "convolution. They range from 0% to 200% and default to 100%.",
+        "Each bar measures the side output from one slider at 100%,",
         "with the other two at 0%, using an 80 Hz, 700 Hz, or 5 kHz mono tone.",
         "",
         "![Velvet input band controls](velvet-bands.png)",
+        "",
+        f'At 200%, the low, mid, and high solo-band side outputs are '
+        f'{float(velvet_bands[0]["low_200"]) / float(velvet_bands[0]["low_only"]):.2f}×, '
+        f'{float(velvet_bands[1]["mid_200"]) / float(velvet_bands[1]["mid_only"]):.2f}×, and '
+        f'{float(velvet_bands[2]["high_200"]) / float(velvet_bands[2]["high_only"]):.2f}× '
+        "their 100% levels, respectively.",
         "",
         "## Frequency Field: split goniometer",
         "",

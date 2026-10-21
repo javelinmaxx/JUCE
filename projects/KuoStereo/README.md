@@ -18,9 +18,8 @@ transient protection, Velvet widening, and the frequency display.
   This prevents a 0 ms delay from always winning solely because its mid is
   unchanged. A 2048-sample analysis window, averaged candidate scores, and
   a switching margin keep the target stable.
-  The active delay follows a cubic sigmoid toward each target; Max Rate limits
-  its steepest movement, reducing pitch modulation and chorus-like motion.
-  A zero Variability setting fixes the target at Center Delay. Keep Transient
+  The active delay moves linearly toward each target at the selected Max Rate.
+  A zero Variability setting fixes the target at Center Delay. Dynamic
   uses the same onset detector as Velvet Width to
   temporarily shorten the effective Haas delay. At 0% it has no effect; at
   100% the Haas delay reaches 0 ms during detected transients. A 1.5 ms
@@ -33,19 +32,19 @@ transient protection, Velvet widening, and the frequency display.
 - **Velvet Width** adds a sparse, balanced-polarity convolution of the dry mid
   channel to the side channel. Low, Mid, and High sliders beside the meters
   control how much of each 250 Hz / 2.5 kHz input band reaches the convolution.
-  All three default to 100%. Transient Guard uses the shared mid-channel
+  All three range from 0% to 200% and default to 100%. Transient uses the shared mid-channel
   onset detector to attenuate only detected onset samples before convolution;
   its depth fades toward zero near the detector threshold to avoid abrupt
   switches. Existing sustained side texture continues while the attack stays
-  focused. Guard Attack controls how quickly attenuation reaches full depth,
+  focused. Attack controls how quickly attenuation reaches full depth,
   up to 10 ms. Values below 0.5 ms use a 0.5 ms de-click ramp on tonal onsets;
   high-crest transients use the selected attack, including immediate 0 ms.
 - **Frequency Field** shows three goniometers fed by the processed stereo
   output, split below 250 Hz, from 250 Hz to 2.5 kHz, and above 2.5 kHz.
   Each display scales its points automatically so quieter bands remain visible.
 
-The controls are Center Delay, Variability, Max Rate, Keep Transient, Velvet
-Width, Transient Guard, Guard Attack, Low/Mid/High Velvet, Output, and Bypass. All are host
+The controls are Center Delay, Variability, Max Rate, Dynamic, Velvet
+Width, Transient, Attack, Low/Mid/High Velvet, Output, and Bypass. All are host
 parameters and survive state recall.
 The plug-in accepts stereo input and output, offers VST3 and Standalone builds,
 and also builds as an Audio Unit on macOS. It reports 1.5 ms of lookahead

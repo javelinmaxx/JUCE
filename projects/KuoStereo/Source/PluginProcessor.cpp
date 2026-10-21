@@ -15,13 +15,13 @@ juce::AudioProcessorValueTreeState::ParameterLayout KuoStereoProcessor::layout()
     add ("haasCenter", "Haas center delay", -30, 30, 0.1f, 12, "ms");
     add ("haasRange", "Haas variability", 0, 12, 0.1f, 6, "ms");
     add ("haasRate", "Haas maximum variation rate", 0.1f, 10, 0.1f, 1, "ms/s");
-    add ("haasKeepTransient", "Haas keep transient", 0, 100, 0.1f, 0, "%");
+    add ("haasKeepTransient", "Dynamic", 0, 100, 0.1f, 0, "%");
     add ("width", "Velvet width", 0, 100, 0.1f, 35, "%");
-    add ("transientProtect", "Transient protection", 0, 100, 0.1f, 80, "%");
-    add ("guardAttack", "Velvet guard attack", 0, 10, 0.1f, 0, "ms");
-    add ("velvetLow", "Velvet low band", 0, 100, 0.1f, 100, "%");
-    add ("velvetMid", "Velvet mid band", 0, 100, 0.1f, 100, "%");
-    add ("velvetHigh", "Velvet high band", 0, 100, 0.1f, 100, "%");
+    add ("transientProtect", "Transient", 0, 100, 0.1f, 80, "%");
+    add ("guardAttack", "Attack", 0, 10, 0.1f, 0, "ms");
+    add ("velvetLow", "Velvet low band", 0, 200, 0.1f, 100, "%");
+    add ("velvetMid", "Velvet mid band", 0, 200, 0.1f, 100, "%");
+    add ("velvetHigh", "Velvet high band", 0, 200, 0.1f, 100, "%");
     add ("output", "Output", -12, 12, 0.1f, 0, "dB");
     result.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "bypass", 1 },
         "Bypass", false));
@@ -65,8 +65,6 @@ void KuoStereoProcessor::prepareToPlay (double rate, int)
     widthBlend = 0;
     const auto centerDelayMs = parameters.getRawParameterValue ("haasCenter")->load();
     targetDelaySamples = smoothDelaySamples = centerDelayMs * 0.001f * sampleRate;
-    slewStartDelaySamples = slewTargetDelaySamples = smoothDelaySamples;
-    slewProgress = 1.0f;
     selectedDelayMs.store (centerDelayMs, std::memory_order_relaxed);
     currentDelayMs.store (centerDelayMs, std::memory_order_relaxed);
     const auto coefficient = [this] (float hz)
@@ -343,7 +341,7 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
             if (bandOnset)
             {
                 // Fade near both onset thresholds so detector chatter cannot switch
-                // the convolution input abruptly, even with a short Guard Attack.
+                // the convolution input abruptly, even with a short Attack.
                 const auto ratioStrength = std::clamp ((fast - slow * 3.5f)
                     / (0.004f + slow * 0.5f), 0.0f, 1.0f);
                 const auto levelStrength = std::clamp ((fast - 0.004f) / 0.004f, 0.0f, 1.0f);
@@ -418,24 +416,9 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         }
         else
             haasTransientEnvelope *= transientReleaseCoefficient;
-        if (std::abs (targetDelaySamples - slewTargetDelaySamples) > 0.0001f)
-        {
-            slewStartDelaySamples = smoothDelaySamples;
-            slewTargetDelaySamples = targetDelaySamples;
-            slewProgress = 0.0f;
-        }
-        const auto slewDistance = slewTargetDelaySamples - slewStartDelaySamples;
-        if (slewProgress < 1.0f && std::abs (slewDistance) > 0.0f)
-        {
-            // Smoothstep is sigmoid-shaped. Its peak slope is 1.5, so the
-            // transition duration keeps instantaneous movement under Max Rate.
-            slewProgress = std::min (1.0f, slewProgress
-                + maxDelayStep / (1.5f * std::abs (slewDistance)));
-            const auto shaped = slewProgress * slewProgress * (3.0f - 2.0f * slewProgress);
-            smoothDelaySamples = slewStartDelaySamples + slewDistance * shaped;
-        }
-        else
-            smoothDelaySamples = slewTargetDelaySamples;
+        // Move at a constant rate toward the selected time, without overshoot.
+        smoothDelaySamples += std::clamp (targetDelaySamples - smoothDelaySamples,
+                                        -maxDelayStep, maxDelayStep);
         widthBlend += (widthTarget - widthBlend) * 0.001f;
         const auto leftDelaySamples = std::max (-smoothDelaySamples, 0.0f);
         const auto rightDelaySamples = std::max (smoothDelaySamples, 0.0f);

@@ -338,7 +338,7 @@ void measureMonoWidth (const std::filesystem::path& directory)
 void measureVelvetBands (const std::filesystem::path& directory)
 {
     std::ofstream csv (directory / "velvet_bands.csv");
-    csv << "tone_hz,low_only,mid_only,high_only,all_off\n"
+    csv << "tone_hz,low_only,mid_only,high_only,all_off,low_200,mid_200,high_200\n"
         << std::fixed << std::setprecision (8);
     for (const auto frequency : { 80.0f, 700.0f, 5000.0f })
     {
@@ -361,7 +361,10 @@ void measureVelvetBands (const std::filesystem::path& directory)
             << sideRms ({ 0, 0, 10, 0, 100, 0, 0, 100, 0, 0 }) << ','
             << sideRms ({ 0, 0, 10, 0, 100, 0, 0, 0, 100, 0 }) << ','
             << sideRms ({ 0, 0, 10, 0, 100, 0, 0, 0, 0, 100 }) << ','
-            << sideRms ({ 0, 0, 10, 0, 100, 0, 0, 0, 0, 0 }) << '\n';
+            << sideRms ({ 0, 0, 10, 0, 100, 0, 0, 0, 0, 0 }) << ','
+            << sideRms ({ 0, 0, 10, 0, 100, 0, 0, 200, 0, 0 }) << ','
+            << sideRms ({ 0, 0, 10, 0, 100, 0, 0, 0, 200, 0 }) << ','
+            << sideRms ({ 0, 0, 10, 0, 100, 0, 0, 0, 0, 200 }) << '\n';
     }
 }
 

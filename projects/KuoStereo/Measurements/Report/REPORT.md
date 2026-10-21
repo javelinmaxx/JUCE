@@ -31,21 +31,20 @@ Listen to the [pad input](smart-haas-pad-input.wav),
 
 | Content | Most common target | Target changes | Median active delay | Adaptive error | Fixed 12 ms error |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| C major pad | 15.4 ms | 0 | 15.43 ms | 0.090 | 0.405 |
-| A minor pad | 18.0 ms | 2 | 15.43 ms | 0.365 | 0.427 |
+| C major pad | 15.4 ms | 0 | 15.43 ms | 0.091 | 0.405 |
+| A minor pad | 18.0 ms | 2 | 15.85 ms | 0.362 | 0.427 |
 
 The C major and A minor input levels are 0.088
 and 0.086 RMS over the steady windows.
 The selected target moves from 15.4 ms on C major to 18.0 ms on A minor.
 C major has 0 target changes during its steady window; A minor has 2. The target stays inside 6–18 ms;
 the largest active-delay step is 10.0 ms/s (10 ms/s setting).
-Adaptive processing reduces the spectral error by 77.7% on C major and 14.4% on A minor against the fixed 12 ms delay in this pad test.
+Adaptive processing reduces the spectral error by 77.5% on C major and 15.3% on A minor against the fixed 12 ms delay in this pad test.
 
-A separate 12-to-20 ms Center Delay step shows the cubic sigmoid used
-between selected targets. It eases in and out while Max Rate bounds its
-steepest point.
+A separate 12-to-20 ms Center Delay step shows the linear ramp used
+between selected targets. Max Rate bounds its constant slope.
 
-![Sigmoid Haas delay transition](haas-sigmoid.png)
+![Linear Haas delay transition](haas-linear.png)
 
 The measured peak movement is 10.0 ms/s with Max Rate at 10 ms/s.
 
@@ -65,7 +64,7 @@ With Center at 0 ms and Variability at ±3 ms, a 523 Hz mono tone
 selects -1.8 ms; a stereo version with a 0.6 radian channel phase offset selects 0.0 ms. The width target therefore avoids an automatic 0 ms choice for mono
 but permits 0 ms when the input already has enough side energy.
 
-## Keep Transient and Velvet Transient Guard
+## Dynamic and Velvet Transient
 
 The shared onset detector compares fast and slow magnitude envelopes in four
 mid-channel frequency bands: below 250 Hz, 250 Hz–2.5 kHz, 2.5–8 kHz,
@@ -73,16 +72,16 @@ and above 8 kHz. A band rise also needs sufficient overall attack
 energy or a strong rise in that band; this rejects small fluctuations
 in sustained material. As an equal-amplitude check, a 100 Hz
 tone switches to 5 kHz after 1 s; both tones are 0.18 peak amplitude.
-Haas Keep holds for 10 ms after the last detected onset reaches the output, then decays
+Haas Dynamic holds for 10 ms after the last detected onset reaches the output, then decays
 exponentially to 1% protection over 65 ms.
 Haas fades into protection over 1 ms for tonal onsets. High-crest
 impulses still switch immediately to keep their channels aligned.
 The audio path waits 1.5 ms while the detector reads ahead, so the
 tonal crossfade completes before the first output attack samples.
-Velvet Guard attenuates convolution input only while the detector
+Velvet Transient attenuates convolution input only while the detector
 reports an onset. Its depth
 fades smoothly near the onset threshold, with no fixed suppression interval.
-Guard Attack sets a 0–10 ms linear ramp into attenuation while the
+Attack sets a 0–10 ms linear ramp into attenuation while the
 detector remains active. Values below 0.5 ms use a 0.5 ms de-click
 ramp for tonal onsets; high-crest transients use the selected attack,
 including immediate 0 ms. Longer settings let more of a brief attack
@@ -90,13 +89,13 @@ into Velvet's convolution history.
 
 ![Equal-amplitude spectral onset](spectral-onset.png)
 
-Keep Transient at 100% moves from 12.00 ms before the switch
-to 0.00 ms at the first measured block after it; Keep 0%
+Dynamic at 100% moves from 12.00 ms before the switch
+to 0.00 ms at the first measured block after it; Dynamic 0%
 remains at 12 ms. This checks the frequency-specific trigger independently
 of a broadband level increase.
 
 A 700 Hz tone with 15% amplitude modulation at 5 Hz is compared
-with the same tone plus a sharp impulse at 1 s. Keep is 100%.
+with the same tone plus a sharp impulse at 1 s. Dynamic is 100%.
 
 ![Transient detector selectivity](detector-selectivity.png)
 
@@ -104,18 +103,18 @@ The steady tone stays above 12.00 ms in the pre-impulse window, while the impuls
 
 A 1.0-amplitude onset with a short decaying noise burst is placed in a
 0.002-amplitude white-noise bed. Haas Center is 12 ms and Variability is 0 ms.
-Keep Transient is compared at 0% and 100% with Velvet Width at 0%.
-Separately, Velvet Width is 100% and Transient Guard is compared at 0% and
+Dynamic is compared at 0% and 100% with Velvet Width at 0%.
+Separately, Velvet Width is 100% and Transient is compared at 0% and
 100%; the Haas-only side signal is subtracted to isolate Velvet's added side.
 
 ![Transient timing and side-tail protection](transients.png)
 
-- At the 1.5 ms output onset, the right sample is 0.0011 with Keep 0% and 0.9995 with Keep 100% (input onset 0.9995).
-- Across the first 160 transient samples (3.33 ms), the maximum error between the latency-aligned input and the Keep 100% right output is 0.000000.
+- At the 1.5 ms output onset, the right sample is 0.0011 with Dynamic 0% and 0.9995 with Dynamic 100% (input onset 0.9995).
+- Across the first 160 transient samples (3.33 ms), the maximum error between the latency-aligned input and the Dynamic 100% right output is 0.000000.
 
-| Guard Attack | Velvet-added side RMS, 4–28 ms | Reduction vs Guard 0% |
+| Attack | Velvet-added side RMS, 4–28 ms | Reduction vs Transient 0% |
 | --- | ---: | ---: |
-| Guard 0% | 0.03260 | — |
+| Transient 0% | 0.03260 | — |
 | 0 ms | 0.00113 | 96.5% |
 | 0.5 ms | 0.02898 | 11.1% |
 | 5 ms | 0.03206 | 1.7% |
@@ -124,7 +123,7 @@ Separately, Velvet Width is 100% and Transient Guard is compared at 0% and
   exponentially after its 10 ms hold; normal Haas stays at 12 ms.
 - At 76.0 ms after the transient, the active delay is 11.85 ms, leaving 1.2% protection.
 
-### Haas Keep at a tonal onset
+### Haas Dynamic at a tonal onset
 
 A 0.2-amplitude 1 kHz mono sine starts at 0 ms. Haas Center is 12 ms,
 Variability and Velvet Width are 0%. The initial 10 ms of the right
@@ -132,19 +131,19 @@ output are checked for abrupt sample-to-sample changes.
 
 ![Haas tonal-onset de-click](haas-onset-declick.png)
 
-The largest right-channel step with Keep 100% is 0.0261,
+The largest right-channel step with Dynamic 100% is 0.0261,
 versus 0.1414 before the onset crossfade. A sharp impulse still
-reaches the right channel after the fixed 1.5 ms lookahead with Keep 100%.
+reaches the right channel after the fixed 1.5 ms lookahead with Dynamic 100%.
 
-### Velvet Guard at short attacks
+### Velvet Transient at short attacks
 
 A steady 1 kHz mono tone starts at 0 ms with Haas Center and Variability
-at 0 ms, Velvet Width and Transient Guard at 100%. The plot compares
-0, 0.5, 2, and 3 ms Guard Attack settings and measures 8–20 kHz
+at 0 ms, Velvet Width and Transient at 100%. The plot compares
+0, 0.5, 2, and 3 ms Attack settings and measures 8–20 kHz
 side energy from 15–40 ms. Similar results indicate the tightened
 detector leaves the sustained tone largely unguarded.
 
-![Velvet Guard short-attack noise check](guard-short-attack.png)
+![Velvet Transient short-attack noise check](guard-short-attack.png)
 
 At 0.5 ms attack, high-frequency side RMS is 0.000142; at 3 ms it is 0.000135 (5.5% higher). At 0 ms it is 0.000142; at 2 ms it is 0.000136.
 
@@ -152,18 +151,18 @@ At 0.5 ms attack, high-frequency side RMS is 0.000142; at 3 ms it is 0.000135 (5
 
 A 1.5 s mono, low-pass-filtered white-noise excerpt is processed with
 the same fixed 12 ms Haas delay: Velvet Width at 0%, at 100% with
-Guard 0%, and at 100% with Guard 100%.
+Transient 0%, and at 100% with Transient 100%.
 The Haas-only render is the baseline; the change between renders is Velvet.
 
 ![Mono noise stereo scatter comparison](mono-width.png)
 
 - Side RMS rises from 0.04475 to 0.05489 (22.6% increase).
 - Velvet itself adds 0.03159 side RMS while the mid difference between renders is 0.0000000 RMS.
-- With Guard 100%, side RMS is 0.05489 and the Velvet-added side RMS is 0.03159; sustained width remains audible.
+- With Transient 100%, side RMS is 0.05489 and the Velvet-added side RMS is 0.03159; sustained width remains audible.
 - Left/right correlation changes from 0.003 to -0.198.
 - Listen to [mono input](mono-input.wav), [Haas only](mono-haas-only.wav),
   [Haas + Velvet 100%](mono-velvet-100.wav), and
-  [Haas + Velvet 100% + Guard 100%](mono-velvet-guard-100.wav).
+  [Haas + Velvet 100% + Transient 100%](mono-velvet-guard-100.wav).
 
 For the Velvet-only comparison, subtract the Width 0% render from the
 Width 100% render sample by sample, then add that residual to the dry
@@ -180,10 +179,13 @@ actual Velvet output.
 
 The input to Velvet is split below 250 Hz, from 250 Hz to 2.5 kHz,
 and above 2.5 kHz. The three sliders scale those bands before the
-convolution. Each bar measures the side output from one slider at 100%,
+convolution. They range from 0% to 200% and default to 100%.
+Each bar measures the side output from one slider at 100%,
 with the other two at 0%, using an 80 Hz, 700 Hz, or 5 kHz mono tone.
 
 ![Velvet input band controls](velvet-bands.png)
+
+At 200%, the low, mid, and high solo-band side outputs are 2.00×, 2.00×, and 2.00× their 100% levels, respectively.
 
 ## Frequency Field: split goniometer
 

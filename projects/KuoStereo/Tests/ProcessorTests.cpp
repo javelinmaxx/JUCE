@@ -411,9 +411,9 @@ int main (int argc, char** argv)
         set (processor, "width", 71.0f);
         set (processor, "transientProtect", 91.0f);
         set (processor, "guardAttack", 3.5f);
-        set (processor, "velvetLow", 25.0f);
-        set (processor, "velvetMid", 60.0f);
-        set (processor, "velvetHigh", 90.0f);
+        set (processor, "velvetLow", 150.0f);
+        set (processor, "velvetMid", 200.0f);
+        set (processor, "velvetHigh", 125.0f);
         juce::MemoryBlock state;
         processor.getStateInformation (state);
         KuoStereoProcessor restored;
@@ -488,6 +488,10 @@ int main (int argc, char** argv)
         check (lowPass > lowReject * 5.0f && midPass > midReject * 1.5f
                    && highPass > highReject * 3.0f,
                "Velvet low, mid, and high sliders control their own input bands");
+        check (std::abs (velvetBandSideRms (80, 200, 0, 0) / lowPass - 2.0f) < 0.02f
+                   && std::abs (velvetBandSideRms (700, 0, 200, 0) / midPass - 2.0f) < 0.02f
+                   && std::abs (velvetBandSideRms (5000, 0, 0, 200) / highPass - 2.0f) < 0.02f,
+               "200% band settings double the corresponding Velvet signal");
         check (std::abs (selectedDelayAcrossZero()) >= 0.1f,
                "Smart Haas can select a useful nonzero delay when zero is in range");
         check (std::abs (selectedDelayAcrossZero (true)) < 0.01f,
@@ -511,7 +515,7 @@ int main (int argc, char** argv)
                "minimum Haas delay reaches negative 30 ms");
         check (negativeKept.leftPeakOffset == 72 && negativeKept.rightPeakOffset == 72
                    && std::abs (negativeKept.activeDelayMs) < 0.001f,
-               "Keep Transient protects onsets at negative Haas delays");
+               "Dynamic protects onsets at negative Haas delays");
         const auto unguarded = impulseSideEnergy (0);
         const auto guarded = impulseSideEnergy (100);
         const auto slowGuard = impulseSideEnergy (100, 5);
@@ -519,9 +523,9 @@ int main (int argc, char** argv)
         check (unguarded > 0.01f && guarded < unguarded * 0.2f,
                "transient guard suppresses the widened impulse tail");
         check (slowGuard > guarded && slowGuard < unguarded,
-               "Guard Attack softens attenuation of a sharp impulse");
+               "Attack softens attenuation of a sharp impulse");
         check (std::abs (noGuardSlowAttack - unguarded) < 0.00001f,
-               "Guard Attack has no effect when Transient Guard is zero");
+               "Attack has no effect when Transient is zero");
         const auto guardedBed = noiseBedSideEnergy (100);
         const auto unguardedBed = noiseBedSideEnergy (0);
         check (guardedBed > 0.0001f && guardedBed < unguardedBed * 0.25f,
@@ -533,7 +537,7 @@ int main (int argc, char** argv)
         check (instantGuardStep < 0.0085f && instantGuardStep < slowGuardStep * 1.25f
                    && fastGuardStep < 0.0085f && fastGuardStep < slowGuardStep * 1.25f
                    && mediumGuardStep < slowGuardStep * 1.25f,
-               "short Guard Attack avoids abrupt side-signal steps at onset threshold");
+               "short Attack avoids abrupt side-signal steps at onset threshold");
 
         KuoStereoProcessor haas;
         set (haas, "haasCenter", 12);
@@ -636,46 +640,46 @@ int main (int argc, char** argv)
         const auto slowDelay = limited.getCurrentDelayMs();
         check (std::abs (limited.getSelectedDelayMs() - 20.0f) < 0.01f,
                "zero variability fixes the selected delay at the center");
-        check (slowDelay > 12.03f && slowDelay < 12.07f,
-               "sigmoid delay movement starts gently under a one ms/s peak rate");
+        check (slowDelay > 12.50f && slowDelay < 12.54f,
+               "linear Haas delay movement follows the one ms/s rate");
         set (limited, "haasRate", 10);
         limited.processBlock (buffer, midi);
         const auto fastStep = limited.getCurrentDelayMs() - slowDelay;
-        check (fastStep > 0.005f && fastStep < 0.02f,
-               "maximum rate control changes the sigmoid transition speed");
+        check (fastStep > 0.052f && fastStep < 0.054f,
+               "maximum rate control changes the linear transition speed");
 
-        KuoStereoProcessor curved;
-        set (curved, "haasCenter", 12);
-        set (curved, "haasRange", 0);
-        set (curved, "haasRate", 10);
-        curved.prepareToPlay (48000, 256);
-        set (curved, "haasCenter", 20);
+        KuoStereoProcessor linear;
+        set (linear, "haasCenter", 12);
+        set (linear, "haasRange", 0);
+        set (linear, "haasRate", 10);
+        linear.prepareToPlay (48000, 256);
+        set (linear, "haasCenter", 20);
         buffer.clear();
         float earlyStep = 0, middleStep = 0, lateStep = 0, peakStep = 0;
         for (int block = 0; block < 225; ++block)
         {
-            const auto previous = curved.getCurrentDelayMs();
-            curved.processBlock (buffer, midi);
-            const auto step = curved.getCurrentDelayMs() - previous;
+            const auto previous = linear.getCurrentDelayMs();
+            linear.processBlock (buffer, midi);
+            const auto step = linear.getCurrentDelayMs() - previous;
             peakStep = std::max (peakStep, step);
             if (block == 20) earlyStep = step;
             if (block == 112) middleStep = step;
             if (block == 205) lateStep = step;
         }
-        check (middleStep > earlyStep * 2.0f && middleStep > lateStep * 2.0f
+        check (std::abs (middleStep - earlyStep) < 0.001f && lateStep < 0.001f
                    && peakStep < 10.0f * 256.0f / 48000.0f + 0.001f
-                   && std::abs (curved.getCurrentDelayMs() - 20.0f) < 0.01f,
-               "Haas delay follows a sigmoid with a bounded peak rate");
+                   && std::abs (linear.getCurrentDelayMs() - 20.0f) < 0.01f,
+               "Haas delay follows a constant-rate linear ramp to its target");
 
         const auto noKeep = haasTransientResponse (0);
         const auto halfKeep = haasTransientResponse (50);
         const auto fullKeep = haasTransientResponse (100);
         check (std::abs (noKeep.activeDelayMs - 12.0f) < 0.01f && noKeep.rightPeakOffset == 648,
-               "zero Keep Transient leaves the 12 ms Haas delay unchanged");
+               "zero Dynamic leaves the 12 ms Haas delay unchanged");
         check (std::abs (halfKeep.activeDelayMs - 6.0f) < 0.01f && halfKeep.rightPeakOffset == 360,
-               "half Keep Transient halves the delay during an onset");
+               "half Dynamic halves the delay during an onset");
         check (fullKeep.activeDelayMs < 0.001f && fullKeep.rightPeakOffset == 72,
-               "maximum Keep Transient aligns the onset after lookahead latency");
+               "maximum Dynamic aligns the onset after lookahead latency");
         constexpr float releaseIntervalSeconds = 4.0f * 256.0f / 48000.0f;
         const auto expectedRemainingRatio = std::exp (std::log (0.01f)
             * releaseIntervalSeconds / 0.065f);
@@ -689,7 +693,7 @@ int main (int argc, char** argv)
                "the Haas delay returns after its transient hold and release");
         float tonalAttackError = 0;
         check (haasTonalOnsetMaxStep (tonalAttackError) < 0.04f,
-               "Haas Keep Transient crossfades tonal onsets without a click");
+               "Haas Dynamic crossfades tonal onsets without a click");
         check (tonalAttackError < 0.003f,
                "Haas lookahead protects the first samples of a tonal attack");
         check (haasBurstAttackError() < 0.00001f,
