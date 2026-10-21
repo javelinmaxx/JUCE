@@ -97,7 +97,7 @@ float noiseBedSideEnergy (float guard)
 
 struct HaasTransientResult
 {
-    float activeDelayMs = 0, recoveredDelayMs = 0;
+    float activeDelayMs = 0, heldDelayMs = 0, releasingDelayMs = 0, recoveredDelayMs = 0;
     int rightPeakOffset = -1;
 };
 
@@ -123,6 +123,10 @@ HaasTransientResult haasTransientResponse (float keep)
         processor.processBlock (buffer, midi);
         if (block == 4)
             result.activeDelayMs = processor.getCurrentDelayMs();
+        if (block == 5)
+            result.heldDelayMs = processor.getCurrentDelayMs();
+        if (block == 8)
+            result.releasingDelayMs = processor.getCurrentDelayMs();
         for (int i = 0; i < buffer.getNumSamples(); ++i)
             if (block >= 4 && buffer.getSample (1, i) > 0.9f && result.rightPeakOffset < 0)
                 result.rightPeakOffset = (block - 4) * 256 + i;
@@ -330,8 +334,11 @@ int main (int argc, char** argv)
                "half Keep Transient halves the delay during an onset");
         check (fullKeep.activeDelayMs < 0.001f && fullKeep.rightPeakOffset == 0,
                "maximum Keep Transient makes the onset's right channel undelayed");
+        check (fullKeep.heldDelayMs < 0.01f && fullKeep.releasingDelayMs > 1.0f
+                   && fullKeep.releasingDelayMs < 4.0f,
+               "Haas protection holds for 10 ms after onset detection then releases over 65 ms");
         check (std::abs (fullKeep.recoveredDelayMs - 12.0f) < 0.01f,
-               "the Haas delay returns after the shared transient hold and release");
+               "the Haas delay returns after its transient hold and release");
 
         KuoStereoProcessor spectralOnset;
         set (spectralOnset, "haasCenter", 12);

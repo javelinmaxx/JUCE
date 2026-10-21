@@ -39,11 +39,10 @@ void KuoStereoProcessor::prepareToPlay (double rate, int)
     rightHistory.assign (historySize, 0);
     midHistory.assign (historySize, 0);
     velvetHistory.assign (historySize, 0);
-    writePosition = sampleCount = analysisCounter = scopeCounter = transientHold = velvetAttackRemaining = 0;
+    writePosition = sampleCount = analysisCounter = scopeCounter = transientHold = 0;
     selectedCandidate = -1;
     previousCenterDelayMs = previousVariabilityMs = -1;
     smoothedCandidateScores = {};
-    previousOnset = false;
     lowState = upperState = {};
     detectorLowStates = {};
     detectorFastEnvelopes = detectorSlowEnvelopes = {};
@@ -250,7 +249,7 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     const auto maxRate = parameters.getRawParameterValue ("haasRate")->load();
     const auto maxDelayStep = maxRate * 0.001f; // Samples per sample equals ms per second.
     const auto keepTransient = parameters.getRawParameterValue ("haasKeepTransient")->load() * 0.01f;
-    const auto transientReleaseStep = 1.0f / (0.05f * sampleRate);
+    const auto transientReleaseStep = 1.0f / (0.065f * sampleRate);
     const auto widthTarget = parameters.getRawParameterValue ("width")->load() * 0.01f;
     const auto protection = parameters.getRawParameterValue ("transientProtect")->load() * 0.01f;
     const auto gain = juce::Decibels::decibelsToGain (parameters.getRawParameterValue ("output")->load());
@@ -279,17 +278,12 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
             onset |= detectorFastEnvelopes[band] > 0.004f
                   && detectorFastEnvelopes[band] > detectorSlowEnvelopes[band] * 2.2f;
         }
-        if (onset && ! previousOnset)
-            velvetAttackRemaining = juce::roundToInt (0.003f * sampleRate);
-        previousOnset = onset;
         if (onset)
-            transientHold = juce::roundToInt (0.032f * sampleRate);
+            transientHold = juce::roundToInt (0.010f * sampleRate);
         else if (transientHold > 0)
             --transientHold;
-        // Remove only attack samples from the Velvet input; older sustained side remains audible.
-        const auto velvetInput = mid * (velvetAttackRemaining > 0 ? 1.0f - protection : 1.0f);
-        if (velvetAttackRemaining > 0)
-            --velvetAttackRemaining;
+        // Guard only detector-active samples; the Velvet history keeps its sustained texture.
+        const auto velvetInput = mid * (onset ? 1.0f - protection : 1.0f);
         leftHistory[static_cast<size_t> (writePosition)] = dryLeft;
         rightHistory[static_cast<size_t> (writePosition)] = dryRight;
         midHistory[static_cast<size_t> (writePosition)] = mid;

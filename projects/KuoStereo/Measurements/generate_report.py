@@ -125,7 +125,7 @@ def main(raw_dir, report_dir):
     axes[0].legend(frameon=False, ncol=3)
     axes[1].plot(delay_time, normal_delay, color="#314e79", label="Keep 0%")
     axes[1].plot(delay_time, kept_delay, color="#ca7939", label="Keep 100%")
-    axes[1].set(xlim=(-10, 120), ylim=(-1, 14), ylabel="effective delay (ms)", title="Shared onset hold and tap crossfade")
+    axes[1].set(xlim=(-10, 120), ylim=(-1, 14), ylabel="effective delay (ms)", title="Haas onset hold and tap crossfade")
     axes[1].legend(frameon=False)
     kernel = np.ones(24) / 24  # 0.5 ms moving RMS at 48 kHz
     for key, label, colour in (
@@ -256,6 +256,9 @@ def main(raw_dir, report_dir):
         "and above 8 kHz. It triggers on a sharp rise in any one band rather than",
         "on the total mid-channel level. As an equal-amplitude check, a 100 Hz",
         "tone switches to 5 kHz after 1 s; both tones are 0.18 peak amplitude.",
+        "Haas Keep holds for 10 ms after the last detected onset, then crossfades",
+        "back over 65 ms. Velvet Guard attenuates convolution input only while",
+        "the detector reports an onset, with no fixed suppression interval.",
         "",
         "![Equal-amplitude spectral onset](spectral-onset.png)",
         "",
@@ -279,7 +282,7 @@ def main(raw_dir, report_dir):
         f'and {guard:.5f} at Guard 100% '
         f'({100 * (1 - guard / no_guard):.1f}% reduction).',
         "- The protected Haas path reaches 0 ms during the onset and returns after",
-        "  the shared hold and tap crossfade; normal Haas stays at 12 ms.",
+        "  its 10 ms hold and 65 ms tap crossfade; normal Haas stays at 12 ms.",
         "",
         "## Velvet Width: widening a mono signal",
         "",

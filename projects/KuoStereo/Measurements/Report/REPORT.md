@@ -44,6 +44,9 @@ mid-channel frequency bands: below 250 Hz, 250 Hz–2.5 kHz, 2.5–8 kHz,
 and above 8 kHz. It triggers on a sharp rise in any one band rather than
 on the total mid-channel level. As an equal-amplitude check, a 100 Hz
 tone switches to 5 kHz after 1 s; both tones are 0.18 peak amplitude.
+Haas Keep holds for 10 ms after the last detected onset, then crossfades
+back over 65 ms. Velvet Guard attenuates convolution input only while
+the detector reports an onset, with no fixed suppression interval.
 
 ![Equal-amplitude spectral onset](spectral-onset.png)
 
@@ -61,9 +64,9 @@ Separately, Velvet Width is 100% and Transient Guard is compared at 0% and
 ![Transient timing and side-tail protection](transients.png)
 
 - At onset, the right sample is 0.0011 with Keep 0% and 0.9995 with Keep 100% (input 0.9995).
-- Velvet-added side RMS from 4–28 ms is 0.03363 at Guard 0% and 0.00110 at Guard 100% (96.7% reduction).
+- Velvet-added side RMS from 4–28 ms is 0.03363 at Guard 0% and 0.00111 at Guard 100% (96.7% reduction).
 - The protected Haas path reaches 0 ms during the onset and returns after
-  the shared hold and tap crossfade; normal Haas stays at 12 ms.
+  its 10 ms hold and 65 ms tap crossfade; normal Haas stays at 12 ms.
 
 ## Velvet Width: widening a mono signal
 
@@ -76,7 +79,7 @@ The Haas-only render is the baseline; the change between renders is Velvet.
 
 - Side RMS rises from 0.04476 to 0.05488 (22.6% increase).
 - Velvet itself adds 0.03158 side RMS while the mid difference between renders is 0.0000000 RMS.
-- With Guard 100%, side RMS is 0.05472 and the Velvet-added side RMS is 0.03132; sustained width remains audible.
+- With Guard 100%, side RMS is 0.05486 and the Velvet-added side RMS is 0.03155; sustained width remains audible.
 - Left/right correlation changes from 0.003 to -0.198.
 - Listen to [mono input](mono-input.wav), [Haas only](mono-haas-only.wav),
   [Haas + Velvet 100%](mono-velvet-100.wav), and
