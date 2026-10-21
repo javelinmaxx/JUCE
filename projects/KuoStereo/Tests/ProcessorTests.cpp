@@ -239,8 +239,10 @@ int main (int argc, char** argv)
         float channelDifference = 0;
         bool finite = true;
         float majorTargetSum = 0, minorTargetSum = 0;
+        float previousMajorTarget = 0, previousMinorTarget = 0;
+        float majorEndDelay = 0, minorEndDelay = 0;
         double majorInputEnergy = 0, minorInputEnergy = 0;
-        int majorBlocks = 0, minorBlocks = 0;
+        int majorBlocks = 0, minorBlocks = 0, majorSwitches = 0, minorSwitches = 0;
         for (int block = 0; block < kuoTestSignal::padSamples / 256; ++block)
         {
             for (int i = 0; i < 256; ++i)
@@ -258,12 +260,22 @@ int main (int argc, char** argv)
             const auto blockEnd = (block + 1) * 256;
             if (blockEnd >= 24000 && blockEnd < 134400)
             {
-                majorTargetSum += haas.getSelectedDelayMs();
+                const auto target = haas.getSelectedDelayMs();
+                if (majorBlocks > 0 && std::abs (target - previousMajorTarget) > 0.01f)
+                    ++majorSwitches;
+                previousMajorTarget = target;
+                majorEndDelay = haas.getCurrentDelayMs();
+                majorTargetSum += target;
                 ++majorBlocks;
             }
             if (blockEnd >= 168000 && blockEnd < 278400)
             {
-                minorTargetSum += haas.getSelectedDelayMs();
+                const auto target = haas.getSelectedDelayMs();
+                if (minorBlocks > 0 && std::abs (target - previousMinorTarget) > 0.01f)
+                    ++minorSwitches;
+                previousMinorTarget = target;
+                minorEndDelay = haas.getCurrentDelayMs();
+                minorTargetSum += target;
                 ++minorBlocks;
             }
             if (block > 200)
@@ -282,6 +294,11 @@ int main (int argc, char** argv)
         check (majorBlocks > 0 && minorBlocks > 0
                    && std::abs (majorTargetSum / majorBlocks - minorTargetSum / minorBlocks) > 0.5f,
                "Smart Haas target responds differently to C major and A minor pad chords");
+        check (majorSwitches == 0 && minorSwitches == 0,
+               "Smart Haas target remains stable while each pad chord sustains");
+        check (std::abs (majorEndDelay - previousMajorTarget) < 0.1f
+                   && std::abs (minorEndDelay - previousMinorTarget) < 0.1f,
+               "rate-limited Haas delay settles at each pad chord's selected target");
         check (scopePeak (width, 1) > 0.01f, "mid-band goniometer receives processed stereo points");
 
         KuoStereoProcessor limited;

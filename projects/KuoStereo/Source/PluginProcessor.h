@@ -36,7 +36,7 @@ public:
     juce::AudioProcessorValueTreeState parameters;
 
 private:
-    static constexpr int fftOrder = 9, fftSize = 1 << fftOrder, candidates = 6, velvetTaps = 16;
+    static constexpr int fftOrder = 11, fftSize = 1 << fftOrder, candidates = 7, velvetTaps = 16;
     struct ScopePoint { std::atomic<float> left { 0 }, right { 0 }; };
     static juce::AudioProcessorValueTreeState::ParameterLayout layout();
     float readAgo (const std::vector<float>&, int samplesAgo) const noexcept;
@@ -47,6 +47,7 @@ private:
     juce::dsp::FFT fft { fftOrder };
     std::array<float, fftSize * 2> spectrumInput {}, spectrumCandidate {};
     std::array<float, fftSize> window {};
+    std::array<float, candidates> smoothedCandidateScores {};
     std::array<int, velvetTaps> tapOffsets {};
     std::array<float, velvetTaps> tapWeights {};
     std::vector<float> leftHistory, rightHistory, midHistory, velvetHistory;
@@ -56,9 +57,11 @@ private:
     std::atomic<float> currentDelayMs { 12 };
     std::array<float, 2> lowState {}, upperState {};
     int writePosition = 0, sampleCount = 0, analysisCounter = 0, scopeCounter = 0;
+    int selectedCandidate = -1;
     int transientHold = 0, velvetAttackRemaining = 0;
     bool previousOnset = false;
     float sampleRate = 48000.0f, targetDelaySamples = 576.0f, smoothDelaySamples = 576.0f;
+    float previousCenterDelayMs = -1, previousVariabilityMs = -1;
     float widthBlend = 0, haasTransientEnvelope = 0;
     std::array<float, 3> detectorLowStates {}, detectorCoefficients {};
     std::array<float, 4> detectorFastEnvelopes {}, detectorSlowEnvelopes {};

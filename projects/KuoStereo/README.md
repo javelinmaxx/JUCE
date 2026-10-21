@@ -10,9 +10,10 @@ synthetic audio, plots, and quantified results for adaptive Haas delay,
 transient protection, Velvet widening, and the frequency display.
 
 - **Smart Haas** searches six delays within Center Delay ± Variability,
-  clamped to 3–30 ms. For each candidate, it compares the short-time spectrum
-  of the original mid channel with the mid channel that would result from
-  delaying the right channel. The least different candidate becomes the target.
+  clamped to 3–30 ms, plus Center Delay itself. For each candidate, it compares
+  the original mid spectrum with the spectrum that would result from delaying
+  the right channel. A 2048-sample analysis window, averaged candidate
+  scores, and a switching margin keep the least different target stable.
   Max Rate limits movement toward that target, reducing pitch modulation and
   chorus-like motion. A zero Variability setting fixes the delay at Center
   Delay. Keep Transient uses the same onset detector as Velvet Width to

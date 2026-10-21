@@ -75,6 +75,7 @@ def main(raw_dir, report_dir):
                 "label": label,
                 "mode": Counter(target[steady]).most_common(1)[0][0],
                 "median": float(np.median(active[steady])),
+                "target_changes": int(np.count_nonzero(np.diff(target[steady]))),
                 "input_rms": rms(source[:, 0]),
                 "adaptive": spectral_distance(source[:, 0], source[:, 1]),
                 "fixed": spectral_distance(source[:, 0], source[:, 2]),
@@ -214,7 +215,9 @@ def main(raw_dir, report_dir):
         "each note a sustained pad timbre; the chord transition crossfades over",
         "125 ms. The two chords share two notes and are close in overall level.",
         "Center is 12 ms, Variability is ±6 ms, Max Rate is 10 ms/s,",
-        "and Velvet Width is 0%.",
+        "and Velvet Width is 0%. Smart Haas analyzes 2048-sample windows every",
+        "1024 samples, averages candidate scores over 150 ms, and requires a",
+        "5% score improvement before changing its selected delay.",
         "The fixed comparison uses the same processor with Variability at 0 ms.",
         "The first 0.5 s and final 0.2 s of each chord are excluded from the steady-state table.",
         "The error is the mean of weighted absolute log FFT-magnitude ratios",
@@ -226,23 +229,25 @@ def main(raw_dir, report_dir):
         "[adaptive mid](smart-haas-pad-adaptive.wav), and",
         "[fixed-delay mid](smart-haas-pad-fixed.wav).",
         "",
-        "| Content | Most common target | Median active delay | Adaptive error | Fixed 12 ms error |",
-        "| --- | ---: | ---: | ---: | ---: |",
+        "| Content | Most common target | Target changes | Median active delay | Adaptive error | Fixed 12 ms error |",
+        "| --- | ---: | ---: | ---: | ---: | ---: |",
     ]
     for row in adaptive_results:
-        lines.append(f'| {row["label"]} | {row["mode"]:.1f} ms | {row["median"]:.2f} ms | '
+        lines.append(f'| {row["label"]} | {row["mode"]:.1f} ms | {row["target_changes"]} | {row["median"]:.2f} ms | '
                      f'{row["adaptive"]:.3f} | {row["fixed"]:.3f} |')
     lines += [
         "",
         f'The C major and A minor input levels are {adaptive_results[0]["input_rms"]:.3f}',
         f'and {adaptive_results[1]["input_rms"]:.3f} RMS over the steady windows.',
-        "The selected target changes with the chord and stays inside 6–18 ms;",
+        f'The selected target moves from {adaptive_results[0]["mode"]:.1f} ms on C major '
+        f'to {adaptive_results[1]["mode"]:.1f} ms on A minor.',
+        f'C major has {adaptive_results[0]["target_changes"]} target changes during its steady window; '
+        f'A minor has {adaptive_results[1]["target_changes"]}. The target stays inside 6–18 ms;',
         f"the largest active-delay step is {max_rate:.1f} ms/s (10 ms/s setting).",
-        "But adaptive processing produces a **larger** spectral error than the fixed",
-        "12 ms delay on both chords, particularly A minor. The target jumps",
-        "frequently between candidates, and the active delay travels through",
-        "other values under the rate limit. This musical test does not support",
-        "a spectral-preservation improvement from the current Smart Haas search.",
+        f'Adaptive processing reduces the spectral error by '
+        f'{100 * (1 - adaptive_results[0]["adaptive"] / adaptive_results[0]["fixed"]):.1f}% '
+        f'on C major and {100 * (1 - adaptive_results[1]["adaptive"] / adaptive_results[1]["fixed"]):.1f}% '
+        "on A minor against the fixed 12 ms delay in this pad test.",
         "",
         "## Keep Transient and Velvet Transient Guard",
         "",

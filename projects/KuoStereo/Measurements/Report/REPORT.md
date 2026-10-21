@@ -11,7 +11,9 @@ A minor (A3–C4–E4) for 3 s. Detuned oscillators and harmonics give
 each note a sustained pad timbre; the chord transition crossfades over
 125 ms. The two chords share two notes and are close in overall level.
 Center is 12 ms, Variability is ±6 ms, Max Rate is 10 ms/s,
-and Velvet Width is 0%.
+and Velvet Width is 0%. Smart Haas analyzes 2048-sample windows every
+1024 samples, averages candidate scores over 150 ms, and requires a
+5% score improvement before changing its selected delay.
 The fixed comparison uses the same processor with Variability at 0 ms.
 The first 0.5 s and final 0.2 s of each chord are excluded from the steady-state table.
 The error is the mean of weighted absolute log FFT-magnitude ratios
@@ -23,20 +25,17 @@ Listen to the [pad input](smart-haas-pad-input.wav),
 [adaptive mid](smart-haas-pad-adaptive.wav), and
 [fixed-delay mid](smart-haas-pad-fixed.wav).
 
-| Content | Most common target | Median active delay | Adaptive error | Fixed 12 ms error |
-| --- | ---: | ---: | ---: | ---: |
-| C major pad | 15.6 ms | 15.65 ms | 0.423 | 0.405 |
-| A minor pad | 18.0 ms | 16.45 ms | 0.657 | 0.427 |
+| Content | Most common target | Target changes | Median active delay | Adaptive error | Fixed 12 ms error |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| C major pad | 15.6 ms | 0 | 15.60 ms | 0.277 | 0.405 |
+| A minor pad | 18.0 ms | 0 | 18.00 ms | 0.338 | 0.427 |
 
 The C major and A minor input levels are 0.088
 and 0.086 RMS over the steady windows.
-The selected target changes with the chord and stays inside 6–18 ms;
+The selected target moves from 15.6 ms on C major to 18.0 ms on A minor.
+C major has 0 target changes during its steady window; A minor has 0. The target stays inside 6–18 ms;
 the largest active-delay step is 10.0 ms/s (10 ms/s setting).
-But adaptive processing produces a **larger** spectral error than the fixed
-12 ms delay on both chords, particularly A minor. The target jumps
-frequently between candidates, and the active delay travels through
-other values under the rate limit. This musical test does not support
-a spectral-preservation improvement from the current Smart Haas search.
+Adaptive processing reduces the spectral error by 31.7% on C major and 20.7% on A minor against the fixed 12 ms delay in this pad test.
 
 ## Keep Transient and Velvet Transient Guard
 

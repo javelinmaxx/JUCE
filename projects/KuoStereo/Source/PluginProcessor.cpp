@@ -40,6 +40,9 @@ void KuoStereoProcessor::prepareToPlay (double rate, int)
     midHistory.assign (historySize, 0);
     velvetHistory.assign (historySize, 0);
     writePosition = sampleCount = analysisCounter = scopeCounter = transientHold = velvetAttackRemaining = 0;
+    selectedCandidate = -1;
+    previousCenterDelayMs = previousVariabilityMs = -1;
+    smoothedCandidateScores = {};
     previousOnset = false;
     lowState = upperState = {};
     detectorLowStates = {};
@@ -111,6 +114,14 @@ void KuoStereoProcessor::analyzeMidSpectrum (float centerDelayMs, float variabil
 {
     const auto lowDelayMs = std::max (3.0f, centerDelayMs - variabilityMs);
     const auto highDelayMs = std::min (30.0f, centerDelayMs + variabilityMs);
+    if (std::abs (centerDelayMs - previousCenterDelayMs) > 0.0001f
+        || std::abs (variabilityMs - previousVariabilityMs) > 0.0001f)
+    {
+        // Automation moves the search grid, so old candidate scores no longer describe its delays.
+        selectedCandidate = -1;
+        previousCenterDelayMs = centerDelayMs;
+        previousVariabilityMs = variabilityMs;
+    }
     if (sampleCount < static_cast<int> (sampleRate * 0.03f) + fftSize)
     {
         targetDelaySamples = centerDelayMs * 0.001f * sampleRate;
@@ -133,17 +144,23 @@ void KuoStereoProcessor::analyzeMidSpectrum (float centerDelayMs, float variabil
         referenceLevel += spectrumInput[static_cast<size_t> (bin)] / fftSize;
     if (referenceLevel < 0.001f)
     {
+        selectedCandidate = -1;
         targetDelaySamples = centerDelayMs * 0.001f * sampleRate;
         selectedDelayMs.store (centerDelayMs, std::memory_order_relaxed);
         return;
     }
 
+    constexpr float switchMargin = 0.95f;
+    const auto scoreAlpha = 1.0f - std::exp (-static_cast<float> (fftSize / 2)
+                                             / (0.15f * sampleRate));
     float bestScore = std::numeric_limits<float>::max();
-    float bestDelayMs = centerDelayMs;
+    int bestCandidate = 0;
     for (int candidate = 0; candidate < candidates; ++candidate)
     {
-        const auto delayMs = lowDelayMs + (highDelayMs - lowDelayMs)
-                                         * static_cast<float> (candidate) / static_cast<float> (candidates - 1);
+        // Keep the original six-point grid and always make Center an available fallback.
+        const auto delayMs = candidate == candidates - 1 ? centerDelayMs
+            : lowDelayMs + (highDelayMs - lowDelayMs)
+                         * static_cast<float> (candidate) / static_cast<float> (candidates - 2);
         const auto delaySamples = juce::roundToInt (delayMs * 0.001f * sampleRate);
         std::fill (spectrumCandidate.begin(), spectrumCandidate.end(), 0.0f);
         for (int i = 0; i < fftSize; ++i)
@@ -164,12 +181,20 @@ void KuoStereoProcessor::analyzeMidSpectrum (float centerDelayMs, float variabil
             weightSum += weight;
         }
         score /= std::max (weightSum, 1.0f);
-        if (score < bestScore)
+        auto& average = smoothedCandidateScores[static_cast<size_t> (candidate)];
+        average = selectedCandidate < 0 ? score : average + scoreAlpha * (score - average);
+        if (average < bestScore)
         {
-            bestScore = score;
-            bestDelayMs = delayMs;
+            bestScore = average;
+            bestCandidate = candidate;
         }
     }
+    if (selectedCandidate < 0
+        || bestScore < switchMargin * smoothedCandidateScores[static_cast<size_t> (selectedCandidate)])
+        selectedCandidate = bestCandidate;
+    const auto bestDelayMs = selectedCandidate == candidates - 1 ? centerDelayMs
+        : lowDelayMs + (highDelayMs - lowDelayMs)
+                     * static_cast<float> (selectedCandidate) / static_cast<float> (candidates - 2);
     targetDelaySamples = bestDelayMs * 0.001f * sampleRate;
     selectedDelayMs.store (bestDelayMs, std::memory_order_relaxed);
 }
