@@ -779,14 +779,28 @@ int main (int argc, char** argv)
                    "editor is 20 px shorter after reducing the sound field meters");
             int knobs = 0;
             juce::Slider* firstKnob = nullptr;
+            juce::Slider* variability = nullptr;
             for (auto* child : editor->getChildren())
                 if (auto* slider = dynamic_cast<juce::Slider*> (child))
                 {
                     ++knobs;
                     if (firstKnob == nullptr) firstKnob = slider;
+                    if (slider->getName() == "VARIABILITY") variability = slider;
                 }
             check (knobs == 11, "editor exposes three Velvet band sliders beside the goniometers");
             check (firstKnob != nullptr, "editor has a control to verify scaling");
+            check (variability != nullptr && variability->getTextFromValue (0.0) == "OFF"
+                   && variability->getTextFromValue (6.0) == "6.0 ms"
+                   && std::abs (variability->getValueFromText ("OFF")) < 1.0e-6,
+                   "zero Variability shows OFF while nonzero values retain milliseconds");
+            juce::Label* variabilityReadout = nullptr;
+            for (auto* child : variability->getChildren())
+                if (auto* label = dynamic_cast<juce::Label*> (child)) variabilityReadout = label;
+            variability->setValue (0.0, juce::sendNotificationSync);
+            check (variabilityReadout != nullptr && variabilityReadout->getText() == "OFF"
+                   && std::abs (preview.parameters.getRawParameterValue ("haasRange")->load()) < 1.0e-6f,
+                   "the attached Variability readout shows OFF at zero");
+            variability->setValue (6.0, juce::sendNotificationSync);
             const auto originalKnobWidth = editor->getLocalArea (firstKnob, firstKnob->getLocalBounds()).getWidth();
             const auto image = editor->createComponentSnapshot (editor->getLocalBounds());
             check (image.isValid(), "frequency-split goniometer editor renders");

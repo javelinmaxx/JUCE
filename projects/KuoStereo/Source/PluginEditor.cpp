@@ -164,6 +164,22 @@ KuoStereoEditor::KuoStereoEditor (KuoStereoProcessor& p)
         addAndMakeVisible (slider);
         addAndMakeVisible (labels[i]);
         attachments[i] = std::make_unique<State::SliderAttachment> (p.parameters, ids[i], slider);
+        if (i == 1)
+        {
+            // SliderAttachment installs its own formatter, so override it
+            // after attachment setup. The host parameter remains numeric.
+            slider.setTextValueSuffix ({});
+            slider.textFromValueFunction = [] (double value)
+            {
+                return value < 0.05 ? juce::String ("OFF")
+                                    : juce::String (value, 1) + " ms";
+            };
+            slider.valueFromTextFunction = [] (const juce::String& text)
+            {
+                return text.trim().equalsIgnoreCase ("OFF") ? 0.0 : text.getDoubleValue();
+            };
+            slider.updateText();
+        }
     }
     constexpr std::array<const char*, 3> bandIds { "velvetLow", "velvetMid", "velvetHigh" };
     constexpr std::array<const char*, 3> bandNames {

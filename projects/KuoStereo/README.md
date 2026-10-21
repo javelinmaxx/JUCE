@@ -26,7 +26,7 @@ transient protection, Velvet widening, and the frequency display.
   per pass; the broad survey covers the full range over several passes. The
   analysis runs every 2048 samples on a low-priority worker using a copied,
   preallocated input snapshot. Its result reaches the audio path on a later
-  block. Zero Variability disables the search entirely.
+  block. Zero Variability disables the search entirely and displays OFF.
   The active delay moves linearly toward each target at the selected Max Rate.
   A zero Variability setting fixes the target at Center Delay. Dynamic
   uses the same onset detector as Velvet Width to
