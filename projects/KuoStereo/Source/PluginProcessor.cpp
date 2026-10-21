@@ -42,7 +42,9 @@ void KuoStereoProcessor::prepareToPlay (double rate, int)
     writePosition = sampleCount = analysisCounter = scopeCounter = transientHold = velvetAttackRemaining = 0;
     previousOnset = false;
     lowState = upperState = {};
-    fastEnvelope = slowEnvelope = haasTransientEnvelope = 0;
+    detectorLowStates = {};
+    detectorFastEnvelopes = detectorSlowEnvelopes = {};
+    haasTransientEnvelope = 0;
     widthBlend = 0;
     const auto centerDelayMs = parameters.getRawParameterValue ("haasCenter")->load();
     targetDelaySamples = smoothDelaySamples = centerDelayMs * 0.001f * sampleRate;
@@ -54,6 +56,9 @@ void KuoStereoProcessor::prepareToPlay (double rate, int)
     upperCoefficient = coefficient (2500.0f);
     fastCoefficient = coefficient (160.0f);
     slowCoefficient = coefficient (8.0f);
+    constexpr std::array<float, 3> detectorCrossovers { 250, 2500, 8000 };
+    for (size_t band = 0; band < detectorCoefficients.size(); ++band)
+        detectorCoefficients[band] = coefficient (detectorCrossovers[band]);
     for (int i = 0; i < fftSize; ++i)
         window[static_cast<size_t> (i)] = 0.5f - 0.5f * std::cos (
             juce::MathConstants<float>::twoPi * static_cast<float> (i) / static_cast<float> (fftSize - 1));
@@ -231,9 +236,24 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     {
         const auto dryLeft = left[i], dryRight = right[i];
         const auto mid = 0.5f * (dryLeft + dryRight);
-        fastEnvelope += fastCoefficient * (std::abs (mid) - fastEnvelope);
-        slowEnvelope += slowCoefficient * (std::abs (mid) - slowEnvelope);
-        const auto onset = fastEnvelope > 0.02f && fastEnvelope > slowEnvelope * 1.8f;
+        for (size_t band = 0; band < detectorLowStates.size(); ++band)
+            detectorLowStates[band] += detectorCoefficients[band] * (mid - detectorLowStates[band]);
+        const std::array<float, 4> spectralBands {
+            detectorLowStates[0],
+            detectorLowStates[1] - detectorLowStates[0],
+            detectorLowStates[2] - detectorLowStates[1],
+            mid - detectorLowStates[2]
+        };
+        bool onset = false;
+        for (size_t band = 0; band < spectralBands.size(); ++band)
+        {
+            const auto level = std::abs (spectralBands[band]);
+            detectorFastEnvelopes[band] += fastCoefficient * (level - detectorFastEnvelopes[band]);
+            detectorSlowEnvelopes[band] += slowCoefficient * (level - detectorSlowEnvelopes[band]);
+            // Positive per-band spectral change detects attacks even when total level stays steady.
+            onset |= detectorFastEnvelopes[band] > 0.004f
+                  && detectorFastEnvelopes[band] > detectorSlowEnvelopes[band] * 2.2f;
+        }
         if (onset && ! previousOnset)
             velvetAttackRemaining = juce::roundToInt (0.003f * sampleRate);
         previousOnset = onset;

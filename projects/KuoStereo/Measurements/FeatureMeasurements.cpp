@@ -168,6 +168,24 @@ void measureTransient (const std::filesystem::path& directory)
     }
 }
 
+void measureSpectralOnset (const std::filesystem::path& directory)
+{
+    Samples input (sampleRate * 6 / 5);
+    for (size_t i = 0; i < input.size(); ++i)
+    {
+        const auto frequency = i < sampleRate ? 100.0f : 5000.0f;
+        input[i] = 0.18f * std::sin (juce::MathConstants<float>::twoPi * frequency
+                                    * static_cast<float> (i) / sampleRate);
+    }
+    const auto normal = render (input, { 12, 0, 10, 0, 0, 0 });
+    const auto kept = render (input, { 12, 0, 10, 100, 0, 0 });
+    std::ofstream csv (directory / "spectral_onset.csv");
+    csv << "time_ms,normal_ms,kept_ms\n" << std::fixed << std::setprecision (9);
+    for (size_t block = 0; block < kept.active.size(); ++block)
+        csv << 1000.0 * (static_cast<double> ((block + 1) * blockSize) - sampleRate) / sampleRate << ','
+            << normal.active[block] << ',' << kept.active[block] << '\n';
+}
+
 void measureMonoWidth (const std::filesystem::path& directory)
 {
     Samples input (sampleRate * 2);
@@ -238,6 +256,7 @@ int main (int argc, char** argv)
         std::filesystem::create_directories (directory);
         measureAdaptation (directory);
         measureTransient (directory);
+        measureSpectralOnset (directory);
         measureMonoWidth (directory);
         measureScope (directory);
         return 0;

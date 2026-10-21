@@ -60,7 +60,8 @@ private:
     bool previousOnset = false;
     float sampleRate = 48000.0f, targetDelaySamples = 576.0f, smoothDelaySamples = 576.0f;
     float widthBlend = 0, haasTransientEnvelope = 0;
-    float fastEnvelope = 0, slowEnvelope = 0;
+    std::array<float, 3> detectorLowStates {}, detectorCoefficients {};
+    std::array<float, 4> detectorFastEnvelopes {}, detectorSlowEnvelopes {};
     float lowCoefficient = 0, upperCoefficient = 0, fastCoefficient = 0, slowCoefficient = 0;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (KuoStereoProcessor)
 };

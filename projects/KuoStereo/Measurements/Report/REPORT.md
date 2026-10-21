@@ -37,6 +37,19 @@ temporal averaging merit investigation before claiming reliable improvement.
 
 ## Keep Transient and Velvet Transient Guard
 
+The shared onset detector compares fast and slow magnitude envelopes in four
+mid-channel frequency bands: below 250 Hz, 250 Hz–2.5 kHz, 2.5–8 kHz,
+and above 8 kHz. It triggers on a sharp rise in any one band rather than
+on the total mid-channel level. As an equal-amplitude check, a 100 Hz
+tone switches to 5 kHz after 1 s; both tones are 0.18 peak amplitude.
+
+![Equal-amplitude spectral onset](spectral-onset.png)
+
+Keep Transient at 100% moves from 12.00 ms before the switch
+to 0.00 ms at the first measured block after it; Keep 0%
+remains at 12 ms. This checks the frequency-specific trigger independently
+of a broadband level increase.
+
 A 1.0-amplitude onset with a short decaying noise burst is placed in a
 0.002-amplitude white-noise bed. Haas Center is 12 ms and Variability is 0 ms.
 Keep Transient is compared at 0% and 100% with Velvet Width at 0%.
@@ -61,7 +74,7 @@ The Haas-only render is the baseline; the change between renders is Velvet.
 
 - Side RMS rises from 0.04476 to 0.05488 (22.6% increase).
 - Velvet itself adds 0.03158 side RMS while the mid difference between renders is 0.0000000 RMS.
-- With Guard 100%, side RMS is 0.05488 and the Velvet-added side RMS is 0.03158; sustained width remains audible.
+- With Guard 100%, side RMS is 0.05472 and the Velvet-added side RMS is 0.03132; sustained width remains audible.
 - Left/right correlation changes from 0.003 to -0.198.
 - Listen to [mono input](mono-input.wav), [Haas only](mono-haas-only.wav),
   [Haas + Velvet 100%](mono-velvet-100.wav), and

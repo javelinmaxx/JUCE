@@ -292,6 +292,36 @@ int main (int argc, char** argv)
         check (std::abs (fullKeep.recoveredDelayMs - 12.0f) < 0.01f,
                "the Haas delay returns after the shared transient hold and release");
 
+        KuoStereoProcessor spectralOnset;
+        set (spectralOnset, "haasCenter", 12);
+        set (spectralOnset, "haasRange", 0);
+        set (spectralOnset, "haasKeepTransient", 100);
+        set (spectralOnset, "width", 0);
+        spectralOnset.prepareToPlay (48000, 256);
+        for (int block = 0; block < 190; ++block)
+        {
+            for (int i = 0; i < 256; ++i)
+            {
+                const auto time = static_cast<float> (block * 256 + i) / 48000.0f;
+                const auto sample = 0.18f * std::sin (juce::MathConstants<float>::twoPi * 100.0f * time);
+                buffer.setSample (0, i, sample);
+                buffer.setSample (1, i, sample);
+            }
+            spectralOnset.processBlock (buffer, midi);
+        }
+        check (std::abs (spectralOnset.getCurrentDelayMs() - 12.0f) < 0.01f,
+               "steady low-band tone does not keep spectral transient protection active");
+        for (int i = 0; i < 256; ++i)
+        {
+            const auto time = static_cast<float> (i) / 48000.0f;
+            const auto sample = 0.18f * std::sin (juce::MathConstants<float>::twoPi * 5000.0f * time);
+            buffer.setSample (0, i, sample);
+            buffer.setSample (1, i, sample);
+        }
+        spectralOnset.processBlock (buffer, midi);
+        check (spectralOnset.getCurrentDelayMs() < 0.01f,
+               "spectral detector responds to a frequency change at equal tone amplitude");
+
         if (argc > 1 && juce::String (argv[1]) == "--editor")
         {
             KuoStereoProcessor preview;

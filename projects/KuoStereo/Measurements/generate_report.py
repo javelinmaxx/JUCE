@@ -134,6 +134,22 @@ def main(raw_dir, report_dir):
     fig.savefig(report_dir / "transients.png", dpi=170)
     plt.close(fig)
 
+    spectral_onset = read_csv(raw_dir / "spectral_onset.csv")
+    switch_time = np.array([float(row["time_ms"]) for row in spectral_onset])
+    switch_normal = np.array([float(row["normal_ms"]) for row in spectral_onset])
+    switch_kept = np.array([float(row["kept_ms"]) for row in spectral_onset])
+    before_switch = float(np.median(switch_kept[(switch_time >= -100) & (switch_time < 0)]))
+    after_switch = float(switch_kept[np.flatnonzero(switch_time > 0)[0]])
+    fig, axis = plt.subplots(figsize=(8, 3.3), layout="constrained")
+    axis.plot(switch_time, switch_normal, color="#314e79", label="Keep 0%")
+    axis.plot(switch_time, switch_kept, color="#ca7939", label="Keep 100%")
+    axis.axvline(0, color="0.4", ls=":", lw=1)
+    axis.set(xlim=(-100, 120), ylim=(-0.5, 13), xlabel="time relative to equal-amplitude tone change (ms)",
+             ylabel="effective Haas delay (ms)", title="100 Hz to 5 kHz: per-band spectral onset")
+    axis.legend(frameon=False)
+    fig.savefig(report_dir / "spectral-onset.png", dpi=170)
+    plt.close(fig)
+
     mono = np.fromfile(raw_dir / "mono.raw", dtype="<f4").reshape(-1, 7)
     input_mono, off_l, off_r, on_l, on_r, guard_l, guard_r = mono.T
     off_side = 0.5 * (off_l - off_r)
@@ -219,6 +235,19 @@ def main(raw_dir, report_dir):
         "temporal averaging merit investigation before claiming reliable improvement.",
         "",
         "## Keep Transient and Velvet Transient Guard",
+        "",
+        "The shared onset detector compares fast and slow magnitude envelopes in four",
+        "mid-channel frequency bands: below 250 Hz, 250 Hz–2.5 kHz, 2.5–8 kHz,",
+        "and above 8 kHz. It triggers on a sharp rise in any one band rather than",
+        "on the total mid-channel level. As an equal-amplitude check, a 100 Hz",
+        "tone switches to 5 kHz after 1 s; both tones are 0.18 peak amplitude.",
+        "",
+        "![Equal-amplitude spectral onset](spectral-onset.png)",
+        "",
+        f"Keep Transient at 100% moves from {before_switch:.2f} ms before the switch",
+        f"to {after_switch:.2f} ms at the first measured block after it; Keep 0%",
+        "remains at 12 ms. This checks the frequency-specific trigger independently",
+        "of a broadband level increase.",
         "",
         "A 1.0-amplitude onset with a short decaying noise burst is placed in a",
         "0.002-amplitude white-noise bed. Haas Center is 12 ms and Variability is 0 ms.",
