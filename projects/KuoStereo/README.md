@@ -22,7 +22,9 @@ transient protection, Velvet widening, and the frequency display.
   choice. Fine 0.2 ms neighborhoods alternate every other pass, so each is
   checked about every 171 ms at 48 kHz. At most seven candidates are FFT-scored
   per pass; the broad survey covers the full range over several passes. The
-  analysis runs every 2048 samples, and zero Variability disables it entirely.
+  analysis runs every 2048 samples on a low-priority worker using a copied,
+  preallocated input snapshot. Its result reaches the audio path on a later
+  block. Zero Variability disables the search entirely.
   The active delay moves linearly toward each target at the selected Max Rate.
   A zero Variability setting fixes the target at Center Delay. Dynamic
   uses the same onset detector as Velvet Width to

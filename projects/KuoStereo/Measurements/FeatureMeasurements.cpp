@@ -2,6 +2,7 @@
 #include "SynthPad.h"
 #include <algorithm>
 #include <cmath>
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -9,6 +10,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace
@@ -76,6 +78,8 @@ Render render (const Samples& input, const Settings& settings)
             buffer.setSample (1, static_cast<int> (i), input[start + i]);
         }
         processor.processBlock (buffer, midi);
+        if (settings.range > 0.0f && (start + count) % 2048 == 0)
+            std::this_thread::sleep_for (std::chrono::milliseconds (5));
         for (size_t i = 0; i < count; ++i)
         {
             result.left[start + i] = buffer.getSample (0, static_cast<int> (i));
@@ -162,6 +166,8 @@ void measureZeroPreference (const std::filesystem::path& directory)
                 buffer.setSample (1, i, 0.2f * std::sin (phase + (alreadyWide ? 0.6f : 0.0f)));
             }
             processor.processBlock (buffer, midi);
+            if (block % 8 == 7)
+                std::this_thread::sleep_for (std::chrono::milliseconds (5));
         }
         csv << (alreadyWide ? "already-wide" : "mono") << ','
             << processor.getSelectedDelayMs() << '\n';

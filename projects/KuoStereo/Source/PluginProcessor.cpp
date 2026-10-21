@@ -35,8 +35,19 @@ KuoStereoProcessor::KuoStereoProcessor()
 {
 }
 
+KuoStereoProcessor::~KuoStereoProcessor()
+{
+    releaseResources();
+}
+
+void KuoStereoProcessor::releaseResources()
+{
+    searchWorker.stopThread (-1);
+}
+
 void KuoStereoProcessor::prepareToPlay (double rate, int)
 {
+    searchWorker.stopThread (-1);
     sampleRate = static_cast<float> (std::max (rate, 1000.0));
     lookaheadSamples = juce::roundToInt (0.0015f * sampleRate);
     setLatencySamples (lookaheadSamples);
@@ -45,14 +56,6 @@ void KuoStereoProcessor::prepareToPlay (double rate, int)
     rightHistory.assign (historySize, 0);
     velvetHistory.assign (historySize, 0);
     writePosition = sampleCount = analysisCounter = scopeCounter = transientHold = 0;
-    selectedCandidate = -1;
-    previousCenterDelayMs = previousVariabilityMs = -1;
-    smoothedCandidateScores = {};
-    candidateScoreInitialized = {};
-    candidateLastScoreFrame = {};
-    coarseSurveyCursor = 0;
-    scoreFrame = 0;
-    coarseSurveyComplete = false;
     lowState = upperState = {};
     detectorLowStates = {};
     detectorFastEnvelopes = detectorSlowEnvelopes = {};
@@ -69,8 +72,13 @@ void KuoStereoProcessor::prepareToPlay (double rate, int)
     widthBlend = 0;
     const auto centerDelayMs = parameters.getRawParameterValue ("haasCenter")->load();
     targetDelaySamples = smoothDelaySamples = centerDelayMs * 0.001f * sampleRate;
-    selectedDelayMs.store (centerDelayMs, std::memory_order_relaxed);
     currentDelayMs.store (centerDelayMs, std::memory_order_relaxed);
+    previousCenterDelayMs = centerDelayMs;
+    previousVariabilityMs = parameters.getRawParameterValue ("haasRange")->load();
+    searchWorker.prepare (sampleRate, historySize);
+    searchWorker.setFixedDelay (centerDelayMs);
+    if (parameters.getRawParameterValue ("haasRange")->load() > 0.0f)
+        searchWorker.setAdaptiveMode();
     const auto coefficient = [this] (float hz)
     { return 1.0f - std::exp (-juce::MathConstants<float>::twoPi * hz / sampleRate); };
     lowCoefficient = coefficient (250.0f);
@@ -80,9 +88,6 @@ void KuoStereoProcessor::prepareToPlay (double rate, int)
     constexpr std::array<float, 3> detectorCrossovers { 250, 2500, 8000 };
     for (size_t band = 0; band < detectorCoefficients.size(); ++band)
         detectorCoefficients[band] = coefficient (detectorCrossovers[band]);
-    for (int i = 0; i < fftSize; ++i)
-        window[static_cast<size_t> (i)] = 0.5f - 0.5f * std::cos (
-            juce::MathConstants<float>::twoPi * static_cast<float> (i) / static_cast<float> (fftSize - 1));
     auto random = 0x4b554f31u;
     int pairSign = 1;
     for (int i = 0; i < velvetTaps; ++i)
@@ -103,6 +108,274 @@ void KuoStereoProcessor::prepareToPlay (double rate, int)
             point.right.store (0, std::memory_order_relaxed);
         }
     scopeWrite.store (0, std::memory_order_relaxed);
+}
+
+KuoStereoProcessor::HaasSearchWorker::HaasSearchWorker()
+    : juce::Thread ("Kuo Stereo Haas Search")
+{
+}
+
+void KuoStereoProcessor::HaasSearchWorker::prepare (float newSampleRate, size_t historySamples)
+{
+    sampleRate = newSampleRate;
+    job.leftAgo.assign (historySamples, 0.0f);
+    job.rightAgo.assign (historySamples, 0.0f);
+    job.state.store (0, std::memory_order_relaxed);
+    generation.store (0, std::memory_order_relaxed);
+    latestSequence.store (0, std::memory_order_relaxed);
+    fixedMode.store (true, std::memory_order_relaxed);
+    selectedDelayMs.store (12.0f, std::memory_order_relaxed);
+    targetDelayMs.store (12.0f, std::memory_order_relaxed);
+    activeGeneration = 0;
+    resetSearch();
+    for (int i = 0; i < fftSize; ++i)
+        window[static_cast<size_t> (i)] = 0.5f - 0.5f * std::cos (
+            juce::MathConstants<float>::twoPi * static_cast<float> (i)
+                / static_cast<float> (fftSize - 1));
+    startThread (juce::Thread::Priority::low);
+}
+
+void KuoStereoProcessor::HaasSearchWorker::setFixedDelay (float delayMs) noexcept
+{
+    if (! fixedMode.exchange (true, std::memory_order_acq_rel))
+        generation.fetch_add (1, std::memory_order_acq_rel);
+    selectedDelayMs.store (delayMs, std::memory_order_relaxed);
+    targetDelayMs.store (delayMs, std::memory_order_relaxed);
+}
+
+void KuoStereoProcessor::HaasSearchWorker::setAdaptiveMode() noexcept
+{
+    if (fixedMode.exchange (false, std::memory_order_acq_rel))
+        generation.fetch_add (1, std::memory_order_acq_rel);
+}
+
+void KuoStereoProcessor::HaasSearchWorker::invalidateSearch (float centerDelayMs) noexcept
+{
+    generation.fetch_add (1, std::memory_order_acq_rel);
+    selectedDelayMs.store (centerDelayMs, std::memory_order_relaxed);
+    targetDelayMs.store (centerDelayMs, std::memory_order_relaxed);
+}
+
+KuoStereoProcessor::HaasSearchWorker::SearchJob*
+KuoStereoProcessor::HaasSearchWorker::acquireJob() noexcept
+{
+    int expected = 0;
+    if (! job.state.compare_exchange_strong (expected, 1, std::memory_order_acquire))
+        return nullptr;
+    job.generation = generation.load (std::memory_order_acquire);
+    job.sequence = latestSequence.fetch_add (1, std::memory_order_acq_rel) + 1;
+    return &job;
+}
+
+void KuoStereoProcessor::HaasSearchWorker::publishJob (SearchJob& newJob) noexcept
+{
+    newJob.state.store (2, std::memory_order_release);
+}
+
+float KuoStereoProcessor::getSelectedDelayMs() const noexcept
+{
+    return searchWorker.getSelectedDelayMs();
+}
+
+void KuoStereoProcessor::HaasSearchWorker::resetSearch() noexcept
+{
+    smoothedCandidateScores = {};
+    candidateScoreInitialized = {};
+    candidateLastScoreFrame = {};
+    selectedCandidate = -1;
+    coarseSurveyCursor = 0;
+    scoreFrame = 0;
+    coarseSurveyComplete = false;
+    previousCenterDelayMs = previousVariabilityMs = -1.0f;
+}
+
+void KuoStereoProcessor::HaasSearchWorker::run()
+{
+    while (! threadShouldExit())
+    {
+        int expected = 2;
+        if (job.state.compare_exchange_strong (expected, 3, std::memory_order_acquire))
+        {
+            process (job);
+            job.state.store (0, std::memory_order_release);
+        }
+        else
+            juce::Thread::sleep (2);
+    }
+}
+
+void KuoStereoProcessor::HaasSearchWorker::process (const SearchJob& input) noexcept
+{
+    if (input.generation != generation.load (std::memory_order_acquire))
+        return;
+    if (activeGeneration != input.generation)
+    {
+        resetSearch();
+        activeGeneration = input.generation;
+    }
+    const auto centerDelayMs = input.centerMs;
+    const auto variabilityMs = input.variabilityMs;
+    const auto lowDelayMs = std::max (-30.0f, centerDelayMs - variabilityMs);
+    const auto highDelayMs = std::min (30.0f, centerDelayMs + variabilityMs);
+    if (std::abs (centerDelayMs - previousCenterDelayMs) > 0.0001f
+        || std::abs (variabilityMs - previousVariabilityMs) > 0.0001f)
+    {
+        resetSearch();
+        activeGeneration = input.generation;
+        previousCenterDelayMs = centerDelayMs;
+        previousVariabilityMs = variabilityMs;
+    }
+    if (highDelayMs - lowDelayMs < 0.0001f) return;
+
+    const auto firstGridPoint = static_cast<int> (std::ceil (lowDelayMs * 5.0f - 0.0001f));
+    const auto lastGridPoint = static_cast<int> (std::floor (highDelayMs * 5.0f + 0.0001f));
+    const auto candidateCount = lastGridPoint - firstGridPoint + 1;
+    if (candidateCount <= 0 || candidateCount > maxCandidates) return;
+    const auto candidateDelayMs = [=] (int candidate) noexcept
+    { return 0.2f * static_cast<float> (firstGridPoint + candidate); };
+
+    std::fill (spectrumInput.begin(), spectrumInput.end(), 0.0f);
+    for (int i = 0; i < fftSize; ++i)
+    {
+        const auto ago = fftSize - 1 - i;
+        spectrumInput[static_cast<size_t> (i)] = 0.5f
+            * (input.leftAgo[static_cast<size_t> (ago)]
+               + input.rightAgo[static_cast<size_t> (ago)]) * window[static_cast<size_t> (i)];
+    }
+    fft.performFrequencyOnlyForwardTransform (spectrumInput.data());
+    float referenceLevel = 0.0f;
+    for (int bin = 2; bin < fftSize / 2; ++bin)
+        referenceLevel += spectrumInput[static_cast<size_t> (bin)] / fftSize;
+    if (referenceLevel < 0.001f)
+    {
+        resetSearch();
+        activeGeneration = input.generation;
+        previousCenterDelayMs = centerDelayMs;
+        previousVariabilityMs = variabilityMs;
+        if (input.generation == generation.load (std::memory_order_acquire)
+            && input.sequence == latestSequence.load (std::memory_order_acquire))
+        {
+            selectedDelayMs.store (centerDelayMs, std::memory_order_relaxed);
+            targetDelayMs.store (centerDelayMs, std::memory_order_relaxed);
+        }
+        return;
+    }
+
+    constexpr float switchMargin = 0.98f;
+    ++scoreFrame;
+    std::array<bool, maxCandidates> scored {};
+    const auto scoreCandidate = [&] (int candidate) noexcept
+    {
+        auto& average = smoothedCandidateScores[static_cast<size_t> (candidate)];
+        if (scored[static_cast<size_t> (candidate)]) return average;
+        scored[static_cast<size_t> (candidate)] = true;
+        const auto delaySamples = candidateDelayMs (candidate) * 0.001f * sampleRate;
+        const auto leftDelay = std::max (-delaySamples, 0.0f);
+        const auto rightDelay = std::max (delaySamples, 0.0f);
+        std::fill (spectrumCandidate.begin(), spectrumCandidate.end(), 0.0f);
+        float sideEnergy = 0.0f, midEnergy = 0.0f;
+        for (int i = 0; i < fftSize; ++i)
+        {
+            const auto ago = static_cast<float> (fftSize - 1 - i);
+            const auto leftAgo = ago + leftDelay;
+            const auto rightAgo = ago + rightDelay;
+            const auto leftWhole = static_cast<size_t> (leftAgo);
+            const auto rightWhole = static_cast<size_t> (rightAgo);
+            const auto leftFraction = leftAgo - static_cast<float> (leftWhole);
+            const auto rightFraction = rightAgo - static_cast<float> (rightWhole);
+            const auto candidateLeft = input.leftAgo[leftWhole] * (1.0f - leftFraction)
+                + input.leftAgo[leftWhole + 1] * leftFraction;
+            const auto candidateRight = input.rightAgo[rightWhole] * (1.0f - rightFraction)
+                + input.rightAgo[rightWhole + 1] * rightFraction;
+            const auto candidateMid = 0.5f * (candidateLeft + candidateRight);
+            const auto candidateSide = 0.5f * (candidateLeft - candidateRight);
+            const auto weight = window[static_cast<size_t> (i)];
+            spectrumCandidate[static_cast<size_t> (i)] = candidateMid * weight;
+            midEnergy += candidateMid * candidateMid * weight;
+            sideEnergy += candidateSide * candidateSide * weight;
+        }
+        fft.performFrequencyOnlyForwardTransform (spectrumCandidate.data());
+        float score = 0.0f, weightSum = 0.0f;
+        for (int bin = 2; bin < fftSize / 2; ++bin)
+        {
+            const auto reference = spectrumInput[static_cast<size_t> (bin)] / fftSize;
+            const auto processed = spectrumCandidate[static_cast<size_t> (bin)] / fftSize;
+            const auto weight = reference / (reference + 0.01f);
+            score += weight * std::abs (std::log ((processed + 0.0001f) / (reference + 0.0001f)));
+            weightSum += weight;
+        }
+        score /= std::max (weightSum, 1.0f);
+        constexpr float targetSideRatio = 0.20f;
+        const auto sideRatio = std::sqrt (sideEnergy / std::max (midEnergy, 0.000001f));
+        score += 0.35f * std::max (0.0f, 1.0f - sideRatio / targetSideRatio);
+        auto& initialized = candidateScoreInitialized[static_cast<size_t> (candidate)];
+        const auto elapsedFrames = scoreFrame
+            - candidateLastScoreFrame[static_cast<size_t> (candidate)];
+        const auto scoreAlpha = 1.0f - std::exp (-static_cast<float> (elapsedFrames * analysisHop)
+                                                 / (0.25f * sampleRate));
+        average = initialized ? average + scoreAlpha * (score - average) : score;
+        initialized = true;
+        candidateLastScoreFrame[static_cast<size_t> (candidate)] = scoreFrame;
+        return average;
+    };
+
+    if (selectedCandidate < 0)
+        selectedCandidate = std::clamp (juce::roundToInt (centerDelayMs * 5.0f) - firstGridPoint,
+                                        0, candidateCount - 1);
+    float bestScore = std::numeric_limits<float>::max();
+    int bestCandidate = selectedCandidate;
+    const auto consider = [&] (int candidate)
+    {
+        const auto average = scoreCandidate (candidate);
+        if (average < bestScore)
+        {
+            bestScore = average;
+            bestCandidate = candidate;
+        }
+    };
+    constexpr int coarseScoresPerPass = 4, coarseStride = 3;
+    const auto coarseCount = (candidateCount + coarseStride - 2) / coarseStride + 1;
+    for (int i = 0; i < coarseScoresPerPass; ++i)
+    {
+        scoreCandidate (std::min (coarseSurveyCursor * coarseStride, candidateCount - 1));
+        if (++coarseSurveyCursor >= coarseCount)
+        {
+            coarseSurveyCursor = 0;
+            coarseSurveyComplete = true;
+        }
+    }
+    consider (selectedCandidate);
+    if ((input.sequence & 3u) == 0u)
+        for (int candidate = std::max (0, selectedCandidate - 1);
+             candidate <= std::min (candidateCount - 1, selectedCandidate + 1); ++candidate)
+            consider (candidate);
+    if (coarseSurveyComplete && (input.sequence & 3u) == 2u)
+    {
+        int coarseBest = 0;
+        float coarseBestScore = std::numeric_limits<float>::max();
+        for (int i = 0; i < coarseCount; ++i)
+        {
+            const auto candidate = std::min (i * coarseStride, candidateCount - 1);
+            if (candidateScoreInitialized[static_cast<size_t> (candidate)]
+                && smoothedCandidateScores[static_cast<size_t> (candidate)] < coarseBestScore)
+            {
+                coarseBestScore = smoothedCandidateScores[static_cast<size_t> (candidate)];
+                coarseBest = candidate;
+            }
+        }
+        for (int candidate = std::max (0, coarseBest - 1);
+             candidate <= std::min (candidateCount - 1, coarseBest + 1); ++candidate)
+            consider (candidate);
+    }
+    if (bestScore < switchMargin * smoothedCandidateScores[static_cast<size_t> (selectedCandidate)])
+        selectedCandidate = bestCandidate;
+    if (input.generation == generation.load (std::memory_order_acquire)
+        && input.sequence == latestSequence.load (std::memory_order_acquire))
+    {
+        const auto delayMs = candidateDelayMs (selectedCandidate);
+        selectedDelayMs.store (delayMs, std::memory_order_relaxed);
+        targetDelayMs.store (delayMs, std::memory_order_relaxed);
+    }
 }
 
 bool KuoStereoProcessor::isBusesLayoutSupported (const BusesLayout& buses) const
@@ -128,173 +401,21 @@ float KuoStereoProcessor::readAgoInterpolated (const std::vector<float>& history
          + readAgo (history, whole + 1) * fraction;
 }
 
-void KuoStereoProcessor::analyzeMidSpectrum (float centerDelayMs, float variabilityMs) noexcept
+void KuoStereoProcessor::enqueueMidSpectrum (float centerDelayMs, float variabilityMs) noexcept
 {
-    const auto lowDelayMs = std::max (-30.0f, centerDelayMs - variabilityMs);
-    const auto highDelayMs = std::min (30.0f, centerDelayMs + variabilityMs);
-    if (std::abs (centerDelayMs - previousCenterDelayMs) > 0.0001f
-        || std::abs (variabilityMs - previousVariabilityMs) > 0.0001f)
-    {
-        // Automation moves the grid, so old scores no longer describe its choices.
-        selectedCandidate = -1;
-        candidateScoreInitialized = {};
-        coarseSurveyCursor = 0;
-        coarseSurveyComplete = false;
-        previousCenterDelayMs = centerDelayMs;
-        previousVariabilityMs = variabilityMs;
-    }
-    if (sampleCount < static_cast<int> (sampleRate * 0.03f) + fftSize
-        || highDelayMs - lowDelayMs < 0.0001f)
-    {
-        targetDelaySamples = centerDelayMs * 0.001f * sampleRate;
-        selectedDelayMs.store (centerDelayMs, std::memory_order_relaxed);
+    if (sampleCount < static_cast<int> (sampleRate * 0.03f) + fftSize)
         return;
-    }
-
-    const auto firstGridPoint = static_cast<int> (std::ceil (lowDelayMs * 5.0f - 0.0001f));
-    const auto lastGridPoint = static_cast<int> (std::floor (highDelayMs * 5.0f + 0.0001f));
-    const auto candidateCount = lastGridPoint - firstGridPoint + 1;
-    if (candidateCount <= 0 || candidateCount > maxCandidates)
-    {
-        targetDelaySamples = centerDelayMs * 0.001f * sampleRate;
-        selectedDelayMs.store (centerDelayMs, std::memory_order_relaxed);
+    auto* job = searchWorker.acquireJob();
+    if (job == nullptr)
         return;
+    job->centerMs = centerDelayMs;
+    job->variabilityMs = variabilityMs;
+    for (size_t ago = 0; ago < job->leftAgo.size(); ++ago)
+    {
+        job->leftAgo[ago] = readAgo (leftHistory, static_cast<int> (ago));
+        job->rightAgo[ago] = readAgo (rightHistory, static_cast<int> (ago));
     }
-    const auto candidateDelayMs = [=] (int candidate) noexcept
-    { return 0.2f * static_cast<float> (firstGridPoint + candidate); };
-
-    std::fill (spectrumInput.begin(), spectrumInput.end(), 0.0f);
-    for (int i = 0; i < fftSize; ++i)
-    {
-        const auto ago = fftSize - 1 - i;
-        spectrumInput[static_cast<size_t> (i)] = 0.5f
-            * (readAgo (leftHistory, ago) + readAgo (rightHistory, ago))
-            * window[static_cast<size_t> (i)];
-    }
-    fft.performFrequencyOnlyForwardTransform (spectrumInput.data());
-    float referenceLevel = 0;
-    for (int bin = 2; bin < fftSize / 2; ++bin)
-        referenceLevel += spectrumInput[static_cast<size_t> (bin)] / fftSize;
-    if (referenceLevel < 0.001f)
-    {
-        selectedCandidate = -1;
-        candidateScoreInitialized = {};
-        coarseSurveyCursor = 0;
-        coarseSurveyComplete = false;
-        targetDelaySamples = centerDelayMs * 0.001f * sampleRate;
-        selectedDelayMs.store (centerDelayMs, std::memory_order_relaxed);
-        return;
-    }
-
-    constexpr float switchMargin = 0.98f;
-    ++scoreFrame;
-    std::array<bool, maxCandidates> scored {};
-    const auto scoreCandidate = [&] (int candidate) noexcept
-    {
-        auto& average = smoothedCandidateScores[static_cast<size_t> (candidate)];
-        if (scored[static_cast<size_t> (candidate)]) return average;
-        scored[static_cast<size_t> (candidate)] = true;
-        const auto delaySamples = candidateDelayMs (candidate) * 0.001f * sampleRate;
-        const auto leftDelay = std::max (-delaySamples, 0.0f);
-        const auto rightDelay = std::max (delaySamples, 0.0f);
-        std::fill (spectrumCandidate.begin(), spectrumCandidate.end(), 0.0f);
-        float sideEnergy = 0, midEnergy = 0;
-        for (int i = 0; i < fftSize; ++i)
-        {
-            const auto ago = static_cast<float> (fftSize - 1 - i);
-            const auto candidateLeft = readAgoInterpolated (leftHistory, ago + leftDelay);
-            const auto candidateRight = readAgoInterpolated (rightHistory, ago + rightDelay);
-            const auto candidateMid = 0.5f * (candidateLeft + candidateRight);
-            const auto candidateSide = 0.5f * (candidateLeft - candidateRight);
-            const auto weight = window[static_cast<size_t> (i)];
-            spectrumCandidate[static_cast<size_t> (i)] = candidateMid * weight;
-            midEnergy += candidateMid * candidateMid * weight;
-            sideEnergy += candidateSide * candidateSide * weight;
-        }
-        fft.performFrequencyOnlyForwardTransform (spectrumCandidate.data());
-        float score = 0, weightSum = 0;
-        for (int bin = 2; bin < fftSize / 2; ++bin)
-        {
-            const auto reference = spectrumInput[static_cast<size_t> (bin)] / fftSize;
-            const auto processed = spectrumCandidate[static_cast<size_t> (bin)] / fftSize;
-            const auto weight = reference / (reference + 0.01f);
-            score += weight * std::abs (std::log ((processed + 0.0001f) / (reference + 0.0001f)));
-            weightSum += weight;
-        }
-        score /= std::max (weightSum, 1.0f);
-        // Zero delay has perfect mid preservation; require useful side energy too.
-        constexpr float targetSideRatio = 0.20f;
-        const auto sideRatio = std::sqrt (sideEnergy / std::max (midEnergy, 0.000001f));
-        score += 0.35f * std::max (0.0f, 1.0f - sideRatio / targetSideRatio);
-        auto& initialized = candidateScoreInitialized[static_cast<size_t> (candidate)];
-        const auto elapsedFrames = scoreFrame - candidateLastScoreFrame[static_cast<size_t> (candidate)];
-        const auto scoreAlpha = 1.0f - std::exp (-static_cast<float> (elapsedFrames * analysisHop)
-                                                 / (0.25f * sampleRate));
-        average = initialized ? average + scoreAlpha * (score - average) : score;
-        initialized = true;
-        candidateLastScoreFrame[static_cast<size_t> (candidate)] = scoreFrame;
-        return average;
-    };
-
-    if (selectedCandidate < 0)
-        selectedCandidate = std::clamp (juce::roundToInt (centerDelayMs * 5.0f) - firstGridPoint,
-                                        0, candidateCount - 1);
-    float bestScore = std::numeric_limits<float>::max();
-    int bestCandidate = selectedCandidate;
-    const auto consider = [&] (int candidate)
-    {
-        const auto average = scoreCandidate (candidate);
-        if (average < bestScore)
-        {
-            bestScore = average;
-            bestCandidate = candidate;
-        }
-        return average;
-    };
-    // Limit expensive FFTs per call. A rotating 0.6 ms survey covers the
-    // range over several blocks while nearby 0.2 ms choices stay responsive.
-    constexpr int coarseScoresPerPass = 4;
-    constexpr int coarseStride = 3;
-    const auto coarseCount = (candidateCount + coarseStride - 2) / coarseStride + 1;
-    for (int i = 0; i < coarseScoresPerPass; ++i)
-    {
-        scoreCandidate (std::min (coarseSurveyCursor * coarseStride, candidateCount - 1));
-        if (++coarseSurveyCursor >= coarseCount)
-        {
-            coarseSurveyCursor = 0;
-            coarseSurveyComplete = true;
-        }
-    }
-    consider (selectedCandidate);
-    // Alternate fine neighborhoods; each is revisited every four analysis
-    // windows, and the selected time itself is refreshed on every pass.
-    if ((scoreFrame & 3u) == 0u)
-        for (int candidate = std::max (0, selectedCandidate - 1);
-             candidate <= std::min (candidateCount - 1, selectedCandidate + 1); ++candidate)
-            consider (candidate);
-    if (coarseSurveyComplete && (scoreFrame & 3u) == 2u)
-    {
-        int coarseBest = 0;
-        float coarseBestScore = std::numeric_limits<float>::max();
-        for (int i = 0; i < coarseCount; ++i)
-        {
-            const auto candidate = std::min (i * coarseStride, candidateCount - 1);
-            if (candidateScoreInitialized[static_cast<size_t> (candidate)]
-                && smoothedCandidateScores[static_cast<size_t> (candidate)] < coarseBestScore)
-            {
-                coarseBestScore = smoothedCandidateScores[static_cast<size_t> (candidate)];
-                coarseBest = candidate;
-            }
-        }
-        for (int candidate = std::max (0, coarseBest - 1);
-             candidate <= std::min (candidateCount - 1, coarseBest + 1); ++candidate)
-            consider (candidate);
-    }
-    if (bestScore < switchMargin * smoothedCandidateScores[static_cast<size_t> (selectedCandidate)])
-        selectedCandidate = bestCandidate;
-    const auto bestDelayMs = candidateDelayMs (selectedCandidate);
-    targetDelaySamples = bestDelayMs * 0.001f * sampleRate;
-    selectedDelayMs.store (bestDelayMs, std::memory_order_relaxed);
+    searchWorker.publishJob (*job);
 }
 
 void KuoStereoProcessor::pushScope (float left, float right) noexcept
@@ -347,20 +468,23 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     const auto variability = parameters.getRawParameterValue ("haasRange")->load();
     if (variability <= 0.0f)
     {
-        // Fixed Center Delay needs no spectrum search. Update it immediately
-        // on automation and reset the survey before adaptive mode resumes.
-        if (std::abs (previousVariabilityMs) > 0.0001f)
-        {
-            selectedCandidate = -1;
-            candidateScoreInitialized = {};
-            coarseSurveyCursor = 0;
-            coarseSurveyComplete = false;
-            previousVariabilityMs = 0.0f;
-        }
-        previousCenterDelayMs = centerDelay;
+        searchWorker.setFixedDelay (centerDelay);
         targetDelaySamples = centerDelay * 0.001f * sampleRate;
-        selectedDelayMs.store (centerDelay, std::memory_order_relaxed);
         analysisCounter = 0;
+        previousCenterDelayMs = centerDelay;
+        previousVariabilityMs = variability;
+    }
+    else
+    {
+        searchWorker.setAdaptiveMode();
+        if (std::abs (centerDelay - previousCenterDelayMs) > 0.0001f
+            || std::abs (variability - previousVariabilityMs) > 0.0001f)
+        {
+            searchWorker.invalidateSearch (centerDelay);
+            previousCenterDelayMs = centerDelay;
+            previousVariabilityMs = variability;
+        }
+        targetDelaySamples = searchWorker.getTargetDelayMs() * 0.001f * sampleRate;
     }
     const auto maxRate = parameters.getRawParameterValue ("haasRate")->load();
     const auto maxDelayStep = maxRate * 0.001f; // Samples per sample equals ms per second.
@@ -474,7 +598,7 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         if (variability > 0.0f && ++analysisCounter >= analysisHop)
         {
             analysisCounter = 0;
-            analyzeMidSpectrum (centerDelay, variability);
+            enqueueMidSpectrum (centerDelay, variability);
         }
 
         // Crossfade tonal onsets over 1 ms so the delayed and transient taps

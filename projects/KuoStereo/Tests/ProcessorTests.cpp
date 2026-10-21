@@ -1,8 +1,10 @@
 #include "../Source/PluginProcessor.h"
 #include "../Measurements/SynthPad.h"
 #include <cmath>
+#include <chrono>
 #include <iostream>
 #include <stdexcept>
+#include <thread>
 
 namespace
 {
@@ -346,6 +348,8 @@ float selectedDelayAcrossZero (bool alreadyWide = false, float rangeMs = 3.0f)
                 : value);
         }
         processor.processBlock (buffer, midi);
+        if (block % 8 == 7)
+            std::this_thread::sleep_for (std::chrono::milliseconds (5));
     }
     return processor.getSelectedDelayMs();
 }
@@ -452,9 +456,11 @@ int main (int argc, char** argv)
         KuoStereoProcessor width;
         set (width, "width", 100);
         set (width, "transientProtect", 0);
+        set (width, "haasRange", 0);
         width.prepareToPlay (48000, 256);
         KuoStereoProcessor noWidth;
         set (noWidth, "width", 0);
+        set (noWidth, "haasRange", 0);
         noWidth.prepareToPlay (48000, 256);
         juce::AudioBuffer<float> baseline (2, 256);
         float sideEnergy = 0, maxMidError = 0;
@@ -604,6 +610,8 @@ int main (int argc, char** argv)
                     finite = finite && std::isfinite (left) && std::isfinite (right);
                     channelDifference += std::abs (left - right);
                 }
+            if (block % 8 == 7)
+                std::this_thread::sleep_for (std::chrono::milliseconds (5));
         }
         check (haas.getSelectedDelayMs() >= 6.0f && haas.getSelectedDelayMs() <= 18.0f,
                "mid-spectrum analyzer selects a delay within center plus or minus variability");
@@ -633,6 +641,7 @@ int main (int argc, char** argv)
                 }
                 haas.processBlock (buffer, midi);
             }
+            std::this_thread::sleep_for (std::chrono::milliseconds (5));
             check (haas.getSelectedDelayMs() >= center - 6.0f
                        && haas.getSelectedDelayMs() <= center + 6.0f,
                    "Smart Haas searches both zero-crossing and negative delay ranges");
