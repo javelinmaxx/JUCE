@@ -318,7 +318,7 @@ void DetectorModeSwitch::paint (juce::Graphics& g)
     g.setFont (juce::FontOptions (9.0f));
     g.drawText ("DETECTOR", 0, 0, getWidth(), 16, juce::Justification::centred);
     const auto cx = static_cast<float> (getWidth()) * 0.5f;
-    constexpr float pivotY = 38.0f;
+    constexpr auto pivotY = static_cast<float> (DetectorModeSwitch::pivotOffsetY);
     juce::Path nut, innerNut;
     for (int corner = 0; corner < 6; ++corner)
     {
@@ -791,7 +791,9 @@ void ShunDeEssEditor::resized()
     place (3, 122, 702, 76, 64);
     place (8, 358, 702, 76, 64);
     place (9, 434, 702, 76, 64);
-    detectorMode.setBounds (207, up (570) + 6, 112, 76);
+    const auto knobLayout = look.getSliderLayout (sliders[0]);
+    const auto knobCentreY = up (570 + 20) + knobLayout.sliderBounds.getCentreY();
+    detectorMode.setBounds (207, knobCentreY - DetectorModeSwitch::pivotOffsetY, 112, 76);
     algorithmLabel.setBounds (205, up (702) + 3, 112, 16);
     algorithm.setBounds (205, up (702) + 19, 112, 65);
 

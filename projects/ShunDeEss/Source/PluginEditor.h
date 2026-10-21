@@ -41,6 +41,7 @@ private:
 class DetectorModeSwitch final : public juce::Slider
 {
 public:
+    static constexpr int pivotOffsetY = 38;
     DetectorModeSwitch();
     void setTheme (const CompressorTheme& nextTheme) { theme = nextTheme; repaint(); }
     void paint (juce::Graphics&) override;
