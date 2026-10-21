@@ -47,8 +47,9 @@ void KuoStereoProcessor::prepareToPlay (double rate, int)
     lowState = upperState = {};
     detectorLowStates = {};
     detectorFastEnvelopes = detectorSlowEnvelopes = {};
-    velvetOnsetActive = instantVelvetOnset = false;
-    haasTransientEnvelope = 0;
+    onsetActive = instantTransientOnset = false;
+    haasTransientEnvelope = haasAttackStartEnvelope = 0;
+    haasAttackProgress = 1;
     velvetGuardEnvelope = 0;
     widthBlend = 0;
     const auto centerDelayMs = parameters.getRawParameterValue ("haasCenter")->load();
@@ -318,12 +319,16 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
             transientHold = juce::roundToInt (0.010f * sampleRate);
         else if (transientHold > 0)
             --transientHold;
-        if (onset && ! velvetOnsetActive)
-            instantVelvetOnset = std::abs (mid) > 25.0f * (fastEnvelopeSum + 0.001f);
-        velvetOnsetActive = onset;
+        if (onset && ! onsetActive)
+        {
+            instantTransientOnset = std::abs (mid) > 25.0f * (fastEnvelopeSum + 0.001f);
+            haasAttackStartEnvelope = haasTransientEnvelope;
+            haasAttackProgress = 0.0f;
+        }
+        onsetActive = onset;
         // Sharp transients use the chosen attack (including immediate 0 ms);
         // tonal onsets get at least a 0.5 ms de-click ramp.
-        const auto attackStep = instantVelvetOnset
+        const auto attackStep = instantTransientOnset
             ? transientGuardAttackStep : tonalGuardAttackStep;
         velvetGuardEnvelope = onset ? std::min (1.0f, velvetGuardEnvelope + attackStep) : 0.0f;
         const auto velvetInput = mid * (1.0f - protection * velvetGuardEnvelope * onsetStrength);
@@ -340,9 +345,22 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
             analyzeMidSpectrum (centerDelay, variability);
         }
 
-        // The onset detector also keeps Haas short through its longer hold window.
+        // Crossfade tonal onsets over 1 ms so the delayed and transient taps
+        // cannot exchange energy in a single sample. Sharp impulses stay aligned.
         if (transientHold > 0)
-            haasTransientEnvelope = 1.0f;
+        {
+            if (instantTransientOnset)
+                haasTransientEnvelope = 1.0f;
+            else
+            {
+                haasAttackProgress = std::min (1.0f, haasAttackProgress
+                    + 1.0f / (0.001f * sampleRate));
+                const auto shaped = haasAttackProgress * haasAttackProgress
+                    * (3.0f - 2.0f * haasAttackProgress);
+                haasTransientEnvelope = haasAttackStartEnvelope
+                    + (1.0f - haasAttackStartEnvelope) * shaped;
+            }
+        }
         else
             haasTransientEnvelope *= transientReleaseCoefficient;
         if (std::abs (targetDelaySamples - slewTargetDelaySamples) > 0.0001f)

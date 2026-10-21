@@ -210,6 +210,38 @@ HaasTransientResult haasTransientResponse (float keep)
     return result;
 }
 
+float haasTonalOnsetMaxStep()
+{
+    KuoStereoProcessor processor;
+    set (processor, "haasCenter", 12);
+    set (processor, "haasRange", 0);
+    set (processor, "haasKeepTransient", 100);
+    set (processor, "width", 0);
+    processor.prepareToPlay (48000, 256);
+    juce::AudioBuffer<float> buffer (2, 256);
+    juce::MidiBuffer midi;
+    float previous = 0, maxStep = 0;
+    for (int block = 0; block < 2; ++block)
+    {
+        for (int i = 0; i < 256; ++i)
+        {
+            const auto sample = block * 256 + i;
+            const auto value = 0.2f * std::sin (juce::MathConstants<float>::twoPi
+                * 1000.0f * static_cast<float> (sample) / 48000.0f);
+            buffer.setSample (0, i, value);
+            buffer.setSample (1, i, value);
+        }
+        processor.processBlock (buffer, midi);
+        for (int i = 0; i < 256; ++i)
+        {
+            const auto value = buffer.getSample (1, i);
+            maxStep = std::max (maxStep, std::abs (value - previous));
+            previous = value;
+        }
+    }
+    return maxStep;
+}
+
 float scopePeak (KuoStereoProcessor& processor, int band)
 {
     std::array<juce::Point<float>, KuoStereoProcessor::scopePoints> points;
@@ -494,6 +526,8 @@ int main (int argc, char** argv)
                "Haas protection holds for 10 ms then decays exponentially to 1% over 65 ms");
         check (std::abs (fullKeep.recoveredDelayMs - 12.0f) < 0.01f,
                "the Haas delay returns after its transient hold and release");
+        check (haasTonalOnsetMaxStep() < 0.04f,
+               "Haas Keep Transient crossfades tonal onsets without a click");
 
         KuoStereoProcessor spectralOnset;
         set (spectralOnset, "haasCenter", 12);

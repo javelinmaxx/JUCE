@@ -23,7 +23,9 @@ transient protection, Velvet widening, and the frequency display.
   uses the same onset detector as Velvet Width to
   temporarily shorten the effective Haas delay. At 0% it has no effect; at
   100% the delay reaches 0 ms during detected transients. After a
-  10 ms hold, an exponential tap crossfade decays to 1% protection over 65 ms,
+  1 ms crossfade brings tonal onsets into protection without a tap-switch click;
+  sharp impulses remain sample-aligned. After a 10 ms hold, an exponential
+  tap crossfade decays to 1% protection over 65 ms,
   restoring the normal delay without a rapid delay-time sweep. The shared onset
   detector compares fast and slow magnitudes in four frequency bands rather
   than the overall mid-channel level.

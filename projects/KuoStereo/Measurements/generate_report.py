@@ -212,6 +212,22 @@ def main(raw_dir, report_dir):
     fig.savefig(report_dir / "guard-short-attack.png", dpi=170)
     plt.close(fig)
 
+    haas_onset = read_csv(raw_dir / "haas_onset_noise.csv")
+    haas_time = np.array([float(row["time_ms"]) for row in haas_onset])
+    haas_input = np.array([float(row["input"]) for row in haas_onset])
+    haas_normal = np.array([float(row["right_normal"]) for row in haas_onset])
+    haas_kept = np.array([float(row["right_kept"]) for row in haas_onset])
+    haas_step = float(np.max(np.abs(np.diff(haas_kept[:480]))))
+    fig, axis = plt.subplots(figsize=(9, 3.3), layout="constrained")
+    axis.plot(haas_time, haas_input, color="0.6", lw=0.9, label="mono input")
+    axis.plot(haas_time, haas_normal, color="#314e79", lw=1, label="right, Keep 0%")
+    axis.plot(haas_time, haas_kept, color="#ca7939", lw=1, label="right, Keep 100%")
+    axis.set(xlim=(0, 4), xlabel="time from tonal onset (ms)",
+             ylabel="sample amplitude", title="Haas Keep tonal-onset de-click")
+    axis.legend(frameon=False, ncol=3)
+    fig.savefig(report_dir / "haas-onset-declick.png", dpi=170)
+    plt.close(fig)
+
     spectral_onset = read_csv(raw_dir / "spectral_onset.csv")
     switch_time = np.array([float(row["time_ms"]) for row in spectral_onset])
     switch_normal = np.array([float(row["normal_ms"]) for row in spectral_onset])
@@ -370,7 +386,10 @@ def main(raw_dir, report_dir):
         "on the total mid-channel level. As an equal-amplitude check, a 100 Hz",
         "tone switches to 5 kHz after 1 s; both tones are 0.18 peak amplitude.",
         "Haas Keep holds for 10 ms after the last detected onset, then decays",
-        "exponentially to 1% protection over 65 ms. Velvet Guard attenuates",
+        "exponentially to 1% protection over 65 ms.",
+        "Haas fades into protection over 1 ms for tonal onsets. High-crest",
+        "impulses still switch immediately to keep their channels aligned.",
+        "Velvet Guard attenuates",
         "convolution input only while the detector reports an onset. Its depth",
         "fades smoothly near the onset threshold, with no fixed suppression interval.",
         "Guard Attack sets a 0–10 ms linear ramp into attenuation while the",
@@ -409,6 +428,18 @@ def main(raw_dir, report_dir):
         "  exponentially after its 10 ms hold; normal Haas stays at 12 ms.",
         f'- At {delay_time[release_end_index]:.1f} ms after the transient, the active delay is '
         f'{kept_delay[release_end_index]:.2f} ms, leaving {remaining_protection:.1f}% protection.',
+        "",
+        "### Haas Keep at a tonal onset",
+        "",
+        "A 0.2-amplitude 1 kHz mono sine starts at 0 ms. Haas Center is 12 ms,",
+        "Variability and Velvet Width are 0%. The initial 10 ms of the right",
+        "output are checked for abrupt sample-to-sample changes.",
+        "",
+        "![Haas tonal-onset de-click](haas-onset-declick.png)",
+        "",
+        f"The largest right-channel step with Keep 100% is {haas_step:.4f},",
+        "versus 0.1414 before the onset crossfade. A sharp impulse still",
+        "reaches the right channel at the original sample with Keep 100%.",
         "",
         "### Velvet Guard at short attacks",
         "",

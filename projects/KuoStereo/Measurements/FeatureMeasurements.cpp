@@ -223,6 +223,21 @@ void measureGuardNoise (const std::filesystem::path& directory)
             << 0.5f * (slow.left[i] - slow.right[i]) << '\n';
 }
 
+void measureHaasOnsetNoise (const std::filesystem::path& directory)
+{
+    Samples input (sampleRate / 8);
+    for (size_t i = 0; i < input.size(); ++i)
+        input[i] = 0.2f * std::sin (juce::MathConstants<float>::twoPi * 1000.0f
+                                   * static_cast<float> (i) / sampleRate);
+    const auto normal = render (input, { 12, 0, 10, 0, 0, 0 });
+    const auto kept = render (input, { 12, 0, 10, 100, 0, 0 });
+    std::ofstream csv (directory / "haas_onset_noise.csv");
+    csv << "time_ms,input,right_normal,right_kept\n" << std::fixed << std::setprecision (10);
+    for (size_t i = 0; i < input.size(); ++i)
+        csv << 1000.0 * static_cast<double> (i) / sampleRate << ','
+            << input[i] << ',' << normal.right[i] << ',' << kept.right[i] << '\n';
+}
+
 void measureSpectralOnset (const std::filesystem::path& directory)
 {
     Samples input (sampleRate * 6 / 5);
@@ -314,6 +329,7 @@ int main (int argc, char** argv)
         measureHaasSlew (directory);
         measureTransient (directory);
         measureGuardNoise (directory);
+        measureHaasOnsetNoise (directory);
         measureSpectralOnset (directory);
         measureMonoWidth (directory);
         measureScope (directory);

@@ -64,7 +64,10 @@ and above 8 kHz. It triggers on a sharp rise in any one band rather than
 on the total mid-channel level. As an equal-amplitude check, a 100 Hz
 tone switches to 5 kHz after 1 s; both tones are 0.18 peak amplitude.
 Haas Keep holds for 10 ms after the last detected onset, then decays
-exponentially to 1% protection over 65 ms. Velvet Guard attenuates
+exponentially to 1% protection over 65 ms.
+Haas fades into protection over 1 ms for tonal onsets. High-crest
+impulses still switch immediately to keep their channels aligned.
+Velvet Guard attenuates
 convolution input only while the detector reports an onset. Its depth
 fades smoothly near the onset threshold, with no fixed suppression interval.
 Guard Attack sets a 0–10 ms linear ramp into attenuation while the
@@ -100,6 +103,18 @@ Separately, Velvet Width is 100% and Transient Guard is compared at 0% and
 - The protected Haas path reaches 0 ms during the onset and returns
   exponentially after its 10 ms hold; normal Haas stays at 12 ms.
 - At 76.0 ms after the transient, the active delay is 11.86 ms, leaving 1.1% protection.
+
+### Haas Keep at a tonal onset
+
+A 0.2-amplitude 1 kHz mono sine starts at 0 ms. Haas Center is 12 ms,
+Variability and Velvet Width are 0%. The initial 10 ms of the right
+output are checked for abrupt sample-to-sample changes.
+
+![Haas tonal-onset de-click](haas-onset-declick.png)
+
+The largest right-channel step with Keep 100% is 0.0261,
+versus 0.1414 before the onset crossfade. A sharp impulse still
+reaches the right channel at the original sample with Keep 100%.
 
 ### Velvet Guard at short attacks
 
