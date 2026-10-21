@@ -112,6 +112,8 @@ def main(raw_dir, report_dir):
     tail = (transient_time >= 4) & (transient_time < 28)
     no_guard = rms(columns["velvet_side_no_guard"][tail])
     guard = rms(columns["velvet_side_guard"][tail])
+    guard_half_ms = rms(columns["velvet_side_attack_half_ms"][tail])
+    guard_five_ms = rms(columns["velvet_side_attack_five_ms"][tail])
     onset_index = int(np.argmin(np.abs(transient_time)))
     delay = read_csv(raw_dir / "transient_delay.csv")
     delay_time = np.array([float(row["time_ms"]) for row in delay])
@@ -130,7 +132,9 @@ def main(raw_dir, report_dir):
     kernel = np.ones(24) / 24  # 0.5 ms moving RMS at 48 kHz
     for key, label, colour in (
         ("velvet_side_no_guard", "Velvet guard 0%", "#314e79"),
-        ("velvet_side_guard", "Velvet guard 100%", "#ca7939"),
+        ("velvet_side_guard", "Guard 100%, attack 0 ms", "#ca7939"),
+        ("velvet_side_attack_half_ms", "Guard 100%, attack 0.5 ms", "#569477"),
+        ("velvet_side_attack_five_ms", "Guard 100%, attack 5 ms", "#9869a7"),
     ):
         envelope = np.sqrt(np.convolve(columns[key] ** 2, kernel, mode="same"))
         axes[2].plot(transient_time, envelope, color=colour, label=label)
@@ -259,6 +263,9 @@ def main(raw_dir, report_dir):
         "Haas Keep holds for 10 ms after the last detected onset, then crossfades",
         "back over 65 ms. Velvet Guard attenuates convolution input only while",
         "the detector reports an onset, with no fixed suppression interval.",
+        "Guard Attack sets a 0–10 ms linear ramp into attenuation while the",
+        "detector remains active. At 0 ms the guard acts immediately; longer",
+        "settings let more of a brief attack into Velvet's convolution history.",
         "",
         "![Equal-amplitude spectral onset](spectral-onset.png)",
         "",
@@ -278,9 +285,14 @@ def main(raw_dir, report_dir):
         f'- At onset, the right sample is {columns["right_normal"][onset_index]:.4f} with Keep 0% '
         f'and {columns["right_kept"][onset_index]:.4f} with Keep 100% '
         f'(input {columns["input"][onset_index]:.4f}).',
-        f'- Velvet-added side RMS from 4–28 ms is {no_guard:.5f} at Guard 0% '
-        f'and {guard:.5f} at Guard 100% '
-        f'({100 * (1 - guard / no_guard):.1f}% reduction).',
+        "",
+        "| Guard Attack | Velvet-added side RMS, 4–28 ms | Reduction vs Guard 0% |",
+        "| --- | ---: | ---: |",
+        f'| Guard 0% | {no_guard:.5f} | — |',
+        f'| 0 ms | {guard:.5f} | {100 * (1 - guard / no_guard):.1f}% |',
+        f'| 0.5 ms | {guard_half_ms:.5f} | {100 * (1 - guard_half_ms / no_guard):.1f}% |',
+        f'| 5 ms | {guard_five_ms:.5f} | {100 * (1 - guard_five_ms / no_guard):.1f}% |',
+        "",
         "- The protected Haas path reaches 0 ms during the onset and returns after",
         "  its 10 ms hold and 65 ms tap crossfade; normal Haas stays at 12 ms.",
         "",

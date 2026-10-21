@@ -18,6 +18,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout KuoStereoProcessor::layout()
     add ("haasKeepTransient", "Haas keep transient", 0, 100, 0.1f, 0, "%");
     add ("width", "Velvet width", 0, 100, 0.1f, 35, "%");
     add ("transientProtect", "Transient protection", 0, 100, 0.1f, 80, "%");
+    add ("guardAttack", "Velvet guard attack", 0, 10, 0.1f, 0, "ms");
     add ("output", "Output", -12, 12, 0.1f, 0, "dB");
     result.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "bypass", 1 },
         "Bypass", false));
@@ -47,6 +48,7 @@ void KuoStereoProcessor::prepareToPlay (double rate, int)
     detectorLowStates = {};
     detectorFastEnvelopes = detectorSlowEnvelopes = {};
     haasTransientEnvelope = 0;
+    velvetGuardEnvelope = 0;
     widthBlend = 0;
     const auto centerDelayMs = parameters.getRawParameterValue ("haasCenter")->load();
     targetDelaySamples = smoothDelaySamples = centerDelayMs * 0.001f * sampleRate;
@@ -252,6 +254,9 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     const auto transientReleaseStep = 1.0f / (0.065f * sampleRate);
     const auto widthTarget = parameters.getRawParameterValue ("width")->load() * 0.01f;
     const auto protection = parameters.getRawParameterValue ("transientProtect")->load() * 0.01f;
+    const auto guardAttackMs = parameters.getRawParameterValue ("guardAttack")->load();
+    const auto guardAttackStep = guardAttackMs <= 0.0f ? 1.0f
+        : 1.0f / (guardAttackMs * 0.001f * sampleRate);
     const auto gain = juce::Decibels::decibelsToGain (parameters.getRawParameterValue ("output")->load());
     const auto bypass = parameters.getRawParameterValue ("bypass")->load() >= 0.5f;
     auto* left = buffer.getWritePointer (0);
@@ -282,8 +287,9 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
             transientHold = juce::roundToInt (0.010f * sampleRate);
         else if (transientHold > 0)
             --transientHold;
-        // Guard only detector-active samples; the Velvet history keeps its sustained texture.
-        const auto velvetInput = mid * (onset ? 1.0f - protection : 1.0f);
+        // Guard only detector-active samples; Attack controls how quickly attenuation reaches its set depth.
+        velvetGuardEnvelope = onset ? std::min (1.0f, velvetGuardEnvelope + guardAttackStep) : 0.0f;
+        const auto velvetInput = mid * (1.0f - protection * velvetGuardEnvelope);
         leftHistory[static_cast<size_t> (writePosition)] = dryLeft;
         rightHistory[static_cast<size_t> (writePosition)] = dryRight;
         midHistory[static_cast<size_t> (writePosition)] = mid;

@@ -122,13 +122,13 @@ KuoStereoEditor::KuoStereoEditor (KuoStereoProcessor& p)
     setLookAndFeel (&look);
     addAndMakeVisible (bypass);
     bypassAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "bypass", bypass);
-    constexpr std::array<const char*, 7> ids {
+    constexpr std::array<const char*, 8> ids {
         "haasCenter", "haasRange", "haasRate", "haasKeepTransient",
-        "width", "transientProtect", "output" };
-    constexpr std::array<const char*, 7> names {
+        "width", "transientProtect", "guardAttack", "output" };
+    constexpr std::array<const char*, 8> names {
         "CENTER DELAY", "VARIABILITY", "MAX RATE", "KEEP TRANSIENT",
-        "VELVET WIDTH", "TRANSIENT GUARD", "OUTPUT" };
-    constexpr std::array<const char*, 7> units { " ms", " ms", " ms/s", " %", " %", " %", " dB" };
+        "VELVET WIDTH", "TRANSIENT GUARD", "GUARD ATTACK", "OUTPUT" };
+    constexpr std::array<const char*, 8> units { " ms", " ms", " ms/s", " %", " %", " %", " ms", " dB" };
     for (size_t i = 0; i < sliders.size(); ++i)
     {
         auto& slider = sliders[i];
@@ -155,14 +155,15 @@ KuoStereoEditor::KuoStereoEditor (KuoStereoProcessor& p)
 void KuoStereoEditor::resized()
 {
     bypass.setBounds (450, 33, 74, 28);
-    const std::array<juce::Rectangle<int>, 7> positions {
+    const std::array<juce::Rectangle<int>, 8> positions {
         juce::Rectangle<int> (35, 163, 104, 70),
         juce::Rectangle<int> (143, 163, 104, 70),
         juce::Rectangle<int> (251, 163, 104, 70),
         juce::Rectangle<int> (359, 163, 104, 70),
-        juce::Rectangle<int> (44, 319, 130, 75),
-        juce::Rectangle<int> (189, 319, 130, 75),
-        juce::Rectangle<int> (344, 319, 130, 75)
+        juce::Rectangle<int> (35, 319, 104, 75),
+        juce::Rectangle<int> (143, 319, 104, 75),
+        juce::Rectangle<int> (251, 319, 104, 75),
+        juce::Rectangle<int> (359, 319, 104, 75)
     };
     for (size_t i = 0; i < sliders.size(); ++i)
     {

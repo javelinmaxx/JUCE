@@ -21,13 +21,14 @@ void set (KuoStereoProcessor& processor, const char* id, float value)
     parameter->setValueNotifyingHost (parameter->convertTo0to1 (value));
 }
 
-float impulseSideEnergy (float guard)
+float impulseSideEnergy (float guard, float attackMs = 0)
 {
     KuoStereoProcessor processor;
     set (processor, "haasCenter", 30);
     set (processor, "haasRange", 0);
     set (processor, "width", 100);
     set (processor, "transientProtect", guard);
+    set (processor, "guardAttack", attackMs);
     processor.prepareToPlay (48000, 256);
     juce::AudioBuffer<float> buffer (2, 256);
     juce::MidiBuffer midi;
@@ -155,7 +156,7 @@ int main (int argc, char** argv)
         check (processor.getName() == "Kuo Stereo", "plug-in identity is Kuo Stereo");
         check (std::abs (processor.getCurrentDelayMs() - 12.0f) < 0.001f,
                "active delay initially displays the default center before audio starts");
-        check (processor.getParameters().size() == 8, "all eight host parameters are registered");
+        check (processor.getParameters().size() == 9, "all nine host parameters are registered");
         auto buses = processor.getBusesLayout();
         check (processor.isBusesLayoutSupported (buses), "stereo layout is supported");
         buses.outputBuses.set (0, juce::AudioChannelSet::mono());
@@ -166,6 +167,7 @@ int main (int argc, char** argv)
         set (processor, "haasKeepTransient", 67.0f);
         set (processor, "width", 71.0f);
         set (processor, "transientProtect", 91.0f);
+        set (processor, "guardAttack", 3.5f);
         juce::MemoryBlock state;
         processor.getStateInformation (state);
         KuoStereoProcessor restored;
@@ -227,8 +229,14 @@ int main (int argc, char** argv)
         check (sideEnergy > 0.01f, "velvet convolution widens a centered sustained tone");
         const auto unguarded = impulseSideEnergy (0);
         const auto guarded = impulseSideEnergy (100);
+        const auto slowGuard = impulseSideEnergy (100, 5);
+        const auto noGuardSlowAttack = impulseSideEnergy (0, 5);
         check (unguarded > 0.01f && guarded < unguarded * 0.2f,
                "transient guard suppresses the widened impulse tail");
+        check (slowGuard > guarded && slowGuard < unguarded,
+               "Guard Attack softens attenuation of a sharp impulse");
+        check (std::abs (noGuardSlowAttack - unguarded) < 0.00001f,
+               "Guard Attack has no effect when Transient Guard is zero");
         const auto guardedBed = noiseBedSideEnergy (100);
         const auto unguardedBed = noiseBedSideEnergy (0);
         check (guardedBed > 0.0001f && guardedBed < unguardedBed * 0.25f,
@@ -398,7 +406,7 @@ int main (int argc, char** argv)
             int knobs = 0;
             for (auto* child : editor->getChildren())
                 if (dynamic_cast<juce::Slider*> (child) != nullptr) ++knobs;
-            check (knobs == 7, "editor exposes transient-aware Haas and widening controls");
+            check (knobs == 8, "editor exposes Guard Attack beside the widening controls");
             const auto image = editor->createComponentSnapshot (editor->getLocalBounds());
             check (image.isValid(), "frequency-split goniometer editor renders");
             if (argc > 2)

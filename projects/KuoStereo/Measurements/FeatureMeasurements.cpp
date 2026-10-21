@@ -37,7 +37,7 @@ void set (KuoStereoProcessor& processor, const char* id, float value)
 
 struct Settings
 {
-    float center = 12, range = 0, rate = 10, keep = 0, width = 0, guard = 0;
+    float center = 12, range = 0, rate = 10, keep = 0, width = 0, guard = 0, guardAttack = 0;
 };
 
 struct Render
@@ -55,6 +55,7 @@ Render render (const Samples& input, const Settings& settings)
     set (processor, "haasKeepTransient", settings.keep);
     set (processor, "width", settings.width);
     set (processor, "transientProtect", settings.guard);
+    set (processor, "guardAttack", settings.guardAttack);
     processor.prepareToPlay (sampleRate, blockSize);
     Render result;
     result.left.resize (input.size());
@@ -131,8 +132,11 @@ void measureTransient (const std::filesystem::path& directory)
     const auto kept = render (input, { 12, 0, 10, 100, 0, 0 });
     const auto unguarded = render (input, { 12, 0, 10, 0, 100, 0 });
     const auto guarded = render (input, { 12, 0, 10, 0, 100, 100 });
+    const auto guardedFast = render (input, { 12, 0, 10, 0, 100, 100, 0.5f });
+    const auto guardedSlow = render (input, { 12, 0, 10, 0, 100, 100, 5.0f });
     std::ofstream csv (directory / "transient.csv");
-    csv << "time_ms,input,right_normal,right_kept,velvet_side_no_guard,velvet_side_guard\n"
+    csv << "time_ms,input,right_normal,right_kept,velvet_side_no_guard,velvet_side_guard,"
+           "velvet_side_attack_half_ms,velvet_side_attack_five_ms\n"
         << std::fixed << std::setprecision (10);
     for (int i = onset - sampleRate / 200; i < onset + sampleRate / 20; ++i)
     {
@@ -141,7 +145,9 @@ void measureTransient (const std::filesystem::path& directory)
         csv << 1000.0 * (i - onset) / sampleRate << ',' << input[index] << ','
             << baseline.right[index] << ',' << kept.right[index] << ','
             << unguarded.left[index] - unguarded.right[index] - side << ','
-            << guarded.left[index] - guarded.right[index] - side << '\n';
+            << guarded.left[index] - guarded.right[index] - side << ','
+            << guardedFast.left[index] - guardedFast.right[index] - side << ','
+            << guardedSlow.left[index] - guardedSlow.right[index] - side << '\n';
     }
     std::ofstream delay (directory / "transient_delay.csv");
     delay << "time_ms,normal_ms,kept_ms\n" << std::fixed << std::setprecision (9);

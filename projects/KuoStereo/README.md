@@ -26,13 +26,15 @@ transient protection, Velvet widening, and the frequency display.
   channel to the side channel. Transient Guard uses the shared mid-channel
   onset detector to attenuate only detected onset samples before convolution;
   existing sustained side texture continues while the attack stays focused.
+  Guard Attack controls how quickly that attenuation reaches full depth, from
+  immediate to 10 ms; a longer attack lets more of a brief transient through.
 - **Frequency Field** shows three goniometers fed by the processed stereo
   output, split below 250 Hz, from 250 Hz to 2.5 kHz, and above 2.5 kHz.
   Each display scales its points automatically so quieter bands remain visible.
 
 The controls are Center Delay, Variability, Max Rate, Keep Transient, Velvet
-Width, Transient Guard, Output, and Bypass. All are host parameters and survive
-state recall.
+Width, Transient Guard, Guard Attack, Output, and Bypass. All are host
+parameters and survive state recall.
 The plug-in accepts stereo input and output, offers VST3 and Standalone builds,
 and also builds as an Audio Unit on macOS. It reports no added host latency;
 the delay and velvet paths keep up to about 30 ms of internal history.

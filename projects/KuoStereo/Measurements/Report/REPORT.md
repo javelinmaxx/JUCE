@@ -47,6 +47,9 @@ tone switches to 5 kHz after 1 s; both tones are 0.18 peak amplitude.
 Haas Keep holds for 10 ms after the last detected onset, then crossfades
 back over 65 ms. Velvet Guard attenuates convolution input only while
 the detector reports an onset, with no fixed suppression interval.
+Guard Attack sets a 0–10 ms linear ramp into attenuation while the
+detector remains active. At 0 ms the guard acts immediately; longer
+settings let more of a brief attack into Velvet's convolution history.
 
 ![Equal-amplitude spectral onset](spectral-onset.png)
 
@@ -64,7 +67,14 @@ Separately, Velvet Width is 100% and Transient Guard is compared at 0% and
 ![Transient timing and side-tail protection](transients.png)
 
 - At onset, the right sample is 0.0011 with Keep 0% and 0.9995 with Keep 100% (input 0.9995).
-- Velvet-added side RMS from 4–28 ms is 0.03363 at Guard 0% and 0.00111 at Guard 100% (96.7% reduction).
+
+| Guard Attack | Velvet-added side RMS, 4–28 ms | Reduction vs Guard 0% |
+| --- | ---: | ---: |
+| Guard 0% | 0.03363 | — |
+| 0 ms | 0.00111 | 96.7% |
+| 0.5 ms | 0.02992 | 11.0% |
+| 5 ms | 0.03308 | 1.6% |
+
 - The protected Haas path reaches 0 ms during the onset and returns after
   its 10 ms hold and 65 ms tap crossfade; normal Haas stays at 12 ms.
 

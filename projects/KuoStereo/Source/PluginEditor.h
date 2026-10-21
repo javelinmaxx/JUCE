@@ -30,10 +30,10 @@ private:
     KuoStereoProcessor& processor;
     KuoLookAndFeel look;
     KuoBypassButton bypass;
-    std::array<juce::Slider, 7> sliders;
-    std::array<juce::Label, 7> labels;
+    std::array<juce::Slider, 8> sliders;
+    std::array<juce::Label, 8> labels;
     using State = juce::AudioProcessorValueTreeState;
-    std::array<std::unique_ptr<State::SliderAttachment>, 7> attachments;
+    std::array<std::unique_ptr<State::SliderAttachment>, 8> attachments;
     std::unique_ptr<State::ButtonAttachment> bypassAttachment;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (KuoStereoEditor)
 };
