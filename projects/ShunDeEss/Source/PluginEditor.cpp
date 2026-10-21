@@ -791,7 +791,7 @@ void ShunDeEssEditor::resized()
     place (3, 122, 702, 76, 64);
     place (8, 358, 702, 76, 64);
     place (9, 434, 702, 76, 64);
-    detectorMode.setBounds (207, up (570) + 14, 112, 76);
+    detectorMode.setBounds (207, up (570) + 6, 112, 76);
     algorithmLabel.setBounds (205, up (702) + 3, 112, 16);
     algorithm.setBounds (205, up (702) + 19, 112, 65);
 
