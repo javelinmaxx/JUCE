@@ -156,14 +156,14 @@ void KuoStereoEditor::resized()
 {
     bypass.setBounds (450, 33, 74, 28);
     const std::array<juce::Rectangle<int>, 8> positions {
-        juce::Rectangle<int> (35, 163, 104, 70),
-        juce::Rectangle<int> (143, 163, 104, 70),
-        juce::Rectangle<int> (251, 163, 104, 70),
-        juce::Rectangle<int> (359, 163, 104, 70),
-        juce::Rectangle<int> (35, 319, 104, 75),
-        juce::Rectangle<int> (143, 319, 104, 75),
-        juce::Rectangle<int> (251, 319, 104, 75),
-        juce::Rectangle<int> (359, 319, 104, 75)
+        juce::Rectangle<int> (38, 163, 104, 70),
+        juce::Rectangle<int> (161, 163, 104, 70),
+        juce::Rectangle<int> (283, 163, 104, 70),
+        juce::Rectangle<int> (406, 163, 104, 70),
+        juce::Rectangle<int> (38, 319, 104, 75),
+        juce::Rectangle<int> (161, 319, 104, 75),
+        juce::Rectangle<int> (283, 319, 104, 75),
+        juce::Rectangle<int> (406, 319, 104, 75)
     };
     for (size_t i = 0; i < sliders.size(); ++i)
     {
@@ -200,12 +200,12 @@ void KuoStereoEditor::paint (juce::Graphics& g)
     g.drawText ("LOW  /  MID  /  HIGH    -    AUTO SCALE", 38, 444, 390, 16,
                 juce::Justification::centredLeft);
     g.setColour (secondary);
-    g.setFont (juce::FontOptions (9.0f));
-    g.drawText ("ACTIVE DELAY", 378, 100, 130, 15, juce::Justification::centred);
+    g.setFont (juce::FontOptions (7.2f));
+    g.drawText ("ACTIVE DELAY", 303, 104, 82, 16, juce::Justification::centredRight);
     g.setColour (amber);
-    g.setFont (juce::FontOptions (22.0f));
-    g.drawText (juce::String (processor.getCurrentDelayMs(), 1) + " ms", 375, 113, 136, 30,
-                juce::Justification::centred);
+    g.setFont (juce::FontOptions (17.6f));
+    g.drawText (juce::String (processor.getCurrentDelayMs(), 1) + " ms", 391, 101, 116, 22,
+                juce::Justification::centredRight);
     paintScope (g, 0, { 39, 474, 148, 202 });
     paintScope (g, 1, { 200, 474, 148, 202 });
     paintScope (g, 2, { 361, 474, 148, 202 });
