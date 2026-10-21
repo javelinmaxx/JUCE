@@ -32,7 +32,7 @@ template <typename Processor> void stateTests (int parameterCount)
                "all host parameters survive state restoration");
     check (p.getBypassParameter() == p.parameters.getParameter ("bypass"), "host bypass parameter is exposed");
 }
-template <typename Processor> void editorTests (const juce::File& destination, int height, int sliderCount)
+template <typename Processor> void editorTests (const juce::File& destination, int height, int sliderCount, int width = 548)
 {
     Processor p; p.prepareToPlay (48000, 128);
     juce::MidiBuffer midi;
@@ -49,7 +49,7 @@ template <typename Processor> void editorTests (const juce::File& destination, i
     }
     std::unique_ptr<juce::AudioProcessorEditor> editor (p.createEditor());
     editor->setVisible (true);
-    check (editor->getWidth() == 548 && editor->getHeight() == height, "native editor starts at its intended size");
+    check (editor->getWidth() == width && editor->getHeight() == height, "native editor starts at its intended size");
     juce::TooltipWindow* tooltip = nullptr;
     juce::Slider* first = nullptr;
     int sliders = 0;
@@ -75,17 +75,6 @@ template <typename Processor> void editorTests (const juce::File& destination, i
                     check (readout->getTooltip() == hint, "editable value has the same tooltip");
     }
     check (tooltip != nullptr && first != nullptr && sliders == sliderCount, "stage controls and tooltip window exist");
-    if (sliderCount == 4)
-        for (auto* child : editor->getChildren())
-            if (auto* button = dynamic_cast<juce::Button*> (child); button && button->getButtonText() == "CORE")
-            {
-                check (button->getToggleState(), "Ren's Core switch initializes On");
-                check (button->getTooltip().contains ("Saves CPU when Off"), "Core tooltip explains CPU savings");
-                button->setToggleState (false, juce::sendNotificationSync);
-                check (p.parameters.getRawParameterValue ("transformer")->load() < 0.5f,
-                       "Core switch updates its host parameter");
-                button->setToggleState (true, juce::sendNotificationSync);
-            }
     // Exercise UI-to-host and host-to-UI changes without an audio callback.
     const auto id = sliderCount == 4 ? "drive" : "width";
     first->setValue (sliderCount == 4 ? 12 : 75, juce::sendNotificationSync);
@@ -104,7 +93,7 @@ template <typename Processor> void editorTests (const juce::File& destination, i
         && destination.replaceWithData (png.getData(), png.getDataSize()), "native preview is saved");
     for (float factor : { 0.5f, 1.2f })
     {
-        editor->setSize (juce::roundToInt (548 * factor), juce::roundToInt (height * factor));
+        editor->setSize (juce::roundToInt (width * factor), juce::roundToInt (height * factor));
         for (auto* child : editor->getChildren())
         {
             if (dynamic_cast<juce::Slider*> (child) == nullptr && dynamic_cast<juce::Button*> (child) == nullptr) continue;

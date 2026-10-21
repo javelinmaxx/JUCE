@@ -1,16 +1,18 @@
 # Ren Transformer
 
 Ren Transformer isolates YinYang Compressor's transformer and output controls in
-an independent J-SONIC plugin, with the same ebony panels, amber knobs, vertical
-Core switch, one-sentence hover hints, and 50–120% scalable editor.
+an independent J-SONIC plugin, with the same ebony panels, amber knobs,
+one-sentence hover hints, and 50–120% scalable editor. The compact 444 × 260
+interface places Core Drive, DC Bias, Mix, and Output together in one row.
 
 ![Native editor with tooltip](Previews/ren-transformer-tooltip.png)
 
 The DSP directly includes YinYang's `OversampledTransformer`: 4× oversampling,
 magnetic hysteresis, frequency-dependent transformer response, and DC bias.
 There is no compressor or sidechain detector. Core Drive spans 0–18 dB and DC
-Bias spans 0–100%. The Core switch starts On; Off fades to the latency-aligned
-clean path and stops transformer processing to save CPU.
+Bias spans 0–100%. The transformer starts enabled. Its legacy enable parameter
+remains available to host automation and saved states, with no switch in the
+compact interface; disabling it still stops transformer processing after a fade.
 
 Output spans −24 to +24 dB and applies **before** the transformer, following
 YinYang's signal order, so it also affects saturation. Mix blends the colored

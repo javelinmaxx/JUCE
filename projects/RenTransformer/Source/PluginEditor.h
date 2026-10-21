@@ -9,12 +9,10 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
 private:
-    static constexpr int designWidth = 548, designHeight = 444;
+    static constexpr int designWidth = 444, designHeight = 260;
     StageLookAndFeel look;
     juce::TooltipWindow tooltipWindow { this };
     StageBypassButton bypass;
-    StageTransformerSwitch transformer;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> transformerAttachment;
     std::array<juce::Slider, 4> sliders;
     std::array<juce::Label, 4> labels;
     using State = juce::AudioProcessorValueTreeState;

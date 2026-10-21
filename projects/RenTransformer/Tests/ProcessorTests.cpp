@@ -75,7 +75,7 @@ int main (int argc, char** argv)
         stateTests<RenTransformerProcessor> (6); transformerTests();
         blockSizeTests<RenTransformerProcessor>();
         if (argc > 2 && juce::String (argv[1]) == "--editor")
-            editorTests<RenTransformerProcessor> (juce::File (argv[2]), 444, 4);
+            editorTests<RenTransformerProcessor> (juce::File (argv[2]), 260, 4, 444);
         std::cout << checks << " Ren Transformer checks passed\n"; return 0;
     }
     catch (const std::exception& error) { std::cerr << "FAIL: " << error.what() << '\n'; return 1; }
