@@ -12,8 +12,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout KuoStereoProcessor::layout()
             juce::NormalisableRange<float> { lo, hi, step }, initial,
             juce::AudioParameterFloatAttributes().withLabel (unit)));
     };
-    add ("haasMix", "Smart Haas", 0, 100, 0.1f, 35, "%");
-    add ("haasMax", "Haas maximum delay", 5, 30, 0.1f, 18, "ms");
+    add ("haasCenter", "Haas center delay", 3, 30, 0.1f, 12, "ms");
+    add ("haasRange", "Haas variability", 0, 12, 0.1f, 6, "ms");
+    add ("haasRate", "Haas maximum variation rate", 0.1f, 10, 0.1f, 1, "ms/s");
     add ("width", "Velvet width", 0, 100, 0.1f, 35, "%");
     add ("transientProtect", "Transient protection", 0, 100, 0.1f, 80, "%");
     add ("output", "Output", -12, 12, 0.1f, 0, "dB");
@@ -39,10 +40,12 @@ void KuoStereoProcessor::prepareToPlay (double rate, int)
     writePosition = sampleCount = analysisCounter = scopeCounter = transientHold = 0;
     lowState = upperState = {};
     fastEnvelope = slowEnvelope = 0;
-    haasBlend = widthBlend = 0;
+    widthBlend = 0;
     protectionGain = 1;
-    targetDelaySamples = smoothDelaySamples = 0.005f * sampleRate;
-    selectedDelayMs.store (5.0f, std::memory_order_relaxed);
+    const auto centerDelayMs = parameters.getRawParameterValue ("haasCenter")->load();
+    targetDelaySamples = smoothDelaySamples = centerDelayMs * 0.001f * sampleRate;
+    selectedDelayMs.store (centerDelayMs, std::memory_order_relaxed);
+    currentDelayMs.store (centerDelayMs, std::memory_order_relaxed);
     const auto coefficient = [this] (float hz)
     { return 1.0f - std::exp (-juce::MathConstants<float>::twoPi * hz / sampleRate); };
     lowCoefficient = coefficient (250.0f);
@@ -97,22 +100,43 @@ float KuoStereoProcessor::readAgoInterpolated (const std::vector<float>& history
          + readAgo (history, whole + 1) * fraction;
 }
 
-void KuoStereoProcessor::analyzeMidSpectrum (float maxDelayMs) noexcept
+void KuoStereoProcessor::analyzeMidSpectrum (float centerDelayMs, float variabilityMs) noexcept
 {
+    const auto lowDelayMs = std::max (3.0f, centerDelayMs - variabilityMs);
+    const auto highDelayMs = std::min (30.0f, centerDelayMs + variabilityMs);
     if (sampleCount < static_cast<int> (sampleRate * 0.03f) + fftSize)
+    {
+        targetDelaySamples = centerDelayMs * 0.001f * sampleRate;
+        selectedDelayMs.store (centerDelayMs, std::memory_order_relaxed);
         return;
+    }
+    if (highDelayMs - lowDelayMs < 0.0001f)
+    {
+        targetDelaySamples = lowDelayMs * 0.001f * sampleRate;
+        selectedDelayMs.store (lowDelayMs, std::memory_order_relaxed);
+        return;
+    }
     std::fill (spectrumInput.begin(), spectrumInput.end(), 0.0f);
     for (int i = 0; i < fftSize; ++i)
         spectrumInput[static_cast<size_t> (i)] = readAgo (midHistory, fftSize - 1 - i)
                                                  * window[static_cast<size_t> (i)];
     fft.performFrequencyOnlyForwardTransform (spectrumInput.data());
+    float referenceLevel = 0;
+    for (int bin = 2; bin < fftSize / 2; ++bin)
+        referenceLevel += spectrumInput[static_cast<size_t> (bin)] / fftSize;
+    if (referenceLevel < 0.001f)
+    {
+        targetDelaySamples = centerDelayMs * 0.001f * sampleRate;
+        selectedDelayMs.store (centerDelayMs, std::memory_order_relaxed);
+        return;
+    }
 
     float bestScore = std::numeric_limits<float>::max();
-    float bestDelayMs = 5.0f;
+    float bestDelayMs = centerDelayMs;
     for (int candidate = 0; candidate < candidates; ++candidate)
     {
-        const auto delayMs = 3.0f + (std::max (maxDelayMs, 3.0f) - 3.0f)
-                                      * static_cast<float> (candidate) / static_cast<float> (candidates - 1);
+        const auto delayMs = lowDelayMs + (highDelayMs - lowDelayMs)
+                                         * static_cast<float> (candidate) / static_cast<float> (candidates - 1);
         const auto delaySamples = juce::roundToInt (delayMs * 0.001f * sampleRate);
         std::fill (spectrumCandidate.begin(), spectrumCandidate.end(), 0.0f);
         for (int i = 0; i < fftSize; ++i)
@@ -189,8 +213,10 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
 {
     juce::ScopedNoDenormals noDenormals;
     if (buffer.getNumChannels() < 2 || rightHistory.empty()) return;
-    const auto mixTarget = parameters.getRawParameterValue ("haasMix")->load() * 0.01f;
-    const auto maxDelay = parameters.getRawParameterValue ("haasMax")->load();
+    const auto centerDelay = parameters.getRawParameterValue ("haasCenter")->load();
+    const auto variability = parameters.getRawParameterValue ("haasRange")->load();
+    const auto maxRate = parameters.getRawParameterValue ("haasRate")->load();
+    const auto maxDelayStep = maxRate * 0.001f; // Samples per sample equals ms per second.
     const auto widthTarget = parameters.getRawParameterValue ("width")->load() * 0.01f;
     const auto protection = parameters.getRawParameterValue ("transientProtect")->load() * 0.01f;
     const auto gain = juce::Decibels::decibelsToGain (parameters.getRawParameterValue ("output")->load());
@@ -210,7 +236,7 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         if (++analysisCounter >= fftSize / 2)
         {
             analysisCounter = 0;
-            analyzeMidSpectrum (maxDelay);
+            analyzeMidSpectrum (centerDelay, variability);
         }
 
         fastEnvelope += fastCoefficient * (std::abs (mid) - fastEnvelope);
@@ -222,22 +248,22 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         const auto protectionTarget = transientHold > 0 ? 1.0f - protection : 1.0f;
         protectionGain += (protectionTarget - protectionGain)
             * (protectionTarget < protectionGain ? 0.1f : 0.001f);
-        smoothDelaySamples += (targetDelaySamples - smoothDelaySamples) * 0.0001f;
-        haasBlend += (mixTarget - haasBlend) * 0.001f;
+        smoothDelaySamples += std::clamp (targetDelaySamples - smoothDelaySamples,
+                                         -maxDelayStep, maxDelayStep);
         widthBlend += (widthTarget - widthBlend) * 0.001f;
         const auto delayedRight = readAgoInterpolated (rightHistory, smoothDelaySamples);
-        const auto haasRight = dryRight + haasBlend * (delayedRight - dryRight);
         float velvet = 0;
         for (int tap = 0; tap < velvetTaps; ++tap)
             velvet += tapWeights[static_cast<size_t> (tap)]
                     * readAgo (midHistory, tapOffsets[static_cast<size_t> (tap)]);
-        const auto widenedSide = 0.5f * (dryLeft - haasRight)
+        const auto widenedSide = 0.5f * (dryLeft - delayedRight)
                                + 0.5f * widthBlend * protectionGain * velvet;
-        const auto processedMid = 0.5f * (dryLeft + haasRight);
+        const auto processedMid = 0.5f * (dryLeft + delayedRight);
         left[i] = bypass ? dryLeft : (processedMid + widenedSide) * gain;
         right[i] = bypass ? dryRight : (processedMid - widenedSide) * gain;
         pushScope (left[i], right[i]);
     }
+    currentDelayMs.store (smoothDelaySamples * 1000.0f / sampleRate, std::memory_order_relaxed);
 }
 
 void KuoStereoProcessor::getStateInformation (juce::MemoryBlock& data)

@@ -23,7 +23,8 @@ void set (KuoStereoProcessor& processor, const char* id, float value)
 float impulseSideEnergy (float guard)
 {
     KuoStereoProcessor processor;
-    set (processor, "haasMix", 0);
+    set (processor, "haasCenter", 30);
+    set (processor, "haasRange", 0);
     set (processor, "width", 100);
     set (processor, "transientProtect", guard);
     processor.prepareToPlay (48000, 256);
@@ -40,7 +41,7 @@ float impulseSideEnergy (float guard)
         for (int i = 0; i < 256; ++i)
         {
             const auto sample = block * 256 + i;
-            if (sample >= 4000 && sample < 5600)
+            if (sample >= 4192 && sample < 5400)
             {
                 const auto side = buffer.getSample (0, i) - buffer.getSample (1, i);
                 energy += side * side;
@@ -68,13 +69,16 @@ int main (int argc, char** argv)
         juce::ScopedJuceInitialiser_GUI gui;
         KuoStereoProcessor processor;
         check (processor.getName() == "Kuo Stereo", "plug-in identity is Kuo Stereo");
-        check (processor.getParameters().size() == 6, "all six host parameters are registered");
+        check (std::abs (processor.getCurrentDelayMs() - 12.0f) < 0.001f,
+               "active delay initially displays the default center before audio starts");
+        check (processor.getParameters().size() == 7, "all seven host parameters are registered");
         auto buses = processor.getBusesLayout();
         check (processor.isBusesLayoutSupported (buses), "stereo layout is supported");
         buses.outputBuses.set (0, juce::AudioChannelSet::mono());
         check (! processor.isBusesLayoutSupported (buses), "mismatched stereo layout is rejected");
-        set (processor, "haasMix", 62.5f);
-        set (processor, "haasMax", 24.0f);
+        set (processor, "haasCenter", 15.0f);
+        set (processor, "haasRange", 8.0f);
+        set (processor, "haasRate", 2.5f);
         set (processor, "width", 71.0f);
         set (processor, "transientProtect", 91.0f);
         juce::MemoryBlock state;
@@ -107,10 +111,13 @@ int main (int argc, char** argv)
         check (identical, "bypass preserves both input channels exactly");
 
         KuoStereoProcessor width;
-        set (width, "haasMix", 0);
         set (width, "width", 100);
         set (width, "transientProtect", 0);
         width.prepareToPlay (48000, 256);
+        KuoStereoProcessor noWidth;
+        set (noWidth, "width", 0);
+        noWidth.prepareToPlay (48000, 256);
+        juce::AudioBuffer<float> baseline (2, 256);
         float sideEnergy = 0;
         for (int block = 0; block < 180; ++block)
         {
@@ -121,11 +128,14 @@ int main (int argc, char** argv)
                 buffer.setSample (0, i, sample);
                 buffer.setSample (1, i, sample);
             }
+            baseline.makeCopyOf (buffer);
             width.processBlock (buffer, midi);
+            noWidth.processBlock (baseline, midi);
             if (block > 100)
                 for (int i = 0; i < 256; ++i)
                 {
-                    const auto side = buffer.getSample (0, i) - buffer.getSample (1, i);
+                    const auto side = (buffer.getSample (0, i) - buffer.getSample (1, i))
+                                    - (baseline.getSample (0, i) - baseline.getSample (1, i));
                     sideEnergy += side * side;
                 }
         }
@@ -136,8 +146,8 @@ int main (int argc, char** argv)
                "transient guard suppresses the widened impulse tail");
 
         KuoStereoProcessor haas;
-        set (haas, "haasMix", 100);
-        set (haas, "haasMax", 18);
+        set (haas, "haasCenter", 12);
+        set (haas, "haasRange", 6);
         set (haas, "width", 0);
         haas.prepareToPlay (48000, 256);
         unsigned int random = 0x51a7u;
@@ -161,10 +171,30 @@ int main (int argc, char** argv)
                     channelDifference += std::abs (left - right);
                 }
         }
-        check (haas.getSelectedDelayMs() >= 3.0f && haas.getSelectedDelayMs() <= 18.0f,
-               "mid-spectrum analyzer selects a delay within the requested Haas range");
+        check (haas.getSelectedDelayMs() >= 6.0f && haas.getSelectedDelayMs() <= 18.0f,
+               "mid-spectrum analyzer selects a delay within center plus or minus variability");
         check (finite && channelDifference > 1.0f, "adaptive Haas processing creates finite stereo separation");
         check (scopePeak (width, 1) > 0.01f, "mid-band goniometer receives processed stereo points");
+
+        KuoStereoProcessor limited;
+        set (limited, "haasCenter", 12);
+        set (limited, "haasRange", 0);
+        set (limited, "haasRate", 1);
+        limited.prepareToPlay (48000, 256);
+        set (limited, "haasCenter", 20);
+        buffer.clear();
+        for (int block = 0; block < 100; ++block)
+            limited.processBlock (buffer, midi);
+        const auto slowDelay = limited.getCurrentDelayMs();
+        check (std::abs (limited.getSelectedDelayMs() - 20.0f) < 0.01f,
+               "zero variability fixes the selected delay at the center");
+        check (slowDelay > 12.4f && slowDelay < 12.55f,
+               "one ms per second rate limit bounds the active delay movement");
+        set (limited, "haasRate", 10);
+        limited.processBlock (buffer, midi);
+        const auto fastStep = limited.getCurrentDelayMs() - slowDelay;
+        check (fastStep > 0.04f && fastStep < 0.06f,
+               "maximum rate control changes the delay slew limit");
 
         if (argc > 1 && juce::String (argv[1]) == "--editor")
         {
@@ -194,7 +224,7 @@ int main (int argc, char** argv)
             int knobs = 0;
             for (auto* child : editor->getChildren())
                 if (dynamic_cast<juce::Slider*> (child) != nullptr) ++knobs;
-            check (knobs == 5, "editor exposes both widening sections and output controls");
+            check (knobs == 6, "editor exposes delay movement and widening controls");
             const auto image = editor->createComponentSnapshot (editor->getLocalBounds());
             check (image.isValid(), "frequency-split goniometer editor renders");
             if (argc > 2)

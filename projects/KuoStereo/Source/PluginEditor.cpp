@@ -122,15 +122,17 @@ KuoStereoEditor::KuoStereoEditor (KuoStereoProcessor& p)
     setLookAndFeel (&look);
     addAndMakeVisible (bypass);
     bypassAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "bypass", bypass);
-    constexpr std::array<const char*, 5> ids { "haasMix", "haasMax", "width", "transientProtect", "output" };
-    constexpr std::array<const char*, 5> names { "HAAS MIX", "MAX DELAY", "VELVET WIDTH", "TRANSIENT GUARD", "OUTPUT" };
-    constexpr std::array<const char*, 5> units { " %", " ms", " %", " %", " dB" };
+    constexpr std::array<const char*, 6> ids {
+        "haasCenter", "haasRange", "haasRate", "width", "transientProtect", "output" };
+    constexpr std::array<const char*, 6> names {
+        "CENTER DELAY", "VARIABILITY", "MAX RATE", "VELVET WIDTH", "TRANSIENT GUARD", "OUTPUT" };
+    constexpr std::array<const char*, 6> units { " ms", " ms", " ms/s", " %", " %", " dB" };
     for (size_t i = 0; i < sliders.size(); ++i)
     {
         auto& slider = sliders[i];
         slider.setLookAndFeel (&look);
         slider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
-        slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 124, 17);
+        slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 104, 17);
         slider.setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
         slider.setColour (juce::Slider::textBoxTextColourId, foreground);
         slider.setTextValueSuffix (units[i]);
@@ -151,9 +153,10 @@ KuoStereoEditor::KuoStereoEditor (KuoStereoProcessor& p)
 void KuoStereoEditor::resized()
 {
     bypass.setBounds (450, 33, 74, 28);
-    const std::array<juce::Rectangle<int>, 5> positions {
-        juce::Rectangle<int> (52, 163, 120, 70),
-        juce::Rectangle<int> (184, 163, 120, 70),
+    const std::array<juce::Rectangle<int>, 6> positions {
+        juce::Rectangle<int> (35, 163, 104, 70),
+        juce::Rectangle<int> (143, 163, 104, 70),
+        juce::Rectangle<int> (251, 163, 104, 70),
         juce::Rectangle<int> (44, 319, 130, 75),
         juce::Rectangle<int> (189, 319, 130, 75),
         juce::Rectangle<int> (344, 319, 130, 75)
@@ -186,17 +189,18 @@ void KuoStereoEditor::paint (juce::Graphics& g)
     g.drawText ("FREQUENCY FIELD", 38, 422, 250, 20, juce::Justification::centredLeft);
     g.setColour (secondary);
     g.setFont (juce::FontOptions (9.0f));
-    g.drawText ("Mid-aware delay", 38, 124, 250, 16, juce::Justification::centredLeft);
+    g.drawText ("Mid-aware delay with controlled movement", 38, 124, 350, 16,
+                juce::Justification::centredLeft);
     g.drawText ("Sparse stereo texture with transient protection", 38, 284, 390, 16,
                 juce::Justification::centredLeft);
     g.drawText ("LOW  /  MID  /  HIGH    -    AUTO SCALE", 38, 444, 390, 16,
                 juce::Justification::centredLeft);
     g.setColour (secondary);
     g.setFont (juce::FontOptions (9.0f));
-    g.drawText ("SELECTED DELAY", 345, 151, 150, 17, juce::Justification::centred);
+    g.drawText ("ACTIVE DELAY", 365, 151, 140, 17, juce::Justification::centred);
     g.setColour (amber);
     g.setFont (juce::FontOptions (22.0f));
-    g.drawText (juce::String (processor.getSelectedDelayMs(), 1) + " ms", 335, 176, 170, 34,
+    g.drawText (juce::String (processor.getCurrentDelayMs(), 1) + " ms", 365, 176, 140, 34,
                 juce::Justification::centred);
     paintScope (g, 0, { 39, 474, 148, 202 });
     paintScope (g, 1, { 200, 474, 148, 202 });

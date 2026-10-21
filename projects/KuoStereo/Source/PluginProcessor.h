@@ -32,6 +32,7 @@ public:
     static constexpr int scopePoints = 96;
     void readScope (int band, std::array<juce::Point<float>, scopePoints>&) const noexcept;
     float getSelectedDelayMs() const noexcept { return selectedDelayMs.load (std::memory_order_relaxed); }
+    float getCurrentDelayMs() const noexcept { return currentDelayMs.load (std::memory_order_relaxed); }
     juce::AudioProcessorValueTreeState parameters;
 
 private:
@@ -40,7 +41,7 @@ private:
     static juce::AudioProcessorValueTreeState::ParameterLayout layout();
     float readAgo (const std::vector<float>&, int samplesAgo) const noexcept;
     float readAgoInterpolated (const std::vector<float>&, float samplesAgo) const noexcept;
-    void analyzeMidSpectrum (float maxDelayMs) noexcept;
+    void analyzeMidSpectrum (float centerDelayMs, float variabilityMs) noexcept;
     void pushScope (float left, float right) noexcept;
 
     juce::dsp::FFT fft { fftOrder };
@@ -51,11 +52,12 @@ private:
     std::vector<float> leftHistory, rightHistory, midHistory;
     std::array<std::array<ScopePoint, scopePoints>, 3> scope {};
     std::atomic<int> scopeWrite { 0 };
-    std::atomic<float> selectedDelayMs { 0 };
+    std::atomic<float> selectedDelayMs { 12 };
+    std::atomic<float> currentDelayMs { 12 };
     std::array<float, 2> lowState {}, upperState {};
     int writePosition = 0, sampleCount = 0, analysisCounter = 0, scopeCounter = 0, transientHold = 0;
-    float sampleRate = 48000.0f, targetDelaySamples = 240.0f, smoothDelaySamples = 240.0f;
-    float haasBlend = 0, widthBlend = 0, protectionGain = 1, fastEnvelope = 0, slowEnvelope = 0;
+    float sampleRate = 48000.0f, targetDelaySamples = 576.0f, smoothDelaySamples = 576.0f;
+    float widthBlend = 0, protectionGain = 1, fastEnvelope = 0, slowEnvelope = 0;
     float lowCoefficient = 0, upperCoefficient = 0, fastCoefficient = 0, slowCoefficient = 0;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (KuoStereoProcessor)
 };
