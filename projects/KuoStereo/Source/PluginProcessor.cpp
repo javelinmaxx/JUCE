@@ -180,7 +180,7 @@ void KuoStereoProcessor::analyzeMidSpectrum (float centerDelayMs, float variabil
 
     constexpr float switchMargin = 0.98f;
     const auto scoreAlpha = 1.0f - std::exp (-static_cast<float> (fftSize / 2)
-                                             / (0.30f * sampleRate));
+                                             / (0.25f * sampleRate));
     std::array<bool, maxCandidates> scored {};
     const auto scoreCandidate = [&] (int candidate) noexcept
     {

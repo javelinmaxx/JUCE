@@ -15,7 +15,7 @@ and Velvet Width is 0%. Smart Haas can select any 0.1 ms choice in
 the range (121 here, up to 241 at maximum Variability). Every 1024
 samples, a 2048-sample window is scored with a 0.5 ms survey followed
 by exact windowed FFT scores on nearby 0.1 ms choices.
-Candidate scores average over 300 ms, and a 2% improvement can
+Candidate scores average over 250 ms, and a 2% improvement can
 change the selected delay. This allows modest movement with content.
 The score also rewards side energy up to a 0.20 side/mid RMS target,
 so an unchanged mid at 0 ms does not automatically beat every widening
@@ -35,14 +35,14 @@ Listen to the [pad input](smart-haas-pad-input.wav),
 | Content | Most common target | Target changes | Median active delay | Adaptive error | Fixed 12 ms error |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | C major pad | 15.1 ms | 4 | 15.10 ms | 0.083 | 0.405 |
-| A minor pad | 9.0 ms | 3 | 12.00 ms | 0.348 | 0.427 |
+| A minor pad | 9.0 ms | 2 | 12.00 ms | 0.348 | 0.427 |
 
 The C major and A minor input levels are 0.088
 and 0.086 RMS over the steady windows.
 The selected target moves from 15.1 ms on C major to 9.0 ms on A minor.
-C major has 4 target changes during its steady window; A minor has 3. The target stays inside 6–18 ms;
+C major has 4 target changes during its steady window; A minor has 2. The target stays inside 6–18 ms;
 the largest active-delay step is 10.0 ms/s (10 ms/s setting).
-Compared with the fixed 12 ms delay, adaptive spectral error is 79.4% lower on C major and 18.4% lower on A minor in this pad test.
+Compared with the fixed 12 ms delay, adaptive spectral error is 79.5% lower on C major and 18.6% lower on A minor in this pad test.
 
 A separate 12-to-20 ms Center Delay step shows the linear ramp used
 between selected targets. Max Rate bounds its constant slope.

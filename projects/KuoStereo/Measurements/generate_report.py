@@ -371,7 +371,7 @@ def main(raw_dir, report_dir):
         "the range (121 here, up to 241 at maximum Variability). Every 1024",
         "samples, a 2048-sample window is scored with a 0.5 ms survey followed",
         "by exact windowed FFT scores on nearby 0.1 ms choices.",
-        "Candidate scores average over 300 ms, and a 2% improvement can",
+        "Candidate scores average over 250 ms, and a 2% improvement can",
         "change the selected delay. This allows modest movement with content.",
         "The score also rewards side energy up to a 0.20 side/mid RMS target,",
         "so an unchanged mid at 0 ms does not automatically beat every widening",

@@ -16,7 +16,7 @@ transient protection, Velvet widening, and the frequency display.
   For each candidate, it compares the original mid spectrum with the spectrum
   that would result from that signed delay and rewards moderate side energy.
   This prevents a 0 ms delay from always winning solely because its mid is
-  unchanged. A 2048-sample analysis window, 300 ms score averaging, and a
+  unchanged. A 2048-sample analysis window, 250 ms score averaging, and a
   small switching margin let the target respond to content with some movement.
   A coarse-to-fine FFT search keeps the finer choice grid practical.
   The active delay moves linearly toward each target at the selected Max Rate.
