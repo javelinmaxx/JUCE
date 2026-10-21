@@ -80,10 +80,13 @@ automatic makeup gain, or preset browser yet.
 The 548 × 726 editor places Threshold, Knee, and Ratio in that order, with
 Upward in the Compressor section and VariTransient between Attack and Release.
 Knee and VariTransient use smaller knobs. Yin caps gain at 12 dB and limits
-Ratio to 1:1–2:1; Yang retains its 1:1–20:1 range. Ratio changes in 0.01
-increments, and switching modes scales the knob position so Yin 2:1 maps to
-Yang 20:1. Yin internally swaps the Attack and Release time values while keeping
-their labels and automation controls unchanged. The shortened
+Ratio to 1:1–2:1; Yang retains its 1:1–20:1 range. The host ratio changes in
+0.01 increments and retains one 1:1–20:1 position across mode changes;
+Yin displays and uses that position on a 1:1–2:1 scale, so Yin 2:1 maps to
+Yang 20:1 without rewriting the host's ratio parameter. Older saved Yin states
+are migrated to preserve their audible ratio. Yin internally swaps the Attack
+and Release time values while keeping their labels and automation controls
+unchanged. The shortened
 right-hand meter shows upward gain on a -6 to +12 dB scale in Yin, and 0–18 dB
 gain reduction in Yang, alongside a scrolling three-second history. Output,
 Mix, and Stereo Link sit directly below it. Bypass is a button beside the

@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "RatioMapping.h"
 
 namespace
 {
@@ -80,7 +81,10 @@ character::Parameters CharacterCompressorProcessor::readParameters() const noexc
     p.highTiltDb = value (19);
     p.upward = value (14) >= 0.5f;
     if (p.upward)
+    {
+        p.ratio = character::hostToYinRatio (p.ratio);
         std::swap (p.attackMs, p.releaseMs);
+    }
     p.stereoLink = value (15);
     p.midSide = value (16) >= 0.5f;
     p.evenHarmonics = value (17);
@@ -143,7 +147,9 @@ void CharacterCompressorProcessor::process (juce::AudioBuffer<float>& buffer, bo
 
 void CharacterCompressorProcessor::getStateInformation (juce::MemoryBlock& data)
 {
-    if (auto xml = parameters.copyState().createXml())
+    auto state = parameters.copyState();
+    state.setProperty ("ratioMappingVersion", 2, nullptr);
+    if (auto xml = state.createXml())
         copyXmlToBinary (*xml, data);
 }
 
@@ -179,6 +185,19 @@ void CharacterCompressorProcessor::setStateInformation (const void* data, int si
                 mode.setProperty ("value", 0.0f, nullptr);
                 state.appendChild (mode, nullptr);
             }
+            if (static_cast<int> (state.getProperty ("ratioMappingVersion", 1)) < 2)
+            {
+                const auto mode = state.getChildWithProperty ("id", "upward");
+                auto ratio = state.getChildWithProperty ("id", "ratio");
+                if (ratio.isValid() && static_cast<float> (mode.getProperty ("value", 0.0f)) >= 0.5f)
+                {
+                    // Older Yin sessions stored the displayed 1:1–2:1 value directly.
+                    const auto oldRatio = std::clamp (static_cast<float> (ratio.getProperty ("value", 1.0f)),
+                                                      1.0f, 2.0f);
+                    ratio.setProperty ("value", character::yinToHostRatio (oldRatio), nullptr);
+                }
+            }
+            state.setProperty ("ratioMappingVersion", 2, nullptr);
             if (! state.getChildWithProperty ("id", "evenHarmonics").isValid())
             {
                 juce::ValueTree harmonics { "PARAM" };

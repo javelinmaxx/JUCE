@@ -65,6 +65,23 @@ int runTests (int argc, char** argv)
     check (static_cast<int> (restored.parameters.getRawParameterValue ("model")->load()) == 2,
            "malformed state leaves current parameters intact");
 
+    CharacterCompressorProcessor oldYin;
+    auto oldYinState = oldYin.parameters.copyState();
+    oldYinState.getChildWithProperty ("id", "upward").setProperty ("value", 1.0f, nullptr);
+    oldYinState.getChildWithProperty ("id", "ratio").setProperty ("value", 1.5f, nullptr);
+    juce::MemoryBlock oldYinData;
+    if (auto xml = oldYinState.createXml())
+        oldYin.copyXmlToBinary (*xml, oldYinData);
+    oldYin.setStateInformation (oldYinData.getData(), static_cast<int> (oldYinData.getSize()));
+    check (std::abs (oldYin.parameters.getRawParameterValue ("ratio")->load() - 10.5f) < 0.01f,
+           "legacy Yin state migrates its audible 1.5:1 ratio to the stable host position");
+    juce::MemoryBlock migratedYinData;
+    oldYin.getStateInformation (migratedYinData);
+    CharacterCompressorProcessor reopenedYin;
+    reopenedYin.setStateInformation (migratedYinData.getData(), static_cast<int> (migratedYinData.getSize()));
+    check (std::abs (reopenedYin.parameters.getRawParameterValue ("ratio")->load() - 10.5f) < 0.01f,
+           "migrated Yin ratio survives another state save and load");
+
     restored.prepareToPlay (48000, 256);
     juce::AudioBuffer<float> buffer (2, 256);
     juce::MidiBuffer midi;
@@ -91,7 +108,7 @@ int runTests (int argc, char** argv)
 
     // Exercise the automatable Upward parameter through the real processor.
     set (restored, "model", 0);
-    set (restored, "input", 0); set (restored, "threshold", -18); set (restored, "ratio", 4);
+    set (restored, "input", 0); set (restored, "threshold", -18); set (restored, "ratio", 20);
     set (restored, "attack", 10); set (restored, "release", 150); set (restored, "knee", 0);
     set (restored, "output", 0); set (restored, "mix", 100); set (restored, "sidechain", 0);
     set (restored, "drive", 0); set (restored, "transformer", 0); set (restored, "highTilt", 0);
@@ -128,6 +145,21 @@ int runTests (int argc, char** argv)
     check (std::abs (buffer.getSample (0, 255) - loudInput) < 0.001f
            && restored.reduction.load() < 0.01f,
            "host processor leaves above-threshold audio unchanged in Upward mode");
+
+    set (restored, "ratio", 10.5f);
+    double middleRatioEnergy = 0;
+    for (int block = 0; block < 240; ++block)
+    {
+        for (int ch = 0; ch < 2; ++ch)
+            juce::FloatVectorOperations::fill (buffer.getWritePointer (ch), quietInput, buffer.getNumSamples());
+        restored.processBlock (buffer, midi);
+        if (block >= 180)
+            for (int i = 0; i < buffer.getNumSamples(); ++i)
+                middleRatioEnergy += buffer.getSample (0, i) * buffer.getSample (0, i);
+    }
+    const auto middleRatioDb = 10 * std::log10 (middleRatioEnergy / (60.0 * buffer.getNumSamples()));
+    check (middleRatioDb > -26.5 && middleRatioDb < -25.5,
+           "host ratio position 10.5 produces a 1.5:1 Yin compression curve");
 
     if (argc > 1 && juce::String (argv[1]) == "--editor")
     {
@@ -180,6 +212,10 @@ int runTests (int argc, char** argv)
                && upward && bypass && midSide && stereoLink && evenHarmonics && variTransient
                && input && detectorHpf && scHighTilt && transformerDrive,
                "editor includes the complete knob and switch set");
+        check (std::abs (restored.parameters.getRawParameterValue ("ratio")->load() - 10.5f) < 0.01f
+               && std::abs (ratio->getValue() - 10.5) < 0.01
+               && ratio->getTextFromValue (ratio->getValue()) == "1.50:1",
+               "opening the Yin editor preserves the host ratio and shows its mapped value");
         check (threshold->getHeight() > attack->getHeight() && ratio->getHeight() > release->getHeight()
                && threshold->getHeight() == 108 && ratio->getHeight() == 108
                && knee->getHeight() == attack->getHeight() && attack->getHeight() == 60
@@ -273,7 +309,7 @@ int runTests (int argc, char** argv)
         } capture;
         int frame = 0;
         bool clickUpdatedParameter = false, automationUpdatedSwitch = false, upwardUpdatedParameter = false;
-        bool yinRatioRange = false, yangRatioRange = false;
+        bool yinRatioMapped = false, yangRatioMapped = false, automatedRatioRetained = false;
         capture.tick = [&]
         {
             ++frame;
@@ -295,18 +331,28 @@ int runTests (int argc, char** argv)
                     && exact (restored.parameters.getRawParameterValue ("upward")->load(), 1.0f);
             if (frame == 30)
             {
-                yinRatioRange = std::abs (ratio->getMinimum() - 1.0) < 1.0e-9
-                             && std::abs (ratio->getMaximum() - 2.0) < 1.0e-9;
-                ratio->setValue (2.0, juce::sendNotificationSync);
+                yinRatioMapped = std::abs (ratio->getMinimum() - 1.0) < 1.0e-9
+                              && std::abs (ratio->getMaximum() - 20.0) < 1.0e-9
+                              && ratio->getTextFromValue (ratio->getValue()) == "1.50:1"
+                              && std::abs (restored.parameters.getRawParameterValue ("ratio")->load() - 10.5f) < 0.01f;
+                ratio->setValue (20.0, juce::sendNotificationSync);
             }
             if (frame == 40) upward->triggerClick();
             if (frame == 50)
             {
-                yangRatioRange = ! upward->getToggleState()
+                yangRatioMapped = ! upward->getToggleState()
                     && std::abs (ratio->getMinimum() - 1.0) < 1.0e-9
                     && std::abs (ratio->getMaximum() - 20.0) < 1.0e-9
-                    && std::abs (ratio->getValue() - 20.0) < 1.0e-6;
+                    && std::abs (ratio->getValue() - 20.0) < 1.0e-6
+                    && ratio->getTextFromValue (ratio->getValue()) == "20.00:1"
+                    && std::abs (restored.parameters.getRawParameterValue ("ratio")->load() - 20.0f) < 0.01f;
             }
+            if (frame == 60) set (restored, "ratio", 7.27f);
+            if (frame == 80) upward->triggerClick();
+            if (frame == 100)
+                automatedRatioRetained = upward->getToggleState()
+                    && std::abs (restored.parameters.getRawParameterValue ("ratio")->load() - 7.27f) < 0.01f
+                    && ratio->getTextFromValue (ratio->getValue()) == "1.33:1";
             if (frame == 180) juce::MessageManager::getInstance()->stopDispatchLoop();
         };
         transformer->triggerClick();
@@ -316,7 +362,23 @@ int runTests (int argc, char** argv)
         check (clickUpdatedParameter, "animated switch click updates host parameter");
         check (automationUpdatedSwitch, "host automation updates animated switch");
         check (upwardUpdatedParameter, "upward switch updates new host parameter");
-        check (yinRatioRange && yangRatioRange, "ratio knob switches between Yin 1:1–2:1 and Yang 1:1–20:1, mapping Yin 2:1 to Yang 20:1");
+        check (yinRatioMapped && yangRatioMapped,
+               "Yin and Yang display mapped ratios without rewriting the host position");
+        check (automatedRatioRetained, "host ratio automation is retained across a Yin mode change");
+        juce::MemoryBlock flStudioState;
+        restored.getStateInformation (flStudioState);
+        CharacterCompressorProcessor reopened;
+        reopened.setStateInformation (flStudioState.getData(), static_cast<int> (flStudioState.getSize()));
+        std::unique_ptr<juce::AudioProcessorEditor> reopenedEditor (reopened.createEditor());
+        juce::Slider* reopenedRatio = nullptr;
+        for (auto* child : reopenedEditor->getChildren())
+            if (auto* slider = dynamic_cast<juce::Slider*> (child); slider && slider->getName() == "RATIO")
+                reopenedRatio = slider;
+        check (std::abs (reopened.parameters.getRawParameterValue ("ratio")->load() - 7.27f) < 0.01f
+               && reopened.parameters.getRawParameterValue ("upward")->load() >= 0.5f
+               && reopenedRatio != nullptr
+               && reopenedRatio->getTextFromValue (reopenedRatio->getValue()) == "1.33:1",
+               "automated Yin ratio survives host state save, editor close, and reopen");
         // Exercise actual component rendering, not only construction.
         auto image = editor->createComponentSnapshot (editor->getLocalBounds());
         check (image.isValid(), "native editor renders to an image");

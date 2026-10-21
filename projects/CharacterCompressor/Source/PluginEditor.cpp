@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "RatioMapping.h"
 
 CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcessor& p)
     : AudioProcessorEditor (&p), processor (p)
@@ -48,7 +49,24 @@ CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcess
         addAndMakeVisible (labels[i]);
         attachments[i] = std::make_unique<State::SliderAttachment> (p.parameters, ids[i], slider);
         if (i == 2)
-            slider.setSkewFactorFromMidPoint (4.0);
+        {
+            // Keep the attached host value in its fixed 1:1–20:1 range. Only
+            // the text and DSP interpretation change with Yin/Yang mode.
+            slider.textFromValueFunction = [this] (double hostRatio)
+            {
+                const auto displayed = upward.getToggleState()
+                    ? character::hostToYinRatio (static_cast<float> (hostRatio))
+                    : static_cast<float> (hostRatio);
+                return juce::String (displayed, 2);
+            };
+            slider.valueFromTextFunction = [this] (const juce::String& text)
+            {
+                const auto displayed = text.getFloatValue();
+                return static_cast<double> (upward.getToggleState()
+                    ? character::yinToHostRatio (displayed) : displayed);
+            };
+            slider.updateText();
+        }
     }
     sliders[8].setTooltip ("High-pass filter in the detector only. 0 Hz disables it.");
     sliders[9].setTooltip ("Core drive adds saturation before the transformer filters. Generated distortion rolls off above 500 Hz; clean highs pass through.");
@@ -654,23 +672,7 @@ void CharacterCompressorEditor::timerCallback()
     if (upwardMode != lastUpwardMode || modelIndex != lastModelIndex)
     {
         if (upwardMode != lastUpwardMode)
-        {
-            auto& ratio = sliders[2];
-            const auto oldMinimum = ratio.getMinimum();
-            const auto oldMaximum = ratio.getMaximum();
-            const auto oldSpan = oldMaximum - oldMinimum;
-            const auto position = oldSpan > 0.0
-                ? std::clamp ((ratio.getValue() - oldMinimum) / oldSpan, 0.0, 1.0)
-                : 0.0;
-            auto range = ratio.getNormalisableRange();
-            range.start = 1.0;
-            range.end = upwardMode ? 2.0 : 20.0;
-            range.interval = 0.01f;
-            ratio.setNormalisableRange (range);
-            ratio.setSkewFactorFromMidPoint (upwardMode ? 1.4 : 4.0);
-            const auto scaledValue = std::round ((range.start + position * (range.end - range.start)) * 100.0) / 100.0;
-            ratio.setValue (scaledValue, juce::sendNotificationSync);
-        }
+            sliders[2].updateText();
         theme = themeFor (modelIndex, upwardMode);
         applyTheme();
         history.clear();
