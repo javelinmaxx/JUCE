@@ -21,9 +21,9 @@ transient protection, Velvet widening, and the frequency display.
   32 ms hold, a 50 ms tap crossfade restores the normal delay without a rapid
   delay-time sweep.
 - **Velvet Width** adds a sparse, balanced-polarity convolution of the dry mid
-  channel to the side channel. Transient Guard detects mid-channel onsets,
-  holds the protection through the convolution tail, and temporarily reduces
-  the added width so attacks stay focused.
+  channel to the side channel. Transient Guard uses the shared mid-channel
+  onset detector to remove the first 3 ms of an attack from the convolution
+  input; existing sustained side texture continues while the attack stays focused.
 - **Frequency Field** shows three goniometers fed by the processed stereo
   output, split below 250 Hz, from 250 Hz to 2.5 kHz, and above 2.5 kHz.
   Each display scales its points automatically so quieter bands remain visible.

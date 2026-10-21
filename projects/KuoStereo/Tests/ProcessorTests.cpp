@@ -51,6 +51,49 @@ float impulseSideEnergy (float guard)
     return energy;
 }
 
+float noiseBedSideEnergy (float guard)
+{
+    KuoStereoProcessor processor, baseline;
+    for (auto* instance : { &processor, &baseline })
+    {
+        set (*instance, "haasCenter", 30);
+        set (*instance, "haasRange", 0);
+        set (*instance, "width", instance == &processor ? 100.0f : 0.0f);
+        set (*instance, "transientProtect", guard);
+        instance->prepareToPlay (48000, 256);
+    }
+    juce::AudioBuffer<float> buffer (2, 256), dryWidth (2, 256);
+    juce::MidiBuffer midi;
+    float energy = 0;
+    constexpr int onset = 4800;
+    for (int block = 0; block < 34; ++block)
+    {
+        for (int i = 0; i < 256; ++i)
+        {
+            const auto sample = block * 256 + i;
+            const auto value = 0.018f * std::sin (juce::MathConstants<float>::twoPi
+                * 523.0f * static_cast<float> (sample) / 48000.0f)
+                + (sample == onset ? 1.0f : 0.0f);
+            buffer.setSample (0, i, value);
+            buffer.setSample (1, i, value);
+        }
+        dryWidth.makeCopyOf (buffer);
+        processor.processBlock (buffer, midi);
+        baseline.processBlock (dryWidth, midi);
+        for (int i = 0; i < 256; ++i)
+        {
+            const auto sample = block * 256 + i;
+            if (sample >= onset + 192 && sample < onset + 1344)
+            {
+                const auto addedSide = (buffer.getSample (0, i) - buffer.getSample (1, i))
+                                     - (dryWidth.getSample (0, i) - dryWidth.getSample (1, i));
+                energy += addedSide * addedSide;
+            }
+        }
+    }
+    return energy;
+}
+
 struct HaasTransientResult
 {
     float activeDelayMs = 0, recoveredDelayMs = 0;
@@ -181,6 +224,10 @@ int main (int argc, char** argv)
         const auto guarded = impulseSideEnergy (100);
         check (unguarded > 0.01f && guarded < unguarded * 0.2f,
                "transient guard suppresses the widened impulse tail");
+        const auto guardedBed = noiseBedSideEnergy (100);
+        const auto unguardedBed = noiseBedSideEnergy (0);
+        check (guardedBed > 0.0001f && guardedBed < unguardedBed * 0.25f,
+               "full transient guard retains sustained texture while suppressing the attack");
 
         KuoStereoProcessor haas;
         set (haas, "haasCenter", 12);

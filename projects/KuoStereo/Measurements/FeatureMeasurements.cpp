@@ -181,12 +181,13 @@ void measureMonoWidth (const std::filesystem::path& directory)
     }
     const auto baseline = render (input, { 12, 0, 10, 0, 0, 0 });
     const auto widened = render (input, { 12, 0, 10, 0, 100, 0 });
+    const auto guarded = render (input, { 12, 0, 10, 0, 100, 100 });
     std::ofstream output (directory / "mono.raw", std::ios::binary);
     if (! output) throw std::runtime_error ("Cannot write mono.raw");
     for (size_t i = sampleRate / 2; i < input.size(); ++i)
     {
         const float row[] { input[i], baseline.left[i], baseline.right[i],
-                            widened.left[i], widened.right[i] };
+                            widened.left[i], widened.right[i], guarded.left[i], guarded.right[i] };
         output.write (reinterpret_cast<const char*> (row), sizeof (row));
     }
 }

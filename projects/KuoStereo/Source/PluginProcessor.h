@@ -49,15 +49,17 @@ private:
     std::array<float, fftSize> window {};
     std::array<int, velvetTaps> tapOffsets {};
     std::array<float, velvetTaps> tapWeights {};
-    std::vector<float> leftHistory, rightHistory, midHistory;
+    std::vector<float> leftHistory, rightHistory, midHistory, velvetHistory;
     std::array<std::array<ScopePoint, scopePoints>, 3> scope {};
     std::atomic<int> scopeWrite { 0 };
     std::atomic<float> selectedDelayMs { 12 };
     std::atomic<float> currentDelayMs { 12 };
     std::array<float, 2> lowState {}, upperState {};
-    int writePosition = 0, sampleCount = 0, analysisCounter = 0, scopeCounter = 0, transientHold = 0;
+    int writePosition = 0, sampleCount = 0, analysisCounter = 0, scopeCounter = 0;
+    int transientHold = 0, velvetAttackRemaining = 0;
+    bool previousOnset = false;
     float sampleRate = 48000.0f, targetDelaySamples = 576.0f, smoothDelaySamples = 576.0f;
-    float widthBlend = 0, protectionGain = 1, haasTransientEnvelope = 0;
+    float widthBlend = 0, haasTransientEnvelope = 0;
     float fastEnvelope = 0, slowEnvelope = 0;
     float lowCoefficient = 0, upperCoefficient = 0, fastCoefficient = 0, slowCoefficient = 0;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (KuoStereoProcessor)

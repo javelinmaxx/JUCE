@@ -38,11 +38,12 @@ void KuoStereoProcessor::prepareToPlay (double rate, int)
     leftHistory.assign (historySize, 0);
     rightHistory.assign (historySize, 0);
     midHistory.assign (historySize, 0);
-    writePosition = sampleCount = analysisCounter = scopeCounter = transientHold = 0;
+    velvetHistory.assign (historySize, 0);
+    writePosition = sampleCount = analysisCounter = scopeCounter = transientHold = velvetAttackRemaining = 0;
+    previousOnset = false;
     lowState = upperState = {};
     fastEnvelope = slowEnvelope = haasTransientEnvelope = 0;
     widthBlend = 0;
-    protectionGain = 1;
     const auto centerDelayMs = parameters.getRawParameterValue ("haasCenter")->load();
     targetDelaySamples = smoothDelaySamples = centerDelayMs * 0.001f * sampleRate;
     selectedDelayMs.store (centerDelayMs, std::memory_order_relaxed);
@@ -230,9 +231,24 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     {
         const auto dryLeft = left[i], dryRight = right[i];
         const auto mid = 0.5f * (dryLeft + dryRight);
+        fastEnvelope += fastCoefficient * (std::abs (mid) - fastEnvelope);
+        slowEnvelope += slowCoefficient * (std::abs (mid) - slowEnvelope);
+        const auto onset = fastEnvelope > 0.02f && fastEnvelope > slowEnvelope * 1.8f;
+        if (onset && ! previousOnset)
+            velvetAttackRemaining = juce::roundToInt (0.003f * sampleRate);
+        previousOnset = onset;
+        if (onset)
+            transientHold = juce::roundToInt (0.032f * sampleRate);
+        else if (transientHold > 0)
+            --transientHold;
+        // Remove only attack samples from the Velvet input; older sustained side remains audible.
+        const auto velvetInput = mid * (velvetAttackRemaining > 0 ? 1.0f - protection : 1.0f);
+        if (velvetAttackRemaining > 0)
+            --velvetAttackRemaining;
         leftHistory[static_cast<size_t> (writePosition)] = dryLeft;
         rightHistory[static_cast<size_t> (writePosition)] = dryRight;
         midHistory[static_cast<size_t> (writePosition)] = mid;
+        velvetHistory[static_cast<size_t> (writePosition)] = velvetInput;
         writePosition = (writePosition + 1) % static_cast<int> (rightHistory.size());
         if (sampleCount < static_cast<int> (sampleRate * 0.03f) + fftSize)
             ++sampleCount;
@@ -242,20 +258,11 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
             analyzeMidSpectrum (centerDelay, variability);
         }
 
-        fastEnvelope += fastCoefficient * (std::abs (mid) - fastEnvelope);
-        slowEnvelope += slowCoefficient * (std::abs (mid) - slowEnvelope);
-        if (fastEnvelope > 0.02f && fastEnvelope > slowEnvelope * 1.8f)
-            transientHold = juce::roundToInt (0.032f * sampleRate);
-        else if (transientHold > 0)
-            --transientHold;
-        // The same onset and hold signal protects Velvet Width and temporarily shortens Haas.
+        // The onset detector also keeps Haas short through its longer hold window.
         if (transientHold > 0)
             haasTransientEnvelope = 1.0f;
         else
             haasTransientEnvelope = std::max (0.0f, haasTransientEnvelope - transientReleaseStep);
-        const auto protectionTarget = transientHold > 0 ? 1.0f - protection : 1.0f;
-        protectionGain += (protectionTarget - protectionGain)
-            * (protectionTarget < protectionGain ? 0.1f : 0.001f);
         smoothDelaySamples += std::clamp (targetDelaySamples - smoothDelaySamples,
                                          -maxDelayStep, maxDelayStep);
         widthBlend += (widthTarget - widthBlend) * 0.001f;
@@ -271,9 +278,9 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         float velvet = 0;
         for (int tap = 0; tap < velvetTaps; ++tap)
             velvet += tapWeights[static_cast<size_t> (tap)]
-                    * readAgo (midHistory, tapOffsets[static_cast<size_t> (tap)]);
+                    * readAgo (velvetHistory, tapOffsets[static_cast<size_t> (tap)]);
         const auto widenedSide = 0.5f * (dryLeft - delayedRight)
-                               + 0.5f * widthBlend * protectionGain * velvet;
+                               + 0.5f * widthBlend * velvet;
         const auto processedMid = 0.5f * (dryLeft + delayedRight);
         left[i] = bypass ? dryLeft : (processedMid + widenedSide) * gain;
         right[i] = bypass ? dryRight : (processedMid - widenedSide) * gain;

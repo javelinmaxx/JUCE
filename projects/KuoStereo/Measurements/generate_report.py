@@ -134,28 +134,35 @@ def main(raw_dir, report_dir):
     fig.savefig(report_dir / "transients.png", dpi=170)
     plt.close(fig)
 
-    mono = np.fromfile(raw_dir / "mono.raw", dtype="<f4").reshape(-1, 5)
-    input_mono, off_l, off_r, on_l, on_r = mono.T
+    mono = np.fromfile(raw_dir / "mono.raw", dtype="<f4").reshape(-1, 7)
+    input_mono, off_l, off_r, on_l, on_r, guard_l, guard_r = mono.T
     off_side = 0.5 * (off_l - off_r)
     on_side = 0.5 * (on_l - on_r)
+    guard_side = 0.5 * (guard_l - guard_r)
     off_mid = 0.5 * (off_l + off_r)
     on_mid = 0.5 * (on_l + on_r)
     added_side = on_side - off_side
-    off_side_rms, on_side_rms, added_side_rms = map(rms, (off_side, on_side, added_side))
+    off_side_rms, on_side_rms, guard_side_rms, added_side_rms = map(
+        rms, (off_side, on_side, guard_side, added_side)
+    )
+    guarded_added_rms = rms(guard_side - off_side)
     off_corr = float(np.corrcoef(off_l, off_r)[0, 1])
     on_corr = float(np.corrcoef(on_l, on_r)[0, 1])
     mid_error = rms(on_mid - off_mid)
-    fig, axes = plt.subplots(1, 2, figsize=(10, 4.3), layout="constrained")
+    fig, axes = plt.subplots(1, 3, figsize=(12.5, 4.3), layout="constrained")
     points = np.arange(0, len(mono), 37)
     axes[0].scatter(off_l[points], off_r[points], s=3, alpha=0.15, color="#314e79")
     axes[0].set(title="Mono noise through Haas only", xlabel="left", ylabel="right", xlim=(-0.25, 0.25), ylim=(-0.25, 0.25))
     axes[1].scatter(on_l[points], on_r[points], s=3, alpha=0.15, color="#ca7939")
     axes[1].set(title="Same mono noise + Velvet 100%", xlabel="left", ylabel="right", xlim=(-0.25, 0.25), ylim=(-0.25, 0.25))
+    axes[2].scatter(guard_l[points], guard_r[points], s=3, alpha=0.15, color="#569477")
+    axes[2].set(title="Velvet 100% + Guard 100%", xlabel="left", ylabel="right", xlim=(-0.25, 0.25), ylim=(-0.25, 0.25))
     fig.savefig(report_dir / "mono-width.png", dpi=170)
     plt.close(fig)
     save_wav(report_dir / "mono-input.wav", [input_mono])
     save_wav(report_dir / "mono-haas-only.wav", [off_l, off_r])
     save_wav(report_dir / "mono-velvet-100.wav", [on_l, on_r])
+    save_wav(report_dir / "mono-velvet-guard-100.wav", [guard_l, guard_r])
 
     scope = read_csv(raw_dir / "scope.csv")
     scope_rows = []
@@ -232,9 +239,9 @@ def main(raw_dir, report_dir):
         "",
         "## Velvet Width: widening a mono signal",
         "",
-        "A 1.5 s mono, low-pass-filtered white-noise excerpt is processed twice with",
-        "the same fixed 12 ms Haas delay: Velvet Width at 0% and 100%.",
-        "Transient Guard is 0% to expose the full velvet contribution.",
+        "A 1.5 s mono, low-pass-filtered white-noise excerpt is processed with",
+        "the same fixed 12 ms Haas delay: Velvet Width at 0%, at 100% with",
+        "Guard 0%, and at 100% with Guard 100%.",
         "The Haas-only render is the baseline; the change between renders is Velvet.",
         "",
         "![Mono noise stereo scatter comparison](mono-width.png)",
@@ -243,9 +250,12 @@ def main(raw_dir, report_dir):
         f'({100 * (on_side_rms / off_side_rms - 1):.1f}% increase).',
         f'- Velvet itself adds {added_side_rms:.5f} side RMS while the mid difference '
         f'between renders is {mid_error:.7f} RMS.',
+        f'- With Guard 100%, side RMS is {guard_side_rms:.5f} and the Velvet-added '
+        f'side RMS is {guarded_added_rms:.5f}; sustained width remains audible.',
         f'- Left/right correlation changes from {off_corr:.3f} to {on_corr:.3f}.',
         "- Listen to [mono input](mono-input.wav), [Haas only](mono-haas-only.wav),",
-        "  and [Haas + Velvet 100%](mono-velvet-100.wav).",
+        "  [Haas + Velvet 100%](mono-velvet-100.wav), and",
+        "  [Haas + Velvet 100% + Guard 100%](mono-velvet-guard-100.wav).",
         "",
         "## Frequency Field: split goniometer",
         "",

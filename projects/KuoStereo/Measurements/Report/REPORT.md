@@ -46,24 +46,26 @@ Separately, Velvet Width is 100% and Transient Guard is compared at 0% and
 ![Transient timing and side-tail protection](transients.png)
 
 - At onset, the right sample is 0.0011 with Keep 0% and 0.9995 with Keep 100% (input 0.9995).
-- Velvet-added side RMS from 4–28 ms is 0.03363 at Guard 0% and 0.00000 at Guard 100% (100.0% reduction).
+- Velvet-added side RMS from 4–28 ms is 0.03363 at Guard 0% and 0.00110 at Guard 100% (96.7% reduction).
 - The protected Haas path reaches 0 ms during the onset and returns after
   the shared hold and tap crossfade; normal Haas stays at 12 ms.
 
 ## Velvet Width: widening a mono signal
 
-A 1.5 s mono, low-pass-filtered white-noise excerpt is processed twice with
-the same fixed 12 ms Haas delay: Velvet Width at 0% and 100%.
-Transient Guard is 0% to expose the full velvet contribution.
+A 1.5 s mono, low-pass-filtered white-noise excerpt is processed with
+the same fixed 12 ms Haas delay: Velvet Width at 0%, at 100% with
+Guard 0%, and at 100% with Guard 100%.
 The Haas-only render is the baseline; the change between renders is Velvet.
 
 ![Mono noise stereo scatter comparison](mono-width.png)
 
 - Side RMS rises from 0.04476 to 0.05488 (22.6% increase).
 - Velvet itself adds 0.03158 side RMS while the mid difference between renders is 0.0000000 RMS.
+- With Guard 100%, side RMS is 0.05488 and the Velvet-added side RMS is 0.03158; sustained width remains audible.
 - Left/right correlation changes from 0.003 to -0.198.
 - Listen to [mono input](mono-input.wav), [Haas only](mono-haas-only.wav),
-  and [Haas + Velvet 100%](mono-velvet-100.wav).
+  [Haas + Velvet 100%](mono-velvet-100.wav), and
+  [Haas + Velvet 100% + Guard 100%](mono-velvet-guard-100.wav).
 
 ## Frequency Field: split goniometer
 
