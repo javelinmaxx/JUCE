@@ -1,7 +1,7 @@
 # Multi-Compressor
 
 A JUCE-based audio plug-in repository with YinYang Compressor, SHUN DE-ESS,
-Kuo Stereo, and Zao Drive. YinYang provides feed-forward FET, feedback VCA, variable-mu,
+Kuo Stereo, Zao Drive, Ren Transformer, and Kuo Velvet. YinYang provides feed-forward FET, feedback VCA, variable-mu,
 and optical compression models, optional transformer coloration, and a
 high-frequency sidechain tilt. Each project builds as VST3 for Windows and
 macOS, and as an Audio Unit (AU) for macOS.
@@ -9,7 +9,7 @@ macOS, and as an Audio Unit (AU) for macOS.
 - Four selectable compressor models with stereo-linked gain reduction, plus
   an optional upward mode that boosts signal below threshold while leaving
   above-threshold signal at unity compressor gain.
-- Optional output transformer with 2× oversampling, causal magnetic hysteresis,
+- Optional output transformer with 4× oversampling, causal magnetic hysteresis,
   frequency-dependent phase response, and a 500 Hz / 12 dB-per-octave roll-off
   on generated distortion. The response uses a 20 Hz low corner and a 19 kHz,
   Q=2 high pole pair.
@@ -74,15 +74,20 @@ through. Closely spaced notes can keep the slower recovery component engaged.
 
 ## Get the source and build scripts
 
-This repository includes the JUCE framework and four independent plug-in
+This repository includes the JUCE framework and six independent plug-in
 projects: [`projects/CharacterCompressor`](projects/CharacterCompressor),
 [`projects/ShunDeEss`](projects/ShunDeEss),
-[`projects/KuoStereo`](projects/KuoStereo), and
-[`projects/ZaoDrive`](projects/ZaoDrive). Zao Drive models a common-emitter BJT
+[`projects/KuoStereo`](projects/KuoStereo),
+[`projects/ZaoDrive`](projects/ZaoDrive),
+[`projects/RenTransformer`](projects/RenTransformer), and
+[`projects/KuoVelvet`](projects/KuoVelvet). Zao Drive models a common-emitter BJT
 amplifier, an op-amp feedback diode clipper, a diode shunt clipper, and
 series-diode crossover distortion, with an expected-output display
-and YinYang's optional transformer stage. All four projects share
-an analog visual style while keeping independent processors and
+and YinYang's optional transformer stage.
+[`Ren Transformer`](projects/RenTransformer/README.md) isolates YinYang's transformer
+and output controls, and [`Kuo Velvet`](projects/KuoVelvet/README.md) isolates
+Kuo Stereo's Velvet widening with spectral transient protection and band levels.
+All six projects share an analog visual style while keeping independent processors and
 build targets. You do not need another JUCE download. All build commands below
 run from the repository root.
 

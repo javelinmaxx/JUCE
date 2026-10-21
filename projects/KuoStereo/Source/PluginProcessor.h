@@ -1,5 +1,6 @@
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "VelvetStage.h"
 #include <juce_dsp/juce_dsp.h>
 #include <array>
 #include <atomic>
@@ -85,7 +86,6 @@ private:
 
     static constexpr int fftSize = 2048;
     static constexpr int analysisHop = fftSize;
-    static constexpr int velvetTaps = 16;
     struct ScopePoint { std::atomic<float> left { 0 }, right { 0 }; };
     static juce::AudioProcessorValueTreeState::ParameterLayout layout();
     float readAgo (const std::vector<float>&, int samplesAgo) const noexcept;
@@ -94,9 +94,8 @@ private:
     void pushScope (float left, float right) noexcept;
 
     HaasSearchWorker searchWorker;
-    std::array<int, velvetTaps> tapOffsets {};
-    std::array<float, velvetTaps> tapWeights {};
-    std::vector<float> leftHistory, rightHistory, velvetHistory;
+    kuo::VelvetStage velvet;
+    std::vector<float> leftHistory, rightHistory;
     std::array<std::array<ScopePoint, scopePoints>, 3> scope {};
     std::atomic<int> scopeWrite { 0 };
     std::atomic<float> currentDelayMs { 12 };
@@ -107,12 +106,8 @@ private:
     bool onsetActive = false, instantTransientOnset = false;
     float sampleRate = 48000.0f, targetDelaySamples = 576.0f, smoothDelaySamples = 576.0f;
     float previousCenterDelayMs = -1, previousVariabilityMs = -1;
-    float widthBlend = 0, haasTransientEnvelope = 0, velvetGuardEnvelope = 0;
+    float haasTransientEnvelope = 0;
     float haasAttackStartEnvelope = 0, haasAttackProgress = 1;
-    std::array<float, 3> detectorLowStates {}, detectorCoefficients {};
-    std::array<float, 4> detectorFastEnvelopes {}, detectorSlowEnvelopes {};
-    std::array<float, 2> velvetBandLowStates {};
-    std::array<float, 3> velvetBandGains { 1.0f, 1.0f, 1.0f };
-    float lowCoefficient = 0, upperCoefficient = 0, fastCoefficient = 0, slowCoefficient = 0;
+    float lowCoefficient = 0, upperCoefficient = 0;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (KuoStereoProcessor)
 };
