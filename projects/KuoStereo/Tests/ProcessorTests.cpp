@@ -774,12 +774,20 @@ int main (int argc, char** argv)
                    && scopePeak (preview, 2) > 0.01f,
                    "each frequency-split goniometer receives its own processed band");
             std::unique_ptr<juce::AudioProcessorEditor> editor (preview.createEditor());
-            check (editor && editor->getWidth() == 548 && editor->getHeight() == 741,
-                   "editor uses the shared J-SONIC panel dimensions");
+            editor->setVisible (true);
+            check (editor && editor->getWidth() == 548 && editor->getHeight() == 721,
+                   "editor is 20 px shorter after reducing the sound field meters");
             int knobs = 0;
+            juce::Slider* firstKnob = nullptr;
             for (auto* child : editor->getChildren())
-                if (dynamic_cast<juce::Slider*> (child) != nullptr) ++knobs;
+                if (auto* slider = dynamic_cast<juce::Slider*> (child))
+                {
+                    ++knobs;
+                    if (firstKnob == nullptr) firstKnob = slider;
+                }
             check (knobs == 11, "editor exposes three Velvet band sliders beside the goniometers");
+            check (firstKnob != nullptr, "editor has a control to verify scaling");
+            const auto originalKnobWidth = editor->getLocalArea (firstKnob, firstKnob->getLocalBounds()).getWidth();
             const auto image = editor->createComponentSnapshot (editor->getLocalBounds());
             check (image.isValid(), "frequency-split goniometer editor renders");
             if (argc > 2)
@@ -788,6 +796,20 @@ int main (int argc, char** argv)
                 check (juce::PNGImageFormat().writeImageToStream (image, png)
                        && juce::File (argv[2]).replaceWithData (png.getData(), png.getDataSize()),
                        "editor preview writes");
+            }
+            for (const auto size : { juce::Point<int> (274, 361), juce::Point<int> (658, 865) })
+            {
+                editor->setSize (size.x, size.y);
+                const auto control = editor->getLocalArea (firstKnob, firstKnob->getLocalBounds());
+                check (editor->getLocalBounds().contains (control)
+                       && (size.x < 548 ? control.getWidth() < originalKnobWidth
+                                        : control.getWidth() > originalKnobWidth),
+                       "Kuo controls scale and remain inside the editor");
+                auto* hit = editor->getComponentAt (control.getCentre());
+                check (hit == firstKnob || firstKnob->isParentOf (hit),
+                       "Kuo scaled controls remain clickable");
+                check (editor->createComponentSnapshot (editor->getLocalBounds()).isValid(),
+                       "Kuo renders at both resize limits");
             }
         }
         std::cout << checks << " Kuo Stereo checks passed\n";

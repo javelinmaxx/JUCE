@@ -26,6 +26,7 @@ in overlapping windows and drives the zero-latency filterbank. Existing sessions
 retain their Wideband, Split-band, or former Smart (now Brilliant) setting.
 
 An editor preview is available at [Previews/shun-de-ess.png](Previews/shun-de-ess.png).
+The editor resizes from 50% to 120% with a fixed aspect ratio.
 Six examples show the live response plot with different detector/attenuator
 settings: [Wideband default](Previews/ResponseExamples/wideband-default.png),
 [Wideband high shelf](Previews/ResponseExamples/wideband-high-shelf.png),

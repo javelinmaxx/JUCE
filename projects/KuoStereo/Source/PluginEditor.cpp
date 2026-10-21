@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "../../EditorScaling.h"
 #include <cmath>
 
 namespace
@@ -180,7 +181,7 @@ KuoStereoEditor::KuoStereoEditor (KuoStereoProcessor& p)
         bandAttachments[i] = std::make_unique<State::SliderAttachment> (
             p.parameters, bandIds[i], slider);
     }
-    setSize (548, 741);
+    editorScaling::enable (*this, designWidth, designHeight);
     startTimerHz (30);
 }
 
@@ -204,14 +205,29 @@ void KuoStereoEditor::resized()
     }
     constexpr std::array<int, 3> bandX { 168, 329, 490 };
     for (size_t i = 0; i < bandSliders.size(); ++i)
-        bandSliders[i].setBounds (bandX[i], 504, 16, 151);
+        bandSliders[i].setBounds (bandX[i], 504, 16, 131);
+
+    const auto scale = editorScaling::transform (*this, designWidth, designHeight);
+    bypass.setTransform (scale);
+    for (auto& slider : sliders) slider.setTransform (scale);
+    for (auto& label : labels) label.setTransform (scale);
+    for (auto& slider : bandSliders) slider.setTransform (scale);
+}
+
+void KuoStereoEditor::timerCallback()
+{
+    repaint (editorScaling::repaintArea (*this, designWidth, designHeight,
+                                        { 24, 90, 500, 607 }));
 }
 
 void KuoStereoEditor::paint (juce::Graphics& g)
 {
+    g.fillAll (background);
+    g.saveState();
+    g.addTransform (editorScaling::transform (*this, designWidth, designHeight));
     g.setGradientFill (juce::ColourGradient (background.brighter (0.035f), 0, 0,
-                                            background.darker (0.13f), 0, 741, false));
-    g.fillAll();
+                                            background.darker (0.13f), 0, designHeight, false));
+    g.fillRect (0, 0, designWidth, designHeight);
     g.setColour (secondary);
     g.setFont (juce::FontOptions (10.0f));
     g.drawText ("J-SONIC / STEREO FIELD", 24, 20, 260, 18, juce::Justification::centredLeft);
@@ -220,7 +236,7 @@ void KuoStereoEditor::paint (juce::Graphics& g)
     g.drawText ("KUO STEREO", 24, 38, 410, 38, juce::Justification::centredLeft);
     drawPanel (g, { 24, 90, 500, 150 });
     drawPanel (g, { 24, 250, 500, 150 });
-    drawPanel (g, { 24, 410, 500, 307 });
+    drawPanel (g, { 24, 410, 500, 287 });
     g.setColour (foreground);
     g.setFont (juce::FontOptions (13.0f).withStyle ("bold"));
     g.drawText ("SMART HAAS", 38, 102, 250, 20, juce::Justification::centredLeft);
@@ -243,14 +259,15 @@ void KuoStereoEditor::paint (juce::Graphics& g)
     const auto displayedDelayMs = std::abs (activeDelayMs) < 0.05f ? 0.0f : activeDelayMs;
     g.drawText (juce::String (displayedDelayMs, 1) + " ms", 391, 101, 116, 22,
                 juce::Justification::centredRight);
-    paintScope (g, 0, { 39, 474, 124, 202 });
-    paintScope (g, 1, { 200, 474, 124, 202 });
-    paintScope (g, 2, { 361, 474, 124, 202 });
+    paintScope (g, 0, { 39, 474, 124, 182 });
+    paintScope (g, 1, { 200, 474, 124, 182 });
+    paintScope (g, 2, { 361, 474, 124, 182 });
     g.setColour (secondary);
     g.setFont (juce::FontOptions (9.0f));
-    g.drawText ("BELOW 250 Hz", 39, 684, 148, 16, juce::Justification::centred);
-    g.drawText ("250 Hz - 2.5 kHz", 200, 684, 148, 16, juce::Justification::centred);
-    g.drawText ("ABOVE 2.5 kHz", 361, 684, 148, 16, juce::Justification::centred);
+    g.drawText ("BELOW 250 Hz", 39, 664, 148, 16, juce::Justification::centred);
+    g.drawText ("250 Hz - 2.5 kHz", 200, 664, 148, 16, juce::Justification::centred);
+    g.drawText ("ABOVE 2.5 kHz", 361, 664, 148, 16, juce::Justification::centred);
+    g.restoreState();
 }
 
 void KuoStereoEditor::paintScope (juce::Graphics& g, int band, juce::Rectangle<float> bounds)

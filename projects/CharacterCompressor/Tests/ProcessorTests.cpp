@@ -164,6 +164,7 @@ int runTests (int argc, char** argv)
     if (argc > 1 && juce::String (argv[1]) == "--editor")
     {
         std::unique_ptr<juce::AudioProcessorEditor> editor (restored.createEditor());
+        editor->setVisible (true);
         check (editor && editor->getWidth() == 548 && editor->getHeight() == 726, "compact editor creates at expected size");
         check (editor->getNumChildComponents() >= 25, "editor contains controls and meters");
         juce::Slider *threshold = nullptr, *knee = nullptr, *ratio = nullptr;
@@ -387,6 +388,21 @@ int runTests (int argc, char** argv)
             auto stream = juce::File (argv[2]).createOutputStream();
             check (stream != nullptr, "editor screenshot destination opens");
             check (juce::PNGImageFormat().writeImageToStream (image, *stream), "editor screenshot writes");
+        }
+        const auto originalThresholdWidth = editor->getLocalArea (threshold, threshold->getLocalBounds()).getWidth();
+        for (const auto size : { juce::Point<int> (274, 363), juce::Point<int> (658, 871) })
+        {
+            editor->setSize (size.x, size.y);
+            const auto control = editor->getLocalArea (threshold, threshold->getLocalBounds());
+            check (editor->getLocalBounds().contains (control)
+                   && (size.x < 548 ? control.getWidth() < originalThresholdWidth
+                                    : control.getWidth() > originalThresholdWidth),
+                   "YinYang controls scale and remain inside the editor");
+            auto* hit = editor->getComponentAt (control.getCentre());
+            check (hit == threshold || threshold->isParentOf (hit),
+                   "YinYang scaled controls remain clickable");
+            check (editor->createComponentSnapshot (editor->getLocalBounds()).isValid(),
+                   "YinYang renders at both resize limits");
         }
     }
     std::cout << checks << " processor checks passed\n";

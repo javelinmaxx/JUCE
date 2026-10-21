@@ -742,6 +742,7 @@ int main (int argc, char** argv)
         {
             ShunDeEssProcessor editorProcessor;
             std::unique_ptr<juce::AudioProcessorEditor> editor (editorProcessor.createEditor());
+            editor->setVisible (true);
             check (editor && editor->getWidth() == 548 && editor->getHeight() == 741,
                    "editor matches the YinYang compressor layout dimensions");
             check (editor->getNumChildComponents() >= 20, "editor contains all de-esser controls");
@@ -811,6 +812,21 @@ int main (int argc, char** argv)
                 auto stream = juce::File (argv[2]).createOutputStream();
                 check (stream != nullptr, "editor preview destination opens");
                 check (juce::PNGImageFormat().writeImageToStream (image, *stream), "editor preview writes");
+            }
+            const auto originalModeWidth = editor->getLocalArea (modeKnob, modeKnob->getLocalBounds()).getWidth();
+            for (const auto size : { juce::Point<int> (274, 371), juce::Point<int> (658, 889) })
+            {
+                editor->setSize (size.x, size.y);
+                const auto control = editor->getLocalArea (modeKnob, modeKnob->getLocalBounds());
+                check (editor->getLocalBounds().contains (control)
+                       && (size.x < 548 ? control.getWidth() < originalModeWidth
+                                        : control.getWidth() > originalModeWidth),
+                       "Shun controls scale and remain inside the editor");
+                auto* hit = editor->getComponentAt (control.getCentre());
+                check (hit == modeKnob || modeKnob->isParentOf (hit),
+                       "Shun scaled controls remain clickable");
+                check (editor->createComponentSnapshot (editor->getLocalBounds()).isValid(),
+                       "Shun renders at both resize limits");
             }
         }
         std::cout << checks << " SHUN DE-ESS processor checks passed\n";

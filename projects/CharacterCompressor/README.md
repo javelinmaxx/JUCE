@@ -79,6 +79,7 @@ automatic makeup gain, or preset browser yet.
 
 The 548 × 726 editor places Threshold, Knee, and Ratio in that order, with
 Upward in the Compressor section and VariTransient between Attack and Release.
+It resizes from 50% to 120% with a fixed aspect ratio.
 Knee and VariTransient use smaller knobs. Yin caps gain at 12 dB and limits
 Ratio to 1:1–2:1; Yang retains its 1:1–20:1 range. The host ratio changes in
 0.01 increments and retains one 1:1–20:1 position across mode changes;

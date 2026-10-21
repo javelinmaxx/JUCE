@@ -62,6 +62,7 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
 private:
+    static constexpr int designWidth = 548, designHeight = 741;
     void timerCallback() override;
     void paintMeter (juce::Graphics&);
     void paintResponseDisplay (juce::Graphics&);

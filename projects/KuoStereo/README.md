@@ -4,6 +4,8 @@ Kuo Stereo is J-SONIC's stereo widener plug-in. It is a separate JUCE project
 alongside YinYang Compressor and SHUN DE-ESS, with the same dark analog panel,
 rotary controls, and amber accents. The [editor preview](Previews/kuo-stereo.png)
 shows its three sections.
+The sound field displays are 182 px tall in the default 548 × 721 editor.
+The editor resizes from 50% to 120% with a fixed aspect ratio.
 
 The [feature measurement report](Measurements/Report/REPORT.md) includes
 synthetic audio, plots, and quantified results for adaptive Haas delay,

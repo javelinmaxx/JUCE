@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "../../EditorScaling.h"
 #include "RatioMapping.h"
 
 CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcessor& p)
@@ -83,7 +84,7 @@ CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcess
     upward.snapToState();
     midSide.snapToState();
     lastTick = juce::Time::getMillisecondCounterHiRes() * 0.001;
-    setSize (548, 726);
+    editorScaling::enable (*this, designWidth, designHeight);
     timerCallback();
     startTimerHz (30);
 }
@@ -465,18 +466,21 @@ juce::Slider::SliderLayout CompressorLookAndFeel::getSliderLayout (juce::Slider&
 
 void CharacterCompressorEditor::paint (juce::Graphics& g)
 {
+    g.fillAll (theme.background);
+    g.saveState();
+    g.addTransform (editorScaling::transform (*this, designWidth, designHeight));
     g.setGradientFill (juce::ColourGradient (theme.background.brighter (0.035f), 0, 0,
-        theme.background.darker (0.13f), 0, static_cast<float> (getHeight()), false));
-    g.fillAll();
+        theme.background.darker (0.13f), 0, static_cast<float> (designHeight), false));
+    g.fillRect (0, 0, designWidth, designHeight);
     const auto& grain = analogGrain();
-    for (int y = 0; y < getHeight(); y += grain.getHeight())
-        for (int x = 0; x < getWidth(); x += grain.getWidth())
+    for (int y = 0; y < designHeight; y += grain.getHeight())
+        for (int x = 0; x < designWidth; x += grain.getWidth())
             g.drawImageAt (grain, x, y);
     g.setGradientFill (juce::ColourGradient (theme.control.withAlpha (0.16f), 18, 18,
         juce::Colours::transparentBlack, 470, 565, true));
     g.fillAll();
     g.setGradientFill (juce::ColourGradient (juce::Colours::transparentBlack,
-        static_cast<float> (getWidth()) * 0.5f, static_cast<float> (getHeight()) * 0.45f,
+        static_cast<float> (designWidth) * 0.5f, static_cast<float> (designHeight) * 0.45f,
         juce::Colours::black.withAlpha (0.22f), 670, 430, true));
     g.fillAll();
     g.saveState();
@@ -504,6 +508,7 @@ void CharacterCompressorEditor::paint (juce::Graphics& g)
         g.drawHorizontalLine (y, 24, 324);
     }
     paintMeter (g);
+    g.restoreState();
     g.restoreState();
 }
 
@@ -656,6 +661,13 @@ void CharacterCompressorEditor::resized()
     upward.setBounds (32, up (146), 112, 28);
     midSide.setBounds (241, up (535), 58, 64);
     transformer.setBounds (241, up (663), 58, 64);
+
+    const auto scale = editorScaling::transform (*this, designWidth, designHeight);
+    model.setTransform (scale);
+    for (auto& slider : sliders) slider.setTransform (scale);
+    for (auto& label : labels) label.setTransform (scale);
+    for (auto* control : { &transformer, &upward, &bypass, &midSide })
+        control->setTransform (scale);
 }
 
 void CharacterCompressorEditor::timerCallback()
@@ -686,7 +698,8 @@ void CharacterCompressorEditor::timerCallback()
     const auto gr = std::isfinite (raw) ? std::clamp (raw, 0.0f, maxGain) : 0.0f;
     displayedReduction = std::max (gr, displayedReduction * std::exp (-elapsed / 0.25f));
     history.push (now, gr);
-    repaint (meterBounds);
+    repaint (editorScaling::repaintArea (*this, designWidth, designHeight,
+                                        meterBounds.translated (0, -30)));
 }
 
 void CharacterCompressorEditor::applyTheme()
