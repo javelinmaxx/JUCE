@@ -36,7 +36,7 @@ public:
     juce::AudioProcessorValueTreeState parameters;
 
 private:
-    static constexpr int fftOrder = 11, fftSize = 1 << fftOrder, candidates = 7, velvetTaps = 16;
+    static constexpr int fftOrder = 11, fftSize = 1 << fftOrder, candidates = 30, velvetTaps = 16;
     struct ScopePoint { std::atomic<float> left { 0 }, right { 0 }; };
     static juce::AudioProcessorValueTreeState::ParameterLayout layout();
     float readAgo (const std::vector<float>&, int samplesAgo) const noexcept;

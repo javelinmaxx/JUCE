@@ -153,15 +153,25 @@ void KuoStereoProcessor::analyzeMidSpectrum (float centerDelayMs, float variabil
 
     constexpr float switchMargin = 0.95f;
     const auto scoreAlpha = 1.0f - std::exp (-static_cast<float> (fftSize / 2)
-                                             / (0.15f * sampleRate));
+                                             / (0.6f * sampleRate));
+    const auto candidateDelayMs = [=] (int candidate) noexcept
+    {
+        if (candidate == candidates - 1)
+            return centerDelayMs;
+        constexpr int lowerCandidates = candidates / 2;
+        if (candidate < lowerCandidates)
+            return lowDelayMs + (centerDelayMs - lowDelayMs)
+                              * static_cast<float> (candidate) / lowerCandidates;
+        constexpr int upperCandidates = candidates - lowerCandidates - 1;
+        return centerDelayMs + (highDelayMs - centerDelayMs)
+                             * static_cast<float> (candidate - lowerCandidates + 1) / upperCandidates;
+    };
     float bestScore = std::numeric_limits<float>::max();
     int bestCandidate = 0;
     for (int candidate = 0; candidate < candidates; ++candidate)
     {
-        // Keep the original six-point grid and always make Center an available fallback.
-        const auto delayMs = candidate == candidates - 1 ? centerDelayMs
-            : lowDelayMs + (highDelayMs - lowDelayMs)
-                         * static_cast<float> (candidate) / static_cast<float> (candidates - 2);
+        // Sample both sides of Center without scoring its delay twice.
+        const auto delayMs = candidateDelayMs (candidate);
         const auto delaySamples = juce::roundToInt (delayMs * 0.001f * sampleRate);
         std::fill (spectrumCandidate.begin(), spectrumCandidate.end(), 0.0f);
         for (int i = 0; i < fftSize; ++i)
@@ -193,9 +203,7 @@ void KuoStereoProcessor::analyzeMidSpectrum (float centerDelayMs, float variabil
     if (selectedCandidate < 0
         || bestScore < switchMargin * smoothedCandidateScores[static_cast<size_t> (selectedCandidate)])
         selectedCandidate = bestCandidate;
-    const auto bestDelayMs = selectedCandidate == candidates - 1 ? centerDelayMs
-        : lowDelayMs + (highDelayMs - lowDelayMs)
-                     * static_cast<float> (selectedCandidate) / static_cast<float> (candidates - 2);
+    const auto bestDelayMs = candidateDelayMs (selectedCandidate);
     targetDelaySamples = bestDelayMs * 0.001f * sampleRate;
     selectedDelayMs.store (bestDelayMs, std::memory_order_relaxed);
 }
