@@ -201,7 +201,7 @@ void KuoStereoEditor::paint (juce::Graphics& g)
                 juce::Justification::centredLeft);
     g.setColour (secondary);
     g.setFont (juce::FontOptions (7.2f));
-    g.drawText ("ACTIVE DELAY", 303, 104, 82, 16, juce::Justification::centredRight);
+    g.drawText ("ACTIVE DELAY", 333, 104, 82, 16, juce::Justification::centredRight);
     g.setColour (amber);
     g.setFont (juce::FontOptions (17.6f));
     g.drawText (juce::String (processor.getCurrentDelayMs(), 1) + " ms", 391, 101, 116, 22,
