@@ -17,8 +17,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 FS = 48_000
-SEGMENT_SECONDS = 2
-LABELS = ["100 Hz + noise", "500 Hz + noise", "1350 Hz + noise", "broad noise"]
+SEGMENT_SECONDS = 3
+LABELS = ["C major pad", "A minor pad"]
 
 
 def read_csv(path):
@@ -66,13 +66,16 @@ def main(raw_dir, report_dir):
     adaptive_audio = np.fromfile(raw_dir / "adaptation.raw", dtype="<f4").reshape(-1, 3)
     adaptive_results = []
     for segment, label in enumerate(LABELS):
-        steady = (times >= 2 * segment + 0.5) & (times < 2 * segment + 2)
-        source = adaptive_audio[(2 * segment * FS + FS // 2) : (2 * segment + 2) * FS]
+        start = SEGMENT_SECONDS * segment + 0.5
+        end = SEGMENT_SECONDS * (segment + 1) - 0.2
+        steady = (times >= start) & (times < end)
+        source = adaptive_audio[int(start * FS) : int(end * FS)]
         adaptive_results.append(
             {
                 "label": label,
                 "mode": Counter(target[steady]).most_common(1)[0][0],
                 "median": float(np.median(active[steady])),
+                "input_rms": rms(source[:, 0]),
                 "adaptive": spectral_distance(source[:, 0], source[:, 1]),
                 "fixed": spectral_distance(source[:, 0], source[:, 2]),
             }
@@ -83,11 +86,10 @@ def main(raw_dir, report_dir):
     fig, (ax, score_ax) = plt.subplots(2, 1, figsize=(10, 6.3), layout="constrained")
     ax.step(times, target, where="post", color="#ca7939", alpha=0.62, lw=0.85, label="selected target")
     ax.plot(times, active, color="#314e79", lw=1.5, label="rate-limited active delay")
-    for border in (2, 4, 6):
-        ax.axvline(border, color="0.65", ls=":", lw=0.8)
+    ax.axvline(3, color="0.65", ls=":", lw=0.8)
     for segment, label in enumerate(LABELS):
-        ax.text(segment * 2 + 1, 18.65, label, ha="center", fontsize=8)
-    ax.set(xlim=(0, 8), ylim=(4.5, 19.4), ylabel="Haas delay (ms)", title="Smart Haas response to four sound spectra")
+        ax.text(segment * 3 + 1.5, 18.65, label, ha="center", fontsize=8)
+    ax.set(xlim=(0, 6), ylim=(4.5, 19.4), ylabel="Haas delay (ms)", title="Smart Haas response to a sustained synth pad chord change")
     ax.legend(loc="lower right", frameon=False, ncol=2)
     positions = np.arange(len(LABELS))
     score_ax.bar(positions - 0.18, [row["adaptive"] for row in adaptive_results], width=0.36,
@@ -99,6 +101,9 @@ def main(raw_dir, report_dir):
     score_ax.legend(frameon=False)
     fig.savefig(report_dir / "smart-haas.png", dpi=170)
     plt.close(fig)
+    save_wav(report_dir / "smart-haas-pad-input.wav", [adaptive_audio[:, 0]])
+    save_wav(report_dir / "smart-haas-pad-adaptive.wav", [adaptive_audio[:, 1]])
+    save_wav(report_dir / "smart-haas-pad-fixed.wav", [adaptive_audio[:, 2]])
 
     transient = read_csv(raw_dir / "transient.csv")
     transient_time = np.array([float(row["time_ms"]) for row in transient])
@@ -204,15 +209,22 @@ def main(raw_dir, report_dir):
         "",
         "## Smart Haas: content adaptation and spectral preservation",
         "",
-        "Four consecutive 2 s mono segments contain either a 100, 500, or 1350 Hz tone",
-        "plus low-level white noise, or broad white noise alone. Center is 12 ms,",
-        "Variability is ±6 ms, Max Rate is 10 ms/s, and Velvet Width is 0%.",
+        "A six-second mono synth pad plays C major (C4–E4–G4) for 3 s, then",
+        "A minor (A3–C4–E4) for 3 s. Detuned oscillators and harmonics give",
+        "each note a sustained pad timbre; the chord transition crossfades over",
+        "125 ms. The two chords share two notes and are close in overall level.",
+        "Center is 12 ms, Variability is ±6 ms, Max Rate is 10 ms/s,",
+        "and Velvet Width is 0%.",
         "The fixed comparison uses the same processor with Variability at 0 ms.",
-        "The first 0.5 s of each segment is excluded from the steady-state table.",
+        "The first 0.5 s and final 0.2 s of each chord are excluded from the steady-state table.",
         "The error is the mean of weighted absolute log FFT-magnitude ratios",
         "between input and processed mid, over 512-sample Hann windows; lower is better.",
         "",
         "![Smart Haas delay and spectrum comparison](smart-haas.png)",
+        "",
+        "Listen to the [pad input](smart-haas-pad-input.wav),",
+        "[adaptive mid](smart-haas-pad-adaptive.wav), and",
+        "[fixed-delay mid](smart-haas-pad-fixed.wav).",
         "",
         "| Content | Most common target | Median active delay | Adaptive error | Fixed 12 ms error |",
         "| --- | ---: | ---: | ---: | ---: |",
@@ -222,17 +234,15 @@ def main(raw_dir, report_dir):
                      f'{row["adaptive"]:.3f} | {row["fixed"]:.3f} |')
     lines += [
         "",
-        f"The selected target changes with content and stays inside 6–18 ms; the largest observed",
-        f"active-delay step is approximately {max_rate:.1f} ms/s (10 ms/s setting). The spectral comparison",
-        "also exposes a limitation: adaptation does **not** consistently improve the",
-        "processed mid spectrum against a fixed 12 ms delay in these signals.",
-        "Broad noise makes the target fluctuate among candidates. This result demonstrates",
-        "content response, but does not validate a universal spectral-preservation claim.",
-        "The 500 Hz case is especially poor: the fixed 12 ms delay is six tone",
-        "periods, but the six-candidate grid omits 12 ms and alternates between",
-        "other period-matched targets. Rate-limited travel between them passes",
-        "through delays that colour the tone. Candidate-grid coverage and",
-        "temporal averaging merit investigation before claiming reliable improvement.",
+        f'The C major and A minor input levels are {adaptive_results[0]["input_rms"]:.3f}',
+        f'and {adaptive_results[1]["input_rms"]:.3f} RMS over the steady windows.',
+        "The selected target changes with the chord and stays inside 6–18 ms;",
+        f"the largest active-delay step is {max_rate:.1f} ms/s (10 ms/s setting).",
+        "But adaptive processing produces a **larger** spectral error than the fixed",
+        "12 ms delay on both chords, particularly A minor. The target jumps",
+        "frequently between candidates, and the active delay travels through",
+        "other values under the rate limit. This musical test does not support",
+        "a spectral-preservation improvement from the current Smart Haas search.",
         "",
         "## Keep Transient and Velvet Transient Guard",
         "",

@@ -6,34 +6,37 @@ The measurement executable and this plotting script reproduce every figure and s
 
 ## Smart Haas: content adaptation and spectral preservation
 
-Four consecutive 2 s mono segments contain either a 100, 500, or 1350 Hz tone
-plus low-level white noise, or broad white noise alone. Center is 12 ms,
-Variability is ±6 ms, Max Rate is 10 ms/s, and Velvet Width is 0%.
+A six-second mono synth pad plays C major (C4–E4–G4) for 3 s, then
+A minor (A3–C4–E4) for 3 s. Detuned oscillators and harmonics give
+each note a sustained pad timbre; the chord transition crossfades over
+125 ms. The two chords share two notes and are close in overall level.
+Center is 12 ms, Variability is ±6 ms, Max Rate is 10 ms/s,
+and Velvet Width is 0%.
 The fixed comparison uses the same processor with Variability at 0 ms.
-The first 0.5 s of each segment is excluded from the steady-state table.
+The first 0.5 s and final 0.2 s of each chord are excluded from the steady-state table.
 The error is the mean of weighted absolute log FFT-magnitude ratios
 between input and processed mid, over 512-sample Hann windows; lower is better.
 
 ![Smart Haas delay and spectrum comparison](smart-haas.png)
 
+Listen to the [pad input](smart-haas-pad-input.wav),
+[adaptive mid](smart-haas-pad-adaptive.wav), and
+[fixed-delay mid](smart-haas-pad-fixed.wav).
+
 | Content | Most common target | Median active delay | Adaptive error | Fixed 12 ms error |
 | --- | ---: | ---: | ---: | ---: |
-| 100 Hz + noise | 10.8 ms | 10.80 ms | 0.345 | 0.352 |
-| 500 Hz + noise | 18.0 ms | 11.39 ms | 0.492 | 0.250 |
-| 1350 Hz + noise | 15.6 ms | 15.23 ms | 0.396 | 0.316 |
-| broad noise | 15.6 ms | 12.61 ms | 0.593 | 0.569 |
+| C major pad | 15.6 ms | 15.65 ms | 0.423 | 0.405 |
+| A minor pad | 18.0 ms | 16.45 ms | 0.657 | 0.427 |
 
-The selected target changes with content and stays inside 6–18 ms; the largest observed
-active-delay step is approximately 10.0 ms/s (10 ms/s setting). The spectral comparison
-also exposes a limitation: adaptation does **not** consistently improve the
-processed mid spectrum against a fixed 12 ms delay in these signals.
-Broad noise makes the target fluctuate among candidates. This result demonstrates
-content response, but does not validate a universal spectral-preservation claim.
-The 500 Hz case is especially poor: the fixed 12 ms delay is six tone
-periods, but the six-candidate grid omits 12 ms and alternates between
-other period-matched targets. Rate-limited travel between them passes
-through delays that colour the tone. Candidate-grid coverage and
-temporal averaging merit investigation before claiming reliable improvement.
+The C major and A minor input levels are 0.088
+and 0.086 RMS over the steady windows.
+The selected target changes with the chord and stays inside 6–18 ms;
+the largest active-delay step is 10.0 ms/s (10 ms/s setting).
+But adaptive processing produces a **larger** spectral error than the fixed
+12 ms delay on both chords, particularly A minor. The target jumps
+frequently between candidates, and the active delay travels through
+other values under the rate limit. This musical test does not support
+a spectral-preservation improvement from the current Smart Haas search.
 
 ## Keep Transient and Velvet Transient Guard
 

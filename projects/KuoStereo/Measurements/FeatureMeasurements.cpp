@@ -1,4 +1,5 @@
 #include "../Source/PluginProcessor.h"
+#include "SynthPad.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -93,23 +94,9 @@ void writeRaw (const std::filesystem::path& path, const std::vector<const Sample
 
 void measureAdaptation (const std::filesystem::path& directory)
 {
-    constexpr int segmentLength = sampleRate * 2;
-    Samples input (segmentLength * 4);
-    Noise random;
-    constexpr float frequencies[] { 100.0f, 500.0f, 1350.0f };
+    Samples input (kuoTestSignal::padSamples);
     for (size_t i = 0; i < input.size(); ++i)
-    {
-        const auto segment = static_cast<int> (i) / segmentLength;
-        const auto noise = random.next();
-        if (segment == 3)
-            input[i] = 0.15f * noise;
-        else
-        {
-            const auto phase = juce::MathConstants<float>::twoPi * frequencies[segment]
-                             * static_cast<float> (i) / sampleRate;
-            input[i] = 0.17f * std::sin (phase) + 0.015f * noise;
-        }
-    }
+        input[i] = kuoTestSignal::padSample (static_cast<int> (i));
     const auto adaptive = render (input, { 12, 6, 10, 0, 0, 0 });
     const auto fixed = render (input, { 12, 0, 10, 0, 0, 0 });
     Samples adaptiveMid (input.size()), fixedMid (input.size());
@@ -121,13 +108,11 @@ void measureAdaptation (const std::filesystem::path& directory)
     writeRaw (directory / "adaptation.raw", { &input, &adaptiveMid, &fixedMid });
     std::ofstream csv (directory / "adaptation.csv");
     csv << "time_s,content,target_ms,active_ms\n" << std::fixed << std::setprecision (9);
-    constexpr const char* names[] = {
-        "100 Hz + noise", "500 Hz + noise", "1350 Hz + noise", "broad noise" };
     for (size_t block = 0; block < adaptive.selected.size(); ++block)
     {
         const auto sample = std::min ((block + 1) * blockSize, input.size() - 1);
         csv << static_cast<double> (sample) / sampleRate << ','
-            << names[sample / segmentLength] << ','
+            << (sample < kuoTestSignal::chordChangeSample ? "C major pad" : "A minor pad") << ','
             << adaptive.selected[block] << ',' << adaptive.active[block] << '\n';
     }
 }

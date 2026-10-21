@@ -1,4 +1,5 @@
 #include "../Source/PluginProcessor.h"
+#include "../Measurements/SynthPad.h"
 #include <cmath>
 #include <cstring>
 #include <iostream>
@@ -232,21 +233,39 @@ int main (int argc, char** argv)
         KuoStereoProcessor haas;
         set (haas, "haasCenter", 12);
         set (haas, "haasRange", 6);
+        set (haas, "haasRate", 10);
         set (haas, "width", 0);
         haas.prepareToPlay (48000, 256);
-        unsigned int random = 0x51a7u;
         float channelDifference = 0;
         bool finite = true;
-        for (int block = 0; block < 280; ++block)
+        float majorTargetSum = 0, minorTargetSum = 0;
+        double majorInputEnergy = 0, minorInputEnergy = 0;
+        int majorBlocks = 0, minorBlocks = 0;
+        for (int block = 0; block < kuoTestSignal::padSamples / 256; ++block)
         {
             for (int i = 0; i < 256; ++i)
             {
-                random = random * 1664525u + 1013904223u;
-                const auto sample = (static_cast<float> ((random >> 16) & 0xffffu) / 32768.0f - 1.0f) * 0.15f;
+                const auto sample = kuoTestSignal::padSample (block * 256 + i);
+                const auto position = block * 256 + i;
+                if (position >= 24000 && position < 134400)
+                    majorInputEnergy += static_cast<double> (sample) * sample;
+                if (position >= 168000 && position < 278400)
+                    minorInputEnergy += static_cast<double> (sample) * sample;
                 buffer.setSample (0, i, sample);
                 buffer.setSample (1, i, sample);
             }
             haas.processBlock (buffer, midi);
+            const auto blockEnd = (block + 1) * 256;
+            if (blockEnd >= 24000 && blockEnd < 134400)
+            {
+                majorTargetSum += haas.getSelectedDelayMs();
+                ++majorBlocks;
+            }
+            if (blockEnd >= 168000 && blockEnd < 278400)
+            {
+                minorTargetSum += haas.getSelectedDelayMs();
+                ++minorBlocks;
+            }
             if (block > 200)
                 for (int i = 0; i < 256; ++i)
                 {
@@ -258,6 +277,11 @@ int main (int argc, char** argv)
         check (haas.getSelectedDelayMs() >= 6.0f && haas.getSelectedDelayMs() <= 18.0f,
                "mid-spectrum analyzer selects a delay within center plus or minus variability");
         check (finite && channelDifference > 1.0f, "adaptive Haas processing creates finite stereo separation");
+        check (std::abs (majorInputEnergy / minorInputEnergy - 1.0) < 0.1,
+               "C major and A minor pad chords have comparable steady input energy");
+        check (majorBlocks > 0 && minorBlocks > 0
+                   && std::abs (majorTargetSum / majorBlocks - minorTargetSum / minorBlocks) > 0.5f,
+               "Smart Haas target responds differently to C major and A minor pad chords");
         check (scopePeak (width, 1) > 0.01f, "mid-band goniometer receives processed stereo points");
 
         KuoStereoProcessor limited;
