@@ -1,9 +1,10 @@
 # Multi-Compressor
 
-A JUCE-based audio compressor plug-in with feed-forward FET, feedback VCA,
-variable-mu, and optical compression models, optional transformer coloration,
-and a high-frequency sidechain tilt. Builds as VST3 for Windows and macOS,
-and as an Audio Unit (AU) for macOS.
+A JUCE-based audio plug-in repository with YinYang Compressor, SHUN DE-ESS,
+and Kuo Stereo. YinYang provides feed-forward FET, feedback VCA, variable-mu,
+and optical compression models, optional transformer coloration, and a
+high-frequency sidechain tilt. Each project builds as VST3 for Windows and
+macOS, and as an Audio Unit (AU) for macOS.
 
 - Four selectable compressor models with stereo-linked gain reduction, plus
   an optional upward mode that boosts signal below threshold while leaving
@@ -73,15 +74,18 @@ through. Closely spaced notes can keep the slower recovery component engaged.
 
 ## Get the source and build scripts
 
-This repository includes the JUCE framework and two independent plug-in
-projects: [`projects/CharacterCompressor`](projects/CharacterCompressor) and
-[`projects/ShunDeEss`](projects/ShunDeEss). SHUN DE-ESS reuses the compressor's
-analog visual style and has its own processor and build target. You do not need
-another JUCE download. All build commands below run from the repository root.
+This repository includes the JUCE framework and three independent plug-in
+projects: [`projects/CharacterCompressor`](projects/CharacterCompressor),
+[`projects/ShunDeEss`](projects/ShunDeEss), and
+[`projects/KuoStereo`](projects/KuoStereo). SHUN DE-ESS and Kuo Stereo share
+the compressor's analog visual style while keeping independent processors and
+build targets. You do not need another JUCE download. All build commands below
+run from the repository root.
 
-Build SHUN DE-ESS with CMake using the commands in its
-[project README](projects/ShunDeEss/README.md). The platform scripts below
-build YinYang Compressor; the Windows GitHub workflow builds both plug-ins.
+Build SHUN DE-ESS and Kuo Stereo with CMake using their
+[SHUN](projects/ShunDeEss/README.md) and [Kuo](projects/KuoStereo/README.md)
+instructions. The platform scripts below build YinYang Compressor; the Windows
+GitHub workflow builds YinYang Compressor and SHUN DE-ESS.
 
 Download the development branch with Git:
 
