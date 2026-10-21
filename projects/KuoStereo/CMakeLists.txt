@@ -38,4 +38,8 @@ if(KUO_BUILD_TESTS)
     target_compile_definitions(KuoStereoTests PRIVATE JUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1)
     target_link_libraries(KuoStereoTests PRIVATE KuoStereo)
     add_test(NAME KuoStereoProcessor COMMAND KuoStereoTests)
+
+    add_executable(KuoStereoFeatureMeasurements Measurements/FeatureMeasurements.cpp)
+    target_include_directories(KuoStereoFeatureMeasurements PRIVATE "${JUCE_SOURCE_DIR}/modules")
+    target_link_libraries(KuoStereoFeatureMeasurements PRIVATE KuoStereo)
 endif()

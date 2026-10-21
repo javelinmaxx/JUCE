@@ -5,6 +5,10 @@ alongside YinYang Compressor and SHUN DE-ESS, with the same dark analog panel,
 rotary controls, and amber accents. The [editor preview](Previews/kuo-stereo.png)
 shows its three sections.
 
+The [feature measurement report](Measurements/Report/REPORT.md) includes
+synthetic audio, plots, and quantified results for adaptive Haas delay,
+transient protection, Velvet widening, and the frequency display.
+
 - **Smart Haas** searches six delays within Center Delay ± Variability,
   clamped to 3–30 ms. For each candidate, it compares the short-time spectrum
   of the original mid channel with the mid channel that would result from
