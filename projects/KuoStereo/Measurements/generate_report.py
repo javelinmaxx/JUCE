@@ -119,6 +119,8 @@ def main(raw_dir, report_dir):
     delay_time = np.array([float(row["time_ms"]) for row in delay])
     normal_delay = np.array([float(row["normal_ms"]) for row in delay])
     kept_delay = np.array([float(row["kept_ms"]) for row in delay])
+    release_end_index = int(np.argmin(np.abs(delay_time - 75.0)))
+    remaining_protection = 100 * (normal_delay[release_end_index] - kept_delay[release_end_index]) / normal_delay[release_end_index]
     fig, axes = plt.subplots(3, 1, figsize=(10, 8), layout="constrained")
     axes[0].plot(transient_time, columns["input"], color="0.4", lw=0.9, label="input noise + transient")
     axes[0].plot(transient_time, columns["right_normal"], color="#314e79", lw=1, label="right, Keep 0%")
@@ -278,9 +280,10 @@ def main(raw_dir, report_dir):
         "and above 8 kHz. It triggers on a sharp rise in any one band rather than",
         "on the total mid-channel level. As an equal-amplitude check, a 100 Hz",
         "tone switches to 5 kHz after 1 s; both tones are 0.18 peak amplitude.",
-        "Haas Keep holds for 10 ms after the last detected onset, then crossfades",
-        "back over 65 ms. Velvet Guard attenuates convolution input only while",
-        "the detector reports an onset, with no fixed suppression interval.",
+        "Haas Keep holds for 10 ms after the last detected onset, then decays",
+        "exponentially to 1% protection over 65 ms. Velvet Guard attenuates",
+        "convolution input only while the detector reports an onset, with no",
+        "fixed suppression interval.",
         "Guard Attack sets a 0–10 ms linear ramp into attenuation while the",
         "detector remains active. At 0 ms the guard acts immediately; longer",
         "settings let more of a brief attack into Velvet's convolution history.",
@@ -311,8 +314,10 @@ def main(raw_dir, report_dir):
         f'| 0.5 ms | {guard_half_ms:.5f} | {100 * (1 - guard_half_ms / no_guard):.1f}% |',
         f'| 5 ms | {guard_five_ms:.5f} | {100 * (1 - guard_five_ms / no_guard):.1f}% |',
         "",
-        "- The protected Haas path reaches 0 ms during the onset and returns after",
-        "  its 10 ms hold and 65 ms tap crossfade; normal Haas stays at 12 ms.",
+        "- The protected Haas path reaches 0 ms during the onset and returns",
+        "  exponentially after its 10 ms hold; normal Haas stays at 12 ms.",
+        f'- At {delay_time[release_end_index]:.1f} ms after the transient, the active delay is '
+        f'{kept_delay[release_end_index]:.2f} ms, leaving {remaining_protection:.1f}% protection.',
         "",
         "## Velvet Width: widening a mono signal",
         "",

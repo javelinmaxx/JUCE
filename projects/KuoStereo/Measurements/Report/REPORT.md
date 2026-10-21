@@ -44,9 +44,10 @@ mid-channel frequency bands: below 250 Hz, 250 Hz–2.5 kHz, 2.5–8 kHz,
 and above 8 kHz. It triggers on a sharp rise in any one band rather than
 on the total mid-channel level. As an equal-amplitude check, a 100 Hz
 tone switches to 5 kHz after 1 s; both tones are 0.18 peak amplitude.
-Haas Keep holds for 10 ms after the last detected onset, then crossfades
-back over 65 ms. Velvet Guard attenuates convolution input only while
-the detector reports an onset, with no fixed suppression interval.
+Haas Keep holds for 10 ms after the last detected onset, then decays
+exponentially to 1% protection over 65 ms. Velvet Guard attenuates
+convolution input only while the detector reports an onset, with no
+fixed suppression interval.
 Guard Attack sets a 0–10 ms linear ramp into attenuation while the
 detector remains active. At 0 ms the guard acts immediately; longer
 settings let more of a brief attack into Velvet's convolution history.
@@ -75,8 +76,9 @@ Separately, Velvet Width is 100% and Transient Guard is compared at 0% and
 | 0.5 ms | 0.02992 | 11.0% |
 | 5 ms | 0.03308 | 1.6% |
 
-- The protected Haas path reaches 0 ms during the onset and returns after
-  its 10 ms hold and 65 ms tap crossfade; normal Haas stays at 12 ms.
+- The protected Haas path reaches 0 ms during the onset and returns
+  exponentially after its 10 ms hold; normal Haas stays at 12 ms.
+- At 76.0 ms after the transient, the active delay is 11.86 ms, leaving 1.1% protection.
 
 ## Velvet Width: widening a mono signal
 

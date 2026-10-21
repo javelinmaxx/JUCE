@@ -259,7 +259,8 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     const auto maxRate = parameters.getRawParameterValue ("haasRate")->load();
     const auto maxDelayStep = maxRate * 0.001f; // Samples per sample equals ms per second.
     const auto keepTransient = parameters.getRawParameterValue ("haasKeepTransient")->load() * 0.01f;
-    const auto transientReleaseStep = 1.0f / (0.065f * sampleRate);
+    // After 65 ms of release, transient protection has fallen to 1% (-40 dB).
+    const auto transientReleaseCoefficient = std::exp (std::log (0.01f) / (0.065f * sampleRate));
     const auto widthTarget = parameters.getRawParameterValue ("width")->load() * 0.01f;
     const auto protection = parameters.getRawParameterValue ("transientProtect")->load() * 0.01f;
     const auto guardAttackMs = parameters.getRawParameterValue ("guardAttack")->load();
@@ -315,7 +316,7 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         if (transientHold > 0)
             haasTransientEnvelope = 1.0f;
         else
-            haasTransientEnvelope = std::max (0.0f, haasTransientEnvelope - transientReleaseStep);
+            haasTransientEnvelope *= transientReleaseCoefficient;
         smoothDelaySamples += std::clamp (targetDelaySamples - smoothDelaySamples,
                                          -maxDelayStep, maxDelayStep);
         widthBlend += (widthTarget - widthBlend) * 0.001f;

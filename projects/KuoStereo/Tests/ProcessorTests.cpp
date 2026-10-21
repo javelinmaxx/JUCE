@@ -98,7 +98,8 @@ float noiseBedSideEnergy (float guard)
 
 struct HaasTransientResult
 {
-    float activeDelayMs = 0, heldDelayMs = 0, releasingDelayMs = 0, recoveredDelayMs = 0;
+    float activeDelayMs = 0, heldDelayMs = 0, releasingDelayMs = 0;
+    float laterReleaseDelayMs = 0, recoveredDelayMs = 0;
     int rightPeakOffset = -1;
 };
 
@@ -128,6 +129,8 @@ HaasTransientResult haasTransientResponse (float keep)
             result.heldDelayMs = processor.getCurrentDelayMs();
         if (block == 8)
             result.releasingDelayMs = processor.getCurrentDelayMs();
+        if (block == 12)
+            result.laterReleaseDelayMs = processor.getCurrentDelayMs();
         for (int i = 0; i < buffer.getNumSamples(); ++i)
             if (block >= 4 && buffer.getSample (1, i) > 0.9f && result.rightPeakOffset < 0)
                 result.rightPeakOffset = (block - 4) * 256 + i;
@@ -342,9 +345,15 @@ int main (int argc, char** argv)
                "half Keep Transient halves the delay during an onset");
         check (fullKeep.activeDelayMs < 0.001f && fullKeep.rightPeakOffset == 0,
                "maximum Keep Transient makes the onset's right channel undelayed");
-        check (fullKeep.heldDelayMs < 0.01f && fullKeep.releasingDelayMs > 1.0f
-                   && fullKeep.releasingDelayMs < 4.0f,
-               "Haas protection holds for 10 ms after onset detection then releases over 65 ms");
+        constexpr float releaseIntervalSeconds = 4.0f * 256.0f / 48000.0f;
+        const auto expectedRemainingRatio = std::exp (std::log (0.01f)
+            * releaseIntervalSeconds / 0.065f);
+        const auto actualRemainingRatio = (12.0f - fullKeep.laterReleaseDelayMs)
+            / (12.0f - fullKeep.releasingDelayMs);
+        check (fullKeep.heldDelayMs < 0.01f && fullKeep.releasingDelayMs > 0.0f
+                   && fullKeep.laterReleaseDelayMs > fullKeep.releasingDelayMs
+                   && std::abs (actualRemainingRatio - expectedRemainingRatio) < 0.01f,
+               "Haas protection holds for 10 ms then decays exponentially to 1% over 65 ms");
         check (std::abs (fullKeep.recoveredDelayMs - 12.0f) < 0.01f,
                "the Haas delay returns after its transient hold and release");
 

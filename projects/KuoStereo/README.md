@@ -19,9 +19,10 @@ transient protection, Velvet widening, and the frequency display.
   Delay. Keep Transient uses the same onset detector as Velvet Width to
   temporarily shorten the effective Haas delay. At 0% it has no effect; at
   100% the delay reaches 0 ms during detected transients. After a
-  10 ms hold, a 65 ms tap crossfade restores the normal delay without a rapid
-  delay-time sweep. The shared onset detector compares fast and slow magnitudes in
-  four frequency bands rather than the overall mid-channel level.
+  10 ms hold, an exponential tap crossfade decays to 1% protection over 65 ms,
+  restoring the normal delay without a rapid delay-time sweep. The shared onset
+  detector compares fast and slow magnitudes in four frequency bands rather
+  than the overall mid-channel level.
 - **Velvet Width** adds a sparse, balanced-polarity convolution of the dry mid
   channel to the side channel. Transient Guard uses the shared mid-channel
   onset detector to attenuate only detected onset samples before convolution;
