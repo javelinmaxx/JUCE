@@ -133,6 +133,8 @@ def main(raw_dir, report_dir):
     axes[0].set_ylabel("sample amplitude")
     fig.savefig(report_dir / "signed-haas-delay.png", dpi=170)
     plt.close(fig)
+    zero_preference = {row["source"]: float(row["selected_ms"])
+                       for row in read_csv(raw_dir / "zero_preference.csv")}
 
     slew = read_csv(raw_dir / "haas_slew.csv")
     slew_time = np.array([float(row["time_s"]) for row in slew])
@@ -252,6 +254,39 @@ def main(raw_dir, report_dir):
     fig.savefig(report_dir / "spectral-onset.png", dpi=170)
     plt.close(fig)
 
+    selectivity = read_csv(raw_dir / "detector_selectivity.csv")
+    selectivity_time = np.array([float(row["time_ms"]) for row in selectivity])
+    steady_delay = np.array([float(row["steady_ms"]) for row in selectivity])
+    transient_delay = np.array([float(row["transient_ms"]) for row in selectivity])
+    steady_window = (selectivity_time >= -300) & (selectivity_time < 0)
+    fig, axis = plt.subplots(figsize=(8, 3.3), layout="constrained")
+    axis.plot(selectivity_time, steady_delay, color="#314e79", label="steady tremolo tone")
+    axis.plot(selectivity_time, transient_delay, color="#ca7939", label="same tone + impulse")
+    axis.axvline(0, color="0.4", ls=":", lw=1)
+    axis.set(xlim=(-300, 140), ylim=(-0.5, 13), xlabel="time relative to impulse (ms)",
+             ylabel="effective Haas delay (ms)", title="Transient detector selectivity")
+    axis.legend(frameon=False)
+    fig.savefig(report_dir / "detector-selectivity.png", dpi=170)
+    plt.close(fig)
+
+    velvet_bands = read_csv(raw_dir / "velvet_bands.csv")
+    frequencies = [int(float(row["tone_hz"])) for row in velvet_bands]
+    fig, axis = plt.subplots(figsize=(8, 3.3), layout="constrained")
+    positions = np.arange(len(frequencies))
+    for offset, key, label, color in (
+        (-1, "low_only", "Low only", "#ca7939"),
+        (0, "mid_only", "Mid only", "#569477"),
+        (1, "high_only", "High only", "#314e79"),
+    ):
+        axis.bar(positions + offset * 0.24,
+                 [float(row[key]) for row in velvet_bands], 0.22,
+                 label=label, color=color)
+    axis.set(xticks=positions, xticklabels=[f"{freq} Hz" for freq in frequencies],
+             ylabel="Velvet side RMS", title="Frequency-selective Velvet input levels")
+    axis.legend(frameon=False, ncol=3)
+    fig.savefig(report_dir / "velvet-bands.png", dpi=170)
+    plt.close(fig)
+
     mono = np.fromfile(raw_dir / "mono.raw", dtype="<f4").reshape(-1, 7)
     input_mono, off_l, off_r, on_l, on_r, guard_l, guard_r = mono.T
     off_side = 0.5 * (off_l - off_r)
@@ -332,6 +367,9 @@ def main(raw_dir, report_dir):
         "and Velvet Width is 0%. Smart Haas scores 30 delays in 2048-sample",
         "windows every 1024 samples, averages candidate scores over 600 ms,",
         "and requires a 5% improvement before changing its selected delay.",
+        "The score also rewards side energy up to a 0.20 side/mid RMS target,",
+        "so an unchanged mid at 0 ms does not automatically beat every widening",
+        "candidate. Spectral error still limits how far the delay may move.",
         "The fixed comparison uses the same processor with Variability at 0 ms.",
         "The first 0.5 s and final 0.2 s of each chord are excluded from the steady-state table.",
         "The error is the mean of weighted absolute log FFT-magnitude ratios",
@@ -388,12 +426,19 @@ def main(raw_dir, report_dir):
         f'{signed_peaks["negative"][0]:.1f} ms left and '
         f'{signed_peaks["negative"][1]:.1f} ms right.',
         "",
+        "With Center at 0 ms and Variability at ±3 ms, a 523 Hz mono tone",
+        f'selects {zero_preference["mono"]:.1f} ms; a stereo version with a 0.6 radian '
+        f'channel phase offset selects {zero_preference["already-wide"]:.1f} ms. '
+        "The width target therefore avoids an automatic 0 ms choice for mono",
+        "but permits 0 ms when the input already has enough side energy.",
+        "",
         "## Keep Transient and Velvet Transient Guard",
         "",
         "The shared onset detector compares fast and slow magnitude envelopes in four",
         "mid-channel frequency bands: below 250 Hz, 250 Hz–2.5 kHz, 2.5–8 kHz,",
-        "and above 8 kHz. It triggers on a sharp rise in any one band rather than",
-        "on the total mid-channel level. As an equal-amplitude check, a 100 Hz",
+        "and above 8 kHz. A band rise also needs sufficient overall attack",
+        "energy or a strong rise in that band; this rejects small fluctuations",
+        "in sustained material. As an equal-amplitude check, a 100 Hz",
         "tone switches to 5 kHz after 1 s; both tones are 0.18 peak amplitude.",
         "Haas Keep holds for 10 ms after the last detected onset reaches the output, then decays",
         "exponentially to 1% protection over 65 ms.",
@@ -416,6 +461,15 @@ def main(raw_dir, report_dir):
         f"to {after_switch:.2f} ms at the first measured block after it; Keep 0%",
         "remains at 12 ms. This checks the frequency-specific trigger independently",
         "of a broadband level increase.",
+        "",
+        "A 700 Hz tone with 15% amplitude modulation at 5 Hz is compared",
+        "with the same tone plus a sharp impulse at 1 s. Keep is 100%.",
+        "",
+        "![Transient detector selectivity](detector-selectivity.png)",
+        "",
+        f'The steady tone stays above {np.min(steady_delay[steady_window]):.2f} ms '
+        f'in the pre-impulse window, while the impulse takes the delay to '
+        f'{np.min(transient_delay[(selectivity_time >= 0) & (selectivity_time < 20)]):.2f} ms.',
         "",
         "A 1.0-amplitude onset with a short decaying noise burst is placed in a",
         "0.002-amplitude white-noise bed. Haas Center is 12 ms and Variability is 0 ms.",
@@ -459,9 +513,10 @@ def main(raw_dir, report_dir):
         "### Velvet Guard at short attacks",
         "",
         "A steady 1 kHz mono tone starts at 0 ms with Haas Center and Variability",
-        "at 0 ms, Velvet Width and Transient Guard at 100%. The detector crosses",
-        "its onset threshold near 13 ms. The plot compares 0, 0.5, 2, and 3 ms",
-        "Guard Attack settings and measures 8–20 kHz side energy from 15–40 ms.",
+        "at 0 ms, Velvet Width and Transient Guard at 100%. The plot compares",
+        "0, 0.5, 2, and 3 ms Guard Attack settings and measures 8–20 kHz",
+        "side energy from 15–40 ms. Similar results indicate the tightened",
+        "detector leaves the sustained tone largely unguarded.",
         "",
         "![Velvet Guard short-attack noise check](guard-short-attack.png)",
         "",
@@ -503,6 +558,15 @@ def main(raw_dir, report_dir):
         f'- The Velvet-only mid differs from the dry mono input by '
         f'{velvet_only_mid_error:.7f} RMS.',
         "- Listen to the [Velvet-only render](mono-velvet-only.wav).",
+        "",
+        "### Velvet input bands",
+        "",
+        "The input to Velvet is split below 250 Hz, from 250 Hz to 2.5 kHz,",
+        "and above 2.5 kHz. The three sliders scale those bands before the",
+        "convolution. Each bar measures the side output from one slider at 100%,",
+        "with the other two at 0%, using an 80 Hz, 700 Hz, or 5 kHz mono tone.",
+        "",
+        "![Velvet input band controls](velvet-bands.png)",
         "",
         "## Frequency Field: split goniometer",
         "",

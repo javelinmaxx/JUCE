@@ -38,6 +38,7 @@ void set (KuoStereoProcessor& processor, const char* id, float value)
 struct Settings
 {
     float center = 12, range = 0, rate = 10, keep = 0, width = 0, guard = 0, guardAttack = 0;
+    float low = 100, mid = 100, high = 100;
 };
 
 struct Render
@@ -56,6 +57,9 @@ Render render (const Samples& input, const Settings& settings)
     set (processor, "width", settings.width);
     set (processor, "transientProtect", settings.guard);
     set (processor, "guardAttack", settings.guardAttack);
+    set (processor, "velvetLow", settings.low);
+    set (processor, "velvetMid", settings.mid);
+    set (processor, "velvetHigh", settings.high);
     processor.prepareToPlay (sampleRate, blockSize);
     Render result;
     result.left.resize (input.size());
@@ -133,6 +137,35 @@ void measureSignedDelay (const std::filesystem::path& directory)
             << positive.left[i] << ',' << positive.right[i] << ','
             << zero.left[i] << ',' << zero.right[i] << ','
             << negative.left[i] << ',' << negative.right[i] << '\n';
+}
+
+void measureZeroPreference (const std::filesystem::path& directory)
+{
+    std::ofstream csv (directory / "zero_preference.csv");
+    csv << "source,selected_ms\n" << std::fixed << std::setprecision (5);
+    for (const auto alreadyWide : { false, true })
+    {
+        KuoStereoProcessor processor;
+        set (processor, "haasCenter", 0);
+        set (processor, "haasRange", 3);
+        set (processor, "width", 0);
+        processor.prepareToPlay (sampleRate, blockSize);
+        juce::AudioBuffer<float> buffer (2, blockSize);
+        juce::MidiBuffer midi;
+        for (int block = 0; block < 150; ++block)
+        {
+            for (int i = 0; i < blockSize; ++i)
+            {
+                const auto phase = juce::MathConstants<float>::twoPi * 523.0f
+                    * static_cast<float> (block * blockSize + i) / sampleRate;
+                buffer.setSample (0, i, 0.2f * std::sin (phase));
+                buffer.setSample (1, i, 0.2f * std::sin (phase + (alreadyWide ? 0.6f : 0.0f)));
+            }
+            processor.processBlock (buffer, midi);
+        }
+        csv << (alreadyWide ? "already-wide" : "mono") << ','
+            << processor.getSelectedDelayMs() << '\n';
+    }
 }
 
 void measureHaasSlew (const std::filesystem::path& directory)
@@ -256,6 +289,28 @@ void measureSpectralOnset (const std::filesystem::path& directory)
             << normal.active[block] << ',' << kept.active[block] << '\n';
 }
 
+void measureDetectorSelectivity (const std::filesystem::path& directory)
+{
+    Samples texture (sampleRate * 3 / 2);
+    for (size_t i = 0; i < texture.size(); ++i)
+    {
+        const auto time = static_cast<float> (i) / sampleRate;
+        texture[i] = 0.08f * (1.0f + 0.15f * std::sin (
+            juce::MathConstants<float>::twoPi * 5.0f * time))
+            * std::sin (juce::MathConstants<float>::twoPi * 700.0f * time);
+    }
+    auto attacked = texture;
+    attacked[sampleRate] += 1.0f;
+    const auto steady = render (texture, { 12, 0, 10, 100, 0, 0 });
+    const auto transient = render (attacked, { 12, 0, 10, 100, 0, 0 });
+    std::ofstream csv (directory / "detector_selectivity.csv");
+    csv << "time_ms,steady_ms,transient_ms\n" << std::fixed << std::setprecision (8);
+    for (size_t block = 0; block < steady.active.size(); ++block)
+        csv << 1000.0 * (static_cast<double> ((block + 1) * blockSize) - sampleRate)
+                           / sampleRate << ','
+            << steady.active[block] << ',' << transient.active[block] << '\n';
+}
+
 void measureMonoWidth (const std::filesystem::path& directory)
 {
     Samples input (sampleRate * 2);
@@ -277,6 +332,36 @@ void measureMonoWidth (const std::filesystem::path& directory)
         const float row[] { input[i], baseline.left[i], baseline.right[i],
                             widened.left[i], widened.right[i], guarded.left[i], guarded.right[i] };
         output.write (reinterpret_cast<const char*> (row), sizeof (row));
+    }
+}
+
+void measureVelvetBands (const std::filesystem::path& directory)
+{
+    std::ofstream csv (directory / "velvet_bands.csv");
+    csv << "tone_hz,low_only,mid_only,high_only,all_off\n"
+        << std::fixed << std::setprecision (8);
+    for (const auto frequency : { 80.0f, 700.0f, 5000.0f })
+    {
+        Samples input (sampleRate / 2);
+        for (size_t i = 0; i < input.size(); ++i)
+            input[i] = 0.2f * std::sin (juce::MathConstants<float>::twoPi * frequency
+                * static_cast<float> (i) / sampleRate);
+        const auto sideRms = [&] (const Settings& settings)
+        {
+            const auto output = render (input, settings);
+            double energy = 0;
+            for (size_t i = sampleRate / 4; i < input.size(); ++i)
+            {
+                const auto side = 0.5f * (output.left[i] - output.right[i]);
+                energy += side * side;
+            }
+            return std::sqrt (energy / (input.size() - sampleRate / 4));
+        };
+        csv << frequency << ','
+            << sideRms ({ 0, 0, 10, 0, 100, 0, 0, 100, 0, 0 }) << ','
+            << sideRms ({ 0, 0, 10, 0, 100, 0, 0, 0, 100, 0 }) << ','
+            << sideRms ({ 0, 0, 10, 0, 100, 0, 0, 0, 0, 100 }) << ','
+            << sideRms ({ 0, 0, 10, 0, 100, 0, 0, 0, 0, 0 }) << '\n';
     }
 }
 
@@ -326,12 +411,15 @@ int main (int argc, char** argv)
         std::filesystem::create_directories (directory);
         measureAdaptation (directory);
         measureSignedDelay (directory);
+        measureZeroPreference (directory);
         measureHaasSlew (directory);
         measureTransient (directory);
         measureGuardNoise (directory);
         measureHaasOnsetNoise (directory);
         measureSpectralOnset (directory);
+        measureDetectorSelectivity (directory);
         measureMonoWidth (directory);
+        measureVelvetBands (directory);
         measureScope (directory);
         return 0;
     }

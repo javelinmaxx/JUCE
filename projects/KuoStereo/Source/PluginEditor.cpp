@@ -102,6 +102,21 @@ juce::Label* KuoLookAndFeel::createSliderTextBox (juce::Slider& slider)
     return label;
 }
 
+void KuoLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, int width, int height,
+    float sliderPos, float, float, const juce::Slider::SliderStyle, juce::Slider&)
+{
+    const auto centre = static_cast<float> (x + width / 2);
+    const auto top = static_cast<float> (y + 5);
+    const auto bottom = static_cast<float> (y + height - 5);
+    g.setColour (grid.brighter (0.3f));
+    g.fillRoundedRectangle (centre - 2.0f, top, 4.0f, bottom - top, 2.0f);
+    g.setColour (amber.withAlpha (0.72f));
+    g.fillRoundedRectangle (centre - 1.0f, sliderPos, 2.0f,
+                            std::max (0.0f, bottom - sliderPos), 1.0f);
+    g.setColour (amber);
+    g.fillRoundedRectangle (centre - 6.0f, sliderPos - 3.0f, 12.0f, 6.0f, 2.0f);
+}
+
 void KuoBypassButton::paintButton (juce::Graphics& g, bool highlighted, bool down)
 {
     const auto bounds = getLocalBounds().toFloat().reduced (1);
@@ -149,6 +164,22 @@ KuoStereoEditor::KuoStereoEditor (KuoStereoProcessor& p)
         addAndMakeVisible (labels[i]);
         attachments[i] = std::make_unique<State::SliderAttachment> (p.parameters, ids[i], slider);
     }
+    constexpr std::array<const char*, 3> bandIds { "velvetLow", "velvetMid", "velvetHigh" };
+    constexpr std::array<const char*, 3> bandNames {
+        "LOW VELVET", "MID VELVET", "HIGH VELVET" };
+    for (size_t i = 0; i < bandSliders.size(); ++i)
+    {
+        auto& slider = bandSliders[i];
+        slider.setLookAndFeel (&look);
+        slider.setSliderStyle (juce::Slider::LinearVertical);
+        slider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+        slider.setName (bandNames[i]);
+        slider.setTitle (bandNames[i]);
+        slider.setTooltip (juce::String (bandNames[i]) + " LEVEL");
+        addAndMakeVisible (slider);
+        bandAttachments[i] = std::make_unique<State::SliderAttachment> (
+            p.parameters, bandIds[i], slider);
+    }
     setSize (548, 741);
     startTimerHz (30);
 }
@@ -171,6 +202,9 @@ void KuoStereoEditor::resized()
         labels[i].setBounds (positions[i].getX(), positions[i].getY() - 17, positions[i].getWidth(), 16);
         sliders[i].setBounds (positions[i]);
     }
+    constexpr std::array<int, 3> bandX { 168, 329, 490 };
+    for (size_t i = 0; i < bandSliders.size(); ++i)
+        bandSliders[i].setBounds (bandX[i], 504, 16, 151);
 }
 
 void KuoStereoEditor::paint (juce::Graphics& g)
@@ -198,7 +232,7 @@ void KuoStereoEditor::paint (juce::Graphics& g)
                 juce::Justification::centredLeft);
     g.drawText ("Sparse stereo texture with transient protection", 38, 284, 390, 16,
                 juce::Justification::centredLeft);
-    g.drawText ("LOW  /  MID  /  HIGH    -    AUTO SCALE", 38, 444, 390, 16,
+    g.drawText ("LOW  /  MID  /  HIGH    -    AUTO SCALE  /  VELVET LEVEL", 38, 444, 472, 16,
                 juce::Justification::centredLeft);
     g.setColour (secondary);
     g.setFont (juce::FontOptions (7.2f));
@@ -209,9 +243,9 @@ void KuoStereoEditor::paint (juce::Graphics& g)
     const auto displayedDelayMs = std::abs (activeDelayMs) < 0.05f ? 0.0f : activeDelayMs;
     g.drawText (juce::String (displayedDelayMs, 1) + " ms", 391, 101, 116, 22,
                 juce::Justification::centredRight);
-    paintScope (g, 0, { 39, 474, 148, 202 });
-    paintScope (g, 1, { 200, 474, 148, 202 });
-    paintScope (g, 2, { 361, 474, 148, 202 });
+    paintScope (g, 0, { 39, 474, 124, 202 });
+    paintScope (g, 1, { 200, 474, 124, 202 });
+    paintScope (g, 2, { 361, 474, 124, 202 });
     g.setColour (secondary);
     g.setFont (juce::FontOptions (9.0f));
     g.drawText ("BELOW 250 Hz", 39, 684, 148, 16, juce::Justification::centred);

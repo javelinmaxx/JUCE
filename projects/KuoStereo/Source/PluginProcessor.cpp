@@ -19,6 +19,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout KuoStereoProcessor::layout()
     add ("width", "Velvet width", 0, 100, 0.1f, 35, "%");
     add ("transientProtect", "Transient protection", 0, 100, 0.1f, 80, "%");
     add ("guardAttack", "Velvet guard attack", 0, 10, 0.1f, 0, "ms");
+    add ("velvetLow", "Velvet low band", 0, 100, 0.1f, 100, "%");
+    add ("velvetMid", "Velvet mid band", 0, 100, 0.1f, 100, "%");
+    add ("velvetHigh", "Velvet high band", 0, 100, 0.1f, 100, "%");
     add ("output", "Output", -12, 12, 0.1f, 0, "dB");
     result.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "bypass", 1 },
         "Bypass", false));
@@ -49,6 +52,12 @@ void KuoStereoProcessor::prepareToPlay (double rate, int)
     lowState = upperState = {};
     detectorLowStates = {};
     detectorFastEnvelopes = detectorSlowEnvelopes = {};
+    velvetBandLowStates = {};
+    velvetBandGains = {
+        parameters.getRawParameterValue ("velvetLow")->load() * 0.01f,
+        parameters.getRawParameterValue ("velvetMid")->load() * 0.01f,
+        parameters.getRawParameterValue ("velvetHigh")->load() * 0.01f
+    };
     onsetActive = instantTransientOnset = false;
     haasTransientEnvelope = haasAttackStartEnvelope = 0;
     haasAttackProgress = 1;
@@ -180,14 +189,19 @@ void KuoStereoProcessor::analyzeMidSpectrum (float centerDelayMs, float variabil
         const auto delayMs = candidateDelayMs (candidate);
         const auto delaySamples = juce::roundToInt (delayMs * 0.001f * sampleRate);
         std::fill (spectrumCandidate.begin(), spectrumCandidate.end(), 0.0f);
+        float sideEnergy = 0, midEnergy = 0;
         for (int i = 0; i < fftSize; ++i)
         {
             const auto ago = fftSize - 1 - i;
             // A negative delay makes the right channel lead by delaying the left channel.
-            spectrumCandidate[static_cast<size_t> (i)] = 0.5f
-                * (readAgo (leftHistory, ago + std::max (-delaySamples, 0))
-                   + readAgo (rightHistory, ago + std::max (delaySamples, 0)))
-                * window[static_cast<size_t> (i)];
+            const auto candidateLeft = readAgo (leftHistory, ago + std::max (-delaySamples, 0));
+            const auto candidateRight = readAgo (rightHistory, ago + std::max (delaySamples, 0));
+            const auto candidateMid = 0.5f * (candidateLeft + candidateRight);
+            const auto candidateSide = 0.5f * (candidateLeft - candidateRight);
+            const auto weight = window[static_cast<size_t> (i)];
+            spectrumCandidate[static_cast<size_t> (i)] = candidateMid * weight;
+            midEnergy += candidateMid * candidateMid * weight;
+            sideEnergy += candidateSide * candidateSide * weight;
         }
         fft.performFrequencyOnlyForwardTransform (spectrumCandidate.data());
         float score = 0, weightSum = 0;
@@ -200,6 +214,12 @@ void KuoStereoProcessor::analyzeMidSpectrum (float centerDelayMs, float variabil
             weightSum += weight;
         }
         score /= std::max (weightSum, 1.0f);
+        // Spectral error alone makes 0 ms unbeatable (its mid is unchanged).
+        // Reward enough stereo side energy to meet a modest width target, while
+        // still letting 0 ms win if the source is already wide or delays color it.
+        constexpr float targetSideRatio = 0.20f;
+        const auto sideRatio = std::sqrt (sideEnergy / std::max (midEnergy, 0.000001f));
+        score += 0.35f * std::max (0.0f, 1.0f - sideRatio / targetSideRatio);
         auto& average = smoothedCandidateScores[static_cast<size_t> (candidate)];
         average = selectedCandidate < 0 ? score : average + scoreAlpha * (score - average);
         if (average < bestScore)
@@ -271,6 +291,16 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     const auto transientReleaseCoefficient = std::exp (std::log (0.01f) / (0.065f * sampleRate));
     const auto widthTarget = parameters.getRawParameterValue ("width")->load() * 0.01f;
     const auto protection = parameters.getRawParameterValue ("transientProtect")->load() * 0.01f;
+    const std::array<float, 3> velvetBandTargets {
+        parameters.getRawParameterValue ("velvetLow")->load() * 0.01f,
+        parameters.getRawParameterValue ("velvetMid")->load() * 0.01f,
+        parameters.getRawParameterValue ("velvetHigh")->load() * 0.01f
+    };
+    const auto bandGainCoefficient = 1.0f - std::exp (-1.0f / (0.010f * sampleRate));
+    const auto velvetLowCoefficient = 1.0f - std::exp (
+        -juce::MathConstants<float>::twoPi * 250.0f / sampleRate);
+    const auto velvetUpperCoefficient = 1.0f - std::exp (
+        -juce::MathConstants<float>::twoPi * 2500.0f / sampleRate);
     const auto guardAttackMs = parameters.getRawParameterValue ("guardAttack")->load();
     const auto tonalGuardAttackStep = 1.0f
         / (std::max (guardAttackMs, 0.5f) * 0.001f * sampleRate);
@@ -293,8 +323,10 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
             mid - detectorLowStates[2]
         };
         bool onset = false;
+        bool strongSpectralRise = false;
         float onsetStrength = 0.0f;
         float fastEnvelopeSum = 0.0f;
+        float slowEnvelopeSum = 0.0f;
         for (size_t band = 0; band < spectralBands.size(); ++band)
         {
             const auto level = std::abs (spectralBands[band]);
@@ -304,19 +336,26 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
             const auto fast = detectorFastEnvelopes[band];
             const auto slow = detectorSlowEnvelopes[band];
             fastEnvelopeSum += fast;
-            const auto bandOnset = fast > 0.004f && fast > slow * 2.2f;
+            slowEnvelopeSum += slow;
+            const auto bandOnset = fast > 0.004f && fast > slow * 3.5f;
             onset |= bandOnset;
+            strongSpectralRise |= fast > 0.018f && fast > slow * 3.5f;
             if (bandOnset)
             {
                 // Fade near both onset thresholds so detector chatter cannot switch
                 // the convolution input abruptly, even with a short Guard Attack.
-                const auto ratioStrength = std::clamp ((fast - slow * 2.2f)
+                const auto ratioStrength = std::clamp ((fast - slow * 3.5f)
                     / (0.004f + slow * 0.5f), 0.0f, 1.0f);
                 const auto levelStrength = std::clamp ((fast - 0.004f) / 0.004f, 0.0f, 1.0f);
                 const auto strength = ratioStrength * levelStrength;
                 onsetStrength = std::max (onsetStrength, strength * strength * (3.0f - 2.0f * strength));
             }
         }
+        // An isolated band fluctuation is insufficient: require a strong,
+        // fast rise across the mid spectrum as well.
+        onset = onset && fastEnvelopeSum > 0.015f
+            && (fastEnvelopeSum > slowEnvelopeSum * 1.5f || strongSpectralRise);
+        if (! onset) onsetStrength = 0.0f;
         if (onset)
             // Include the audio lookahead so protection lasts 10 ms after
             // the detected onset reaches the output, not just the detector.
@@ -330,16 +369,28 @@ void KuoStereoProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
             haasAttackProgress = 0.0f;
         }
         onsetActive = onset;
+        if (onset && instantTransientOnset)
+            onsetStrength = 1.0f;
         // Sharp transients use the chosen attack (including immediate 0 ms);
         // tonal onsets get at least a 0.5 ms de-click ramp.
         const auto attackStep = instantTransientOnset
             ? transientGuardAttackStep : tonalGuardAttackStep;
         velvetGuardEnvelope = onset ? std::min (1.0f, velvetGuardEnvelope + attackStep) : 0.0f;
         const auto velvetInput = mid * (1.0f - protection * velvetGuardEnvelope * onsetStrength);
+        velvetBandLowStates[0] += velvetLowCoefficient
+            * (velvetInput - velvetBandLowStates[0]);
+        velvetBandLowStates[1] += velvetUpperCoefficient
+            * (velvetInput - velvetBandLowStates[1]);
+        for (size_t band = 0; band < velvetBandGains.size(); ++band)
+            velvetBandGains[band] += bandGainCoefficient
+                * (velvetBandTargets[band] - velvetBandGains[band]);
+        const auto velvetBands = velvetBandGains[0] * velvetBandLowStates[0]
+            + velvetBandGains[1] * (velvetBandLowStates[1] - velvetBandLowStates[0])
+            + velvetBandGains[2] * (velvetInput - velvetBandLowStates[1]);
         leftHistory[static_cast<size_t> (writePosition)] = dryLeft;
         rightHistory[static_cast<size_t> (writePosition)] = dryRight;
         midHistory[static_cast<size_t> (writePosition)] = mid;
-        velvetHistory[static_cast<size_t> (writePosition)] = velvetInput;
+        velvetHistory[static_cast<size_t> (writePosition)] = velvetBands;
         writePosition = (writePosition + 1) % static_cast<int> (rightHistory.size());
         if (sampleCount < static_cast<int> (sampleRate * 0.03f) + fftSize)
             ++sampleCount;

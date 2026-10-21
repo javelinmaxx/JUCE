@@ -288,6 +288,97 @@ float haasBurstAttackError()
     return maxError;
 }
 
+float velvetBandSideRms (float frequency, float low, float mid, float high)
+{
+    KuoStereoProcessor processor;
+    set (processor, "haasCenter", 0);
+    set (processor, "haasRange", 0);
+    set (processor, "width", 100);
+    set (processor, "transientProtect", 0);
+    set (processor, "velvetLow", low);
+    set (processor, "velvetMid", mid);
+    set (processor, "velvetHigh", high);
+    processor.prepareToPlay (48000, 256);
+    juce::AudioBuffer<float> buffer (2, 256);
+    juce::MidiBuffer midi;
+    double sideEnergy = 0;
+    for (int block = 0; block < 90; ++block)
+    {
+        for (int i = 0; i < 256; ++i)
+        {
+            const auto sample = block * 256 + i;
+            const auto value = 0.2f * std::sin (juce::MathConstants<float>::twoPi
+                * frequency * static_cast<float> (sample) / 48000.0f);
+            buffer.setSample (0, i, value);
+            buffer.setSample (1, i, value);
+        }
+        processor.processBlock (buffer, midi);
+        if (block >= 50)
+            for (int i = 0; i < 256; ++i)
+            {
+                const auto side = 0.5f * (buffer.getSample (0, i) - buffer.getSample (1, i));
+                sideEnergy += side * side;
+            }
+    }
+    return static_cast<float> (std::sqrt (sideEnergy / (40 * 256)));
+}
+
+float selectedDelayAcrossZero (bool alreadyWide = false)
+{
+    KuoStereoProcessor processor;
+    set (processor, "haasCenter", 0);
+    set (processor, "haasRange", 3);
+    set (processor, "width", 0);
+    processor.prepareToPlay (48000, 256);
+    juce::AudioBuffer<float> buffer (2, 256);
+    juce::MidiBuffer midi;
+    for (int block = 0; block < 150; ++block)
+    {
+        for (int i = 0; i < 256; ++i)
+        {
+            const auto sample = block * 256 + i;
+            const auto value = 0.2f * std::sin (juce::MathConstants<float>::twoPi
+                * 523.0f * static_cast<float> (sample) / 48000.0f);
+            buffer.setSample (0, i, value);
+            buffer.setSample (1, i, alreadyWide
+                ? 0.2f * std::sin (juce::MathConstants<float>::twoPi
+                    * 523.0f * static_cast<float> (sample) / 48000.0f + 0.6f)
+                : value);
+        }
+        processor.processBlock (buffer, midi);
+    }
+    return processor.getSelectedDelayMs();
+}
+
+float smallestDelayOnSteadyTone()
+{
+    KuoStereoProcessor processor;
+    set (processor, "haasCenter", 12);
+    set (processor, "haasRange", 0);
+    set (processor, "haasKeepTransient", 100);
+    set (processor, "width", 0);
+    processor.prepareToPlay (48000, 256);
+    juce::AudioBuffer<float> buffer (2, 256);
+    juce::MidiBuffer midi;
+    float minimum = 12;
+    for (int block = 0; block < 250; ++block)
+    {
+        for (int i = 0; i < 256; ++i)
+        {
+            const auto time = static_cast<float> (block * 256 + i) / 48000.0f;
+            const auto value = 0.08f * (1.0f + 0.15f * std::sin (
+                juce::MathConstants<float>::twoPi * 5.0f * time))
+                * std::sin (juce::MathConstants<float>::twoPi * 700.0f * time);
+            buffer.setSample (0, i, value);
+            buffer.setSample (1, i, value);
+        }
+        processor.processBlock (buffer, midi);
+        if (block >= 150)
+            minimum = std::min (minimum, processor.getCurrentDelayMs());
+    }
+    return minimum;
+}
+
 float scopePeak (KuoStereoProcessor& processor, int band)
 {
     std::array<juce::Point<float>, KuoStereoProcessor::scopePoints> points;
@@ -308,7 +399,7 @@ int main (int argc, char** argv)
         check (processor.getName() == "Kuo Stereo", "plug-in identity is Kuo Stereo");
         check (std::abs (processor.getCurrentDelayMs() - 12.0f) < 0.001f,
                "active delay initially displays the default center before audio starts");
-        check (processor.getParameters().size() == 9, "all nine host parameters are registered");
+        check (processor.getParameters().size() == 12, "all twelve host parameters are registered");
         auto buses = processor.getBusesLayout();
         check (processor.isBusesLayoutSupported (buses), "stereo layout is supported");
         buses.outputBuses.set (0, juce::AudioChannelSet::mono());
@@ -320,6 +411,9 @@ int main (int argc, char** argv)
         set (processor, "width", 71.0f);
         set (processor, "transientProtect", 91.0f);
         set (processor, "guardAttack", 3.5f);
+        set (processor, "velvetLow", 25.0f);
+        set (processor, "velvetMid", 60.0f);
+        set (processor, "velvetHigh", 90.0f);
         juce::MemoryBlock state;
         processor.getStateInformation (state);
         KuoStereoProcessor restored;
@@ -385,6 +479,21 @@ int main (int argc, char** argv)
                 }
         }
         check (sideEnergy > 0.01f, "velvet convolution widens a centered sustained tone");
+        const auto lowPass = velvetBandSideRms (80, 100, 0, 0);
+        const auto lowReject = velvetBandSideRms (80, 0, 0, 100);
+        const auto midPass = velvetBandSideRms (700, 0, 100, 0);
+        const auto midReject = velvetBandSideRms (700, 100, 0, 0);
+        const auto highPass = velvetBandSideRms (5000, 0, 0, 100);
+        const auto highReject = velvetBandSideRms (5000, 100, 0, 0);
+        check (lowPass > lowReject * 5.0f && midPass > midReject * 1.5f
+                   && highPass > highReject * 3.0f,
+               "Velvet low, mid, and high sliders control their own input bands");
+        check (std::abs (selectedDelayAcrossZero()) >= 0.1f,
+               "Smart Haas can select a useful nonzero delay when zero is in range");
+        check (std::abs (selectedDelayAcrossZero (true)) < 0.01f,
+               "Smart Haas may keep zero when the input already has sufficient width");
+        check (smallestDelayOnSteadyTone() > 11.9f,
+               "moderate tremolo on a sustained tone does not retrigger transient protection");
         const auto positiveHaas = haasImpulseTiming (12);
         const auto zeroHaas = haasImpulseTiming (0);
         const auto negativeHaas = haasImpulseTiming (-12);
@@ -644,7 +753,7 @@ int main (int argc, char** argv)
             int knobs = 0;
             for (auto* child : editor->getChildren())
                 if (dynamic_cast<juce::Slider*> (child) != nullptr) ++knobs;
-            check (knobs == 8, "editor exposes Guard Attack beside the widening controls");
+            check (knobs == 11, "editor exposes three Velvet band sliders beside the goniometers");
             const auto image = editor->createComponentSnapshot (editor->getLocalBounds());
             check (image.isValid(), "frequency-split goniometer editor renders");
             if (argc > 2)

@@ -68,6 +68,8 @@ private:
     float haasAttackStartEnvelope = 0, haasAttackProgress = 1;
     std::array<float, 3> detectorLowStates {}, detectorCoefficients {};
     std::array<float, 4> detectorFastEnvelopes {}, detectorSlowEnvelopes {};
+    std::array<float, 2> velvetBandLowStates {};
+    std::array<float, 3> velvetBandGains { 1.0f, 1.0f, 1.0f };
     float lowCoefficient = 0, upperCoefficient = 0, fastCoefficient = 0, slowCoefficient = 0;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (KuoStereoProcessor)
 };

@@ -7,6 +7,8 @@ public:
     void drawRotarySlider (juce::Graphics&, int, int, int, int, float, float, float,
                            juce::Slider&) override;
     juce::Label* createSliderTextBox (juce::Slider&) override;
+    void drawLinearSlider (juce::Graphics&, int, int, int, int, float, float, float,
+                           const juce::Slider::SliderStyle, juce::Slider&) override;
 };
 
 class KuoBypassButton final : public juce::ToggleButton
@@ -34,6 +36,8 @@ private:
     std::array<juce::Label, 8> labels;
     using State = juce::AudioProcessorValueTreeState;
     std::array<std::unique_ptr<State::SliderAttachment>, 8> attachments;
+    std::array<juce::Slider, 3> bandSliders;
+    std::array<std::unique_ptr<State::SliderAttachment>, 3> bandAttachments;
     std::unique_ptr<State::ButtonAttachment> bypassAttachment;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (KuoStereoEditor)
 };

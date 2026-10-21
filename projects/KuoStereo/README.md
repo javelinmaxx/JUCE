@@ -14,9 +14,10 @@ transient protection, Velvet widening, and the frequency display.
   the right channel; negative values delay the left channel, so the right
   arrives earlier relative to it. At 0 ms, neither channel is delayed by Haas.
   For each candidate, it compares the original mid spectrum with the spectrum
-  that would result from that signed delay. A 2048-sample analysis window,
-  averaged candidate scores, and a switching margin keep the least different
-  target stable.
+  that would result from that signed delay and rewards moderate side energy.
+  This prevents a 0 ms delay from always winning solely because its mid is
+  unchanged. A 2048-sample analysis window, averaged candidate scores, and
+  a switching margin keep the target stable.
   The active delay follows a cubic sigmoid toward each target; Max Rate limits
   its steepest movement, reducing pitch modulation and chorus-like motion.
   A zero Variability setting fixes the target at Center Delay. Keep Transient
@@ -27,10 +28,12 @@ transient protection, Velvet widening, and the frequency display.
   reaches the output; sharp impulses remain sample-aligned. After a 10 ms
   hold, an exponential tap crossfade decays to 1% protection over 65 ms,
   restoring the normal delay without a rapid delay-time sweep. The shared onset
-  detector compares fast and slow magnitudes in four frequency bands rather
-  than the overall mid-channel level.
+  detector compares fast and slow magnitudes in four frequency bands and
+  requires a substantial overall attack or a strong rise in one band.
 - **Velvet Width** adds a sparse, balanced-polarity convolution of the dry mid
-  channel to the side channel. Transient Guard uses the shared mid-channel
+  channel to the side channel. Low, Mid, and High sliders beside the meters
+  control how much of each 250 Hz / 2.5 kHz input band reaches the convolution.
+  All three default to 100%. Transient Guard uses the shared mid-channel
   onset detector to attenuate only detected onset samples before convolution;
   its depth fades toward zero near the detector threshold to avoid abrupt
   switches. Existing sustained side texture continues while the attack stays
@@ -42,7 +45,7 @@ transient protection, Velvet widening, and the frequency display.
   Each display scales its points automatically so quieter bands remain visible.
 
 The controls are Center Delay, Variability, Max Rate, Keep Transient, Velvet
-Width, Transient Guard, Guard Attack, Output, and Bypass. All are host
+Width, Transient Guard, Guard Attack, Low/Mid/High Velvet, Output, and Bypass. All are host
 parameters and survive state recall.
 The plug-in accepts stereo input and output, offers VST3 and Standalone builds,
 and also builds as an Audio Unit on macOS. It reports 1.5 ms of lookahead
