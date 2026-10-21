@@ -49,6 +49,10 @@ void KuoStereoProcessor::prepareToPlay (double rate, int)
     previousCenterDelayMs = previousVariabilityMs = -1;
     smoothedCandidateScores = {};
     candidateScoreInitialized = {};
+    candidateLastScoreFrame = {};
+    coarseSurveyCursor = 0;
+    scoreFrame = 0;
+    coarseSurveyComplete = false;
     lowState = upperState = {};
     detectorLowStates = {};
     detectorFastEnvelopes = detectorSlowEnvelopes = {};
@@ -134,6 +138,8 @@ void KuoStereoProcessor::analyzeMidSpectrum (float centerDelayMs, float variabil
         // Automation moves the grid, so old scores no longer describe its choices.
         selectedCandidate = -1;
         candidateScoreInitialized = {};
+        coarseSurveyCursor = 0;
+        coarseSurveyComplete = false;
         previousCenterDelayMs = centerDelayMs;
         previousVariabilityMs = variabilityMs;
     }
@@ -173,14 +179,15 @@ void KuoStereoProcessor::analyzeMidSpectrum (float centerDelayMs, float variabil
     {
         selectedCandidate = -1;
         candidateScoreInitialized = {};
+        coarseSurveyCursor = 0;
+        coarseSurveyComplete = false;
         targetDelaySamples = centerDelayMs * 0.001f * sampleRate;
         selectedDelayMs.store (centerDelayMs, std::memory_order_relaxed);
         return;
     }
 
     constexpr float switchMargin = 0.98f;
-    const auto scoreAlpha = 1.0f - std::exp (-static_cast<float> (fftSize / 2)
-                                             / (0.25f * sampleRate));
+    ++scoreFrame;
     std::array<bool, maxCandidates> scored {};
     const auto scoreCandidate = [&] (int candidate) noexcept
     {
@@ -220,14 +227,20 @@ void KuoStereoProcessor::analyzeMidSpectrum (float centerDelayMs, float variabil
         const auto sideRatio = std::sqrt (sideEnergy / std::max (midEnergy, 0.000001f));
         score += 0.35f * std::max (0.0f, 1.0f - sideRatio / targetSideRatio);
         auto& initialized = candidateScoreInitialized[static_cast<size_t> (candidate)];
+        const auto elapsedFrames = scoreFrame - candidateLastScoreFrame[static_cast<size_t> (candidate)];
+        const auto scoreAlpha = 1.0f - std::exp (-static_cast<float> (elapsedFrames * (fftSize / 2))
+                                                 / (0.25f * sampleRate));
         average = initialized ? average + scoreAlpha * (score - average) : score;
         initialized = true;
+        candidateLastScoreFrame[static_cast<size_t> (candidate)] = scoreFrame;
         return average;
     };
 
+    if (selectedCandidate < 0)
+        selectedCandidate = std::clamp (juce::roundToInt (centerDelayMs * 10.0f) - firstTenth,
+                                        0, candidateCount - 1);
     float bestScore = std::numeric_limits<float>::max();
-    int bestCandidate = 0, coarseBest = 0;
-    float coarseBestScore = bestScore;
+    int bestCandidate = selectedCandidate;
     const auto consider = [&] (int candidate)
     {
         const auto average = scoreCandidate (candidate);
@@ -238,29 +251,45 @@ void KuoStereoProcessor::analyzeMidSpectrum (float centerDelayMs, float variabil
         }
         return average;
     };
-    // A 0.5 ms survey locates promising regions, then 0.1 ms choices are
-    // scored with the original windowed FFT near both the best and current time.
-    for (int candidate = 0; candidate < candidateCount; candidate += 5)
+    // Limit expensive FFTs per call. A rotating 0.5 ms survey covers the
+    // range over several blocks while nearby 0.1 ms choices stay responsive.
+    constexpr int coarseScoresPerPass = 4;
+    const auto coarseCount = (candidateCount + 3) / 5 + 1;
+    for (int i = 0; i < coarseScoresPerPass; ++i)
     {
-        const auto average = consider (candidate);
-        if (average < coarseBestScore)
+        scoreCandidate (std::min (coarseSurveyCursor * 5, candidateCount - 1));
+        if (++coarseSurveyCursor >= coarseCount)
         {
-            coarseBestScore = average;
-            coarseBest = candidate;
+            coarseSurveyCursor = 0;
+            coarseSurveyComplete = true;
         }
     }
-    const auto lastAverage = consider (candidateCount - 1);
-    if (lastAverage < coarseBestScore)
-        coarseBest = candidateCount - 1;
-    for (int candidate = std::max (0, coarseBest - 5);
-         candidate <= std::min (candidateCount - 1, coarseBest + 5); ++candidate)
-        consider (candidate);
-    if (selectedCandidate >= 0)
-        for (int candidate = std::max (0, selectedCandidate - 5);
-             candidate <= std::min (candidateCount - 1, selectedCandidate + 5); ++candidate)
+    consider (selectedCandidate);
+    // Alternate fine neighborhoods; each is revisited every four analysis
+    // windows, and the selected time itself is refreshed on every pass.
+    if ((scoreFrame & 3u) == 0u)
+        for (int candidate = std::max (0, selectedCandidate - 2);
+             candidate <= std::min (candidateCount - 1, selectedCandidate + 2); ++candidate)
             consider (candidate);
-    if (selectedCandidate < 0
-        || bestScore < switchMargin * smoothedCandidateScores[static_cast<size_t> (selectedCandidate)])
+    if (coarseSurveyComplete && (scoreFrame & 3u) == 2u)
+    {
+        int coarseBest = 0;
+        float coarseBestScore = std::numeric_limits<float>::max();
+        for (int i = 0; i < coarseCount; ++i)
+        {
+            const auto candidate = std::min (i * 5, candidateCount - 1);
+            if (candidateScoreInitialized[static_cast<size_t> (candidate)]
+                && smoothedCandidateScores[static_cast<size_t> (candidate)] < coarseBestScore)
+            {
+                coarseBestScore = smoothedCandidateScores[static_cast<size_t> (candidate)];
+                coarseBest = candidate;
+            }
+        }
+        for (int candidate = std::max (0, coarseBest - 2);
+             candidate <= std::min (candidateCount - 1, coarseBest + 2); ++candidate)
+            consider (candidate);
+    }
+    if (bestScore < switchMargin * smoothedCandidateScores[static_cast<size_t> (selectedCandidate)])
         selectedCandidate = bestCandidate;
     const auto bestDelayMs = candidateDelayMs (selectedCandidate);
     targetDelaySamples = bestDelayMs * 0.001f * sampleRate;

@@ -3,6 +3,7 @@
 #include <juce_dsp/juce_dsp.h>
 #include <array>
 #include <atomic>
+#include <cstdint>
 #include <vector>
 
 class KuoStereoProcessor final : public juce::AudioProcessor
@@ -50,6 +51,7 @@ private:
     std::array<float, fftSize> window {};
     std::array<float, maxCandidates> smoothedCandidateScores {};
     std::array<bool, maxCandidates> candidateScoreInitialized {};
+    std::array<uint32_t, maxCandidates> candidateLastScoreFrame {};
     std::array<int, velvetTaps> tapOffsets {};
     std::array<float, velvetTaps> tapWeights {};
     std::vector<float> leftHistory, rightHistory, velvetHistory;
@@ -60,6 +62,9 @@ private:
     std::array<float, 2> lowState {}, upperState {};
     int writePosition = 0, sampleCount = 0, analysisCounter = 0, scopeCounter = 0;
     int selectedCandidate = -1;
+    int coarseSurveyCursor = 0;
+    uint32_t scoreFrame = 0;
+    bool coarseSurveyComplete = false;
     int transientHold = 0;
     int lookaheadSamples = 0;
     bool onsetActive = false, instantTransientOnset = false;

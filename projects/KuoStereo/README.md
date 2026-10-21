@@ -18,7 +18,10 @@ transient protection, Velvet widening, and the frequency display.
   This prevents a 0 ms delay from always winning solely because its mid is
   unchanged. A 2048-sample analysis window, 250 ms score averaging, and a
   small switching margin let the target respond to content with some movement.
-  A coarse-to-fine FFT search keeps the finer choice grid practical.
+  Each analysis pass checks four rotating 0.5 ms survey points and the current
+  choice. Fine 0.1 ms neighborhoods alternate every other pass, so each is
+  checked about every 85 ms at 48 kHz. At most nine candidates are FFT-scored
+  per pass; the broad survey covers the full range over several passes.
   The active delay moves linearly toward each target at the selected Max Rate.
   A zero Variability setting fixes the target at Center Delay. Dynamic
   uses the same onset detector as Velvet Width to
