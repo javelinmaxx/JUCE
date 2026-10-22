@@ -33,7 +33,7 @@ must be real; they cannot carry an arbitrary quadrature rotation. See the
 
 Auto analyzes overlapping input spectrogram frames on a separate worker.
 Positive spectral flux, an energy rise, and transient crest distinguish clear
-onsets from stationary noise. Local spectral peaks define up to 12 narrow
+onsets from stationary noise. Local spectral peaks define up to 24 narrow
 Gaussian phase bands. Their complex phase and locally unwrapped phase slopes
 estimate how wave packets can meet the strongest transient sample. Relative
 band-delay targets are limited to ±25 ms.

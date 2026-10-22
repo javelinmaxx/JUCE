@@ -18,7 +18,7 @@ struct Settings
 struct Target { float frequency = 0, width = 0, angle = 0, delay = 0; };
 struct Analysis
 {
-    std::array<Target, 12> targets {};
+    std::array<Target, 24> targets {};
     int count = 0;
     float flux = 0, crest = 0;
 };
