@@ -4,14 +4,15 @@
 
 Auto uses a **fixed correction from the rendered preview waveform's RMS**.
 There is no live-input RMS detector, moving average, attack/release envelope or
-signal-dependent gain tracking. It matches the 1 kHz preview reference; live
+signal-dependent gain tracking. It matches the 1 kHz triangle preview reference; live
 music keeps its dynamics and receives the same fixed gain between reference
 updates. The audio path and display use one shared reference calculation.
 
 ## Calculation and signal path
 
-The worker renders the same −12 dBFS, 1 kHz reference and existing 4,096-sample
-warmup as the display. It measures the 96-sample, two-cycle input and processed
+The worker renders the same −12 dBFS, 1 kHz triangle reference and existing 4,096-sample
+warmup as the display. The triangle retains the previous ±0.25 FS peak
+and 48-sample period at 48 kHz, with two cycles in the snapshot. It measures the 96-sample, two-cycle input and processed
 output snapshot after Clear, the circuit, Tone, Mix, Output and the transformer:
 
 ```text
@@ -46,10 +47,10 @@ change that reference definition.
 
 | Circuit | Transformer | Fixed correction | Preview output/input RMS error |
 | --- | --- | ---: | ---: |
-| BJT CE | Off | +4.442 dB | -2.262e-07 dB |
-| OPAMP FB | On | +13.182 dB | +2.987e-09 dB |
-| DIODE SHUNT | Off | +15.041 dB | +2.749e-07 dB |
-| CROSSOVER | On | +12.977 dB | -5.792e-08 dB |
+| BJT CE | Off | +4.420 dB | -6.622e-09 dB |
+| OPAMP FB | On | +12.926 dB | -1.458e-07 dB |
+| DIODE SHUNT | Off | +14.741 dB | -2.894e-08 dB |
+| CROSSOVER | On | +13.137 dB | -2.190e-07 dB |
 
 Data: [auto-rms.csv](auto-rms.csv). Each measured RMS error is below 1e-5 dB.
 These measurements describe the preview-reference criterion, not a promise of

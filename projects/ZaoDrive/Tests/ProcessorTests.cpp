@@ -138,20 +138,33 @@ void optimizationTests()
         check (ready && rendered.peak > 0, "preview worker publishes the latest requested waveform");
         zao::DriveEngine reference; reference.prepare (48000, 128, false);
         juce::AudioBuffer<float> block (2, 128);
-        double error = 0;
+        // Independently construct the two straight ramps, including delayed
+        // negative indices, so a sine or misaligned dry trace cannot pass.
+        const auto triangle = [] (int sample)
+        {
+            const auto phase = (sample % 48 + 48) % 48;
+            return phase < 24 ? -.25f+phase/48.f : .75f-phase/48.f;
+        };
+        double error = 0, inputError = 0;
         for (int offset = 0; offset < 4192; offset += 128)
         {
             const auto n = std::min (128, 4192-offset);
             block.setSize (2, n, false, false, true);
             for (int i = 0; i < n; ++i)
                 for (int ch = 0; ch < 2; ++ch)
-                    block.setSample (ch, i, .25f*std::sin (static_cast<float> (2*zao::pi*(offset+i)/48.0)));
+                    block.setSample (ch, i, triangle (offset+i));
             reference.process (block, settings);
             for (int i = 0; i < n; ++i)
                 if (offset+i >= 4096)
+                {
                     error = std::max (error, std::abs (static_cast<double> (block.getSample (0, i)
                         -rendered.output[static_cast<size_t> (offset+i-4096)])));
+                    inputError = std::max (inputError, std::abs (static_cast<double> (
+                        triangle (offset+i-reference.getLatency())
+                        -rendered.input[static_cast<size_t> (offset+i-4096)])));
+                }
         }
+        check (inputError < 1e-7, "preview dry trace is a latency-aligned 1 kHz triangle at quarter-scale peak");
         check (error < 1e-6, "reused preview matches a fresh audio engine after reset and request replacement");
     }
 }
@@ -1130,7 +1143,9 @@ void editorTests (const juce::File& destination, bool tooltip, int previewMode, 
     for (int i = 0; i < 24; ++i) { juce::Thread::sleep (20); juce::Timer::callPendingTimersSynchronously(); }
     double previewPower = 0;
     for (auto value : zaoEditor->getExpectedOutput()) previewPower += static_cast<double> (value)*value;
-    check (std::abs (std::sqrt (previewPower/96)-.25/std::sqrt (2.0)) < 1e-4,
+    // Exact RMS of a sampled triangle with 24 samples per ramp, including vertices.
+    const auto triangleRms = .25*std::sqrt ((1.0+2.0/(24*24))/3.0);
+    check (std::abs (std::sqrt (previewPower/96)-triangleRms) < 1e-4,
            "Auto preview shows the level-matched steady reference without extra circuit warmup");
     set (processor, "autoCompensate", 0);
     check (! automatic->getToggleState(), "Auto button follows host automation");

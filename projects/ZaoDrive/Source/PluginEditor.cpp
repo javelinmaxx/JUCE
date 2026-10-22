@@ -285,7 +285,7 @@ void ZaoDriveEditor::paintExpectedOutput (juce::Graphics& g)
     g.setColour (foreground); g.setFont (juce::FontOptions (12.0f).withStyle ("bold"));
     g.drawText ("EXPECTED OUTPUT", 38, 303, 240, 18, juce::Justification::centredLeft);
     g.setColour (secondary); g.setFont (juce::FontOptions (9.0f));
-    g.drawText (processor.getSettings().smart ? "1 kHz reference / Smart follows live input" : "1 kHz sine  /  -12 dBFS reference", 38, 324, 280, 16, juce::Justification::centredLeft);
+    g.drawText (processor.getSettings().smart ? "1 kHz triangle / Smart follows live input" : "1 kHz triangle  /  -12 dBFS reference", 38, 324, 280, 16, juce::Justification::centredLeft);
     const auto& preview = previewAnimation.current();
     const auto scale = preview.scale;
     g.drawText ("SCALE +/-" + juce::String (scale, 3) + " FS", 350, 324, 154, 16, juce::Justification::centredRight);

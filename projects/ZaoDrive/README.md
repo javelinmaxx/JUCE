@@ -33,7 +33,7 @@ Output sets the level entering the optional transformer.
 
 **Auto**, in the Output section, matches the RMS of the preview's input and
 processed output using a fixed correction after the transformer. It uses the
-same −12 dBFS, 1 kHz reference waveform shown in Expected Output. There is no
+same −12 dBFS, 1 kHz triangle reference waveform shown in Expected Output. There is no
 live RMS detector, averaging or automatic reaction to the music: the correction
 stays constant between reference updates, preserving the input's dynamics.
 The shared reference worker recalculates for control or Smart snapshot changes,
@@ -53,7 +53,7 @@ no latency. It defaults Off and saves CPU when Off. See [SMART.md](SMART.md)
 for the signal path and separation limits, the [measured report](Tests/Reports/smart-report.md),
 and the [Smart preview](Previews/zao-smart.png).
 
-The **Expected Output** display renders a −12 dBFS, 1 kHz reference through a
+The **Expected Output** display renders a −12 dBFS, 1 kHz triangle reference through a
 separate instance of the actual audio engine. Gray is the delayed input and amber
 is the predicted output, including Clear, Auto, Tone, Mix, Output, bypass, and transformer
 settings. It is a reference waveform, not a live oscilloscope or a prediction of

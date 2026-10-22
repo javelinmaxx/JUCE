@@ -105,7 +105,7 @@ level averaging. Changes to Smart filter snapshots update the preview reference
 and its correction on the shared reference worker.
 
 The expected-output display applies the current live filter snapshot to its
-1 kHz reference using an independent engine on the preview worker, with live
+1 kHz triangle reference using an independent engine on the preview worker, with live
 spectral analysis disabled in that reference engine. The display eases between
 rendered targets over 160 ms. It is not a live oscilloscope, and its reference
 tone does not determine the live filter targets.

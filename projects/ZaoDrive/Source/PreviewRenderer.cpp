@@ -2,6 +2,16 @@
 
 namespace zao
 {
+namespace
+{
+// Two 48-sample cycles fill the preview at 48 kHz; use the same triangle
+// for the circuit input and its latency-aligned dry reference used by Auto.
+float referenceSample (int sample) noexcept
+{
+    const auto phase = (sample % 48 + 48) % 48;
+    return .25f*(1.f-std::abs (phase-24)/12.f);
+}
+}
 PreviewRenderer::PreviewRenderer (bool startImmediately) : Thread ("Zao waveform preview")
 {
     if (startImmediately) startThread (juce::Thread::Priority::low);
@@ -43,7 +53,7 @@ void PreviewRenderer::run()
     constexpr int warmup = 4096, total = warmup+96;
     std::array<float, total> source;
     for (int i = 0; i < total; ++i)
-        source[static_cast<size_t> (i)] = .25f*std::sin (static_cast<float> (2*pi*i/48.0));
+        source[static_cast<size_t> (i)] = referenceSample (i);
     juce::AudioBuffer<float> block (2, 128);
     std::array<float, 15> previousKey {};
     uint32_t previousAnalysis = 0;
@@ -101,7 +111,7 @@ void PreviewRenderer::run()
                 if (offset+i >= warmup)
                 {
                     const auto at = static_cast<size_t> (offset+i-warmup);
-                    frame.input[at] = .25f*std::sin (static_cast<float> (2*pi*(offset+i-engine.getLatency())/48.0));
+                    frame.input[at] = referenceSample (offset+i-engine.getLatency());
                     frame.output[at] = block.getSample (0, i);
                     frame.peak = std::max (frame.peak, std::abs (frame.output[at]));
                 }
