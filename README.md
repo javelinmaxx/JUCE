@@ -95,7 +95,8 @@ run from the repository root.
 Build SHUN DE-ESS, Kuo Stereo, and Zao Drive with CMake using their
 [SHUN](projects/ShunDeEss/README.md), [Kuo](projects/KuoStereo/README.md), and
 [Zao](projects/ZaoDrive/README.md)
-instructions. The platform scripts below build YinYang Compressor; the Windows
+instructions. The `build-macos-all.sh` script builds all six projects as
+VST3 and AU; the individual platform scripts build YinYang Compressor. The Windows
 GitHub workflow builds YinYang Compressor and SHUN DE-ESS.
 
 Download the development branch with Git:
@@ -115,9 +116,10 @@ Build scripts are included at the repository root:
 | Script | Builds |
 | --- | --- |
 | [`build-windows-vst3.ps1`](build-windows-vst3.ps1) | Windows x64 VST3 |
-| [`build-macos.sh`](build-macos.sh) | macOS VST3, AU, or both; Apple Silicon, Intel, or universal |
+| [`build-macos.sh`](build-macos.sh) | YinYang macOS VST3, AU, or both; Apple Silicon, Intel, or universal |
+| [`build-macos-all.sh`](build-macos-all.sh) | All plugin projects as macOS VST3 and AU; Apple Silicon, Intel, or universal |
 
-Both scripts locate the project relative to their own location, stop if a build
+The scripts locate projects relative to their own location, stop if a build
 fails, and print the finished bundle paths. They do not run test suites. Build
 directories are excluded from Git.
 
@@ -190,6 +192,27 @@ Install **CMake 3.22 or newer** compatible with your macOS version. Ensure
 ```bash
 sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
 ```
+
+To build **all six plugins as both VST3 and AU**, run:
+
+```bash
+./build-macos-all.sh
+```
+
+It defaults to the current shell architecture. For universal Apple Silicon and
+Intel bundles, use `./build-macos-all.sh --arch universal --parallel 4`.
+Projects build sequentially, with four jobs per project by default. The script
+discovers JUCE plugin declarations under `projects/*/CMakeLists.txt`, disables
+project test targets, and prints the finished bundles. Output is under
+`build/macos-all/<architecture>/<project>/<target>_artefacts/Release/`, in the
+`VST3` and `AU` subfolders. Bundle names come from the project, including
+`YinYang Compressor.vst3` and `YinYang Compressor.component`.
+
+Add `--install` to copy all successful builds into your user VST3 and Components
+folders. Use `--build-root PATH` for another output location or `--help` for all
+options. No plug-ins are installed by default.
+
+The following commands build **YinYang only**.
 
 For an **Apple Silicon Mac**, run from the repository root:
 
