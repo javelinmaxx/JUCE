@@ -8,7 +8,8 @@
 
 namespace zao
 {
-// ISO 226:2003 at 80 phons, relative to 1.5 kHz and capped at +3 dB.
+// ISO 226:2003 at 80 phons, shifted down one octave, with 750 Hz at unity
+// and upward gain capped at +3 dB.
 // Type-I symmetry gives one frequency-independent delay, scaled with the
 // sample rate to keep the same contour and approximately 2.67 ms of latency.
 class GreyNoiseFilter
@@ -38,8 +39,10 @@ public:
         }
         fft.perform (spectrum.data(), impulse.data(), true);
         std::vector<float> window (static_cast<size_t> (taps));
+        // The shifted contour has narrower features. A lighter Kaiser window
+        // preserves their depth at the existing tap count and latency.
         juce::dsp::WindowingFunction<float>::fillWindowingTables (window.data(), static_cast<size_t> (taps),
-            juce::dsp::WindowingFunction<float>::kaiser, false, 3.0f);
+            juce::dsp::WindowingFunction<float>::kaiser, false, 1.0f);
         double reference = 0;
         for (int i = 0; i <= latency; ++i)
         {
@@ -48,7 +51,7 @@ public:
             reference += (i == 0 ? 1 : 2)*static_cast<double> (coefficients[static_cast<size_t> (i)])
                 * std::cos (2*juce::MathConstants<double>::pi*EqualLoudness80::referenceFrequencyHz*i/sampleRate);
         }
-        // Keep 1.5 kHz at unity; both sides of each pair use the same float.
+        // Keep the shifted 750 Hz reference at unity; paired taps are identical.
         for (auto& coefficient : coefficients) coefficient /= static_cast<float> (reference);
         enforceBoostCeiling();
 #if JUCE_USE_SIMD

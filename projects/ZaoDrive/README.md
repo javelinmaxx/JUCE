@@ -21,8 +21,9 @@ The first knob changes with the mode:
 | DIODE SHUNT / CROSSOVER | Knee | Varies driver impedance, current limit and bandwidth from firm to soft. |
 
 Drive adds up to 36 dB of excitation. A linear-phase FIR shapes the driver input
-with the ISO 226:2003 equal-loudness contour at 80 phons, referenced to 0 dB at
-1.5 kHz and capped at +3 dB upward gain.
+with the ISO 226:2003 equal-loudness contour at 80 phons shifted down one octave,
+moving its 0 dB reference from 1.5 kHz to 750 Hz and retaining the +3 dB upward
+gain cap. All features of the derived contour move to half their former frequencies.
 The circuit output minus the aligned filtered reference forms a separate wet
 residual, which Tone filters from 1.2–18 kHz. Mix adds that residual to the clean input;
 Output sets the level entering the optional transformer.

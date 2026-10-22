@@ -3,10 +3,11 @@
 ![Capped ISO target, measured magnitude, phase and group delay](grey-report.png)
 
 The wet-driver input now uses the **ISO 226:2003 equal-loudness contour at
-80 phons**, referenced to **0 dB at 1.5 kHz**, with **upward gain capped at +3 dB**.
+80 phons shifted down one octave**, moving its **0 dB reference to 750 Hz**,
+with **upward gain capped at +3 dB**.
 Only upward target gain is limited; negative target gains retain their ISO
-values without inverting the contour. This replaces the former bounded inverse A-weighting
-approximation. The phon selection defines the filter shape; the plugin does not
+values without inverting the contour. The frequency-shifted contour is derived from the standard; it is not
+an unshifted ISO hearing contour at the applied frequencies. The phon selection defines the filter shape; the plugin does not
 calibrate playback SPL or claim to set the listener's loudness to 80 phons.
 
 ## Target definition
@@ -17,47 +18,51 @@ The standard's 29 frequencies, `af`, `Lu` and `Tf` coefficients determine the
 ```text
 Af = 4.47e-3 × (10^(0.025 × 80) − 1.15) + (0.4 × 10^((Tf + Lu)/10 − 9))^af
 Lp = (10/af) × log10(Af) − Lu + 94
-gain = min(+3 dB, Lp(f) − Lp(1.5 kHz))
+gain(f) = min(+3 dB, Lp(2 × f) − Lp(1.5 kHz))
 ```
 
-The 1.5 kHz SPL reference is interpolated to approximately 83.412071 dB.
-Uncapped relative gains are about +35.578 dB at 20 Hz,
--5.496 dB at 4 kHz and +9.557 dB at 12.5 kHz.
-The upward values become +3 dB; the 4 kHz cut is retained. SPL is interpolated
+The original 1.5 kHz SPL reference is interpolated to approximately 83.412071 dB.
+It now maps to 750 Hz in the applied contour. Uncapped relative gains are about
++35.578 dB at 10 Hz, -5.496 dB at 2 kHz and
++9.557 dB at 6.25 kHz. The upward values become +3 dB;
+the former 4 kHz cut now appears at 2 kHz. SPL is interpolated
 linearly in log frequency before applying the cap. Endpoints are held below
-20 Hz and above 12.5 kHz, where this ISO table provides no additional values.
+10 Hz and above 6.25 kHz after the shift; the source ISO table spans
+20 Hz to 12.5 kHz.
 
 Reference: *ISO 226:2003, Acoustics — Normal equal-loudness-level contours*.
 The [target CSV](grey-iso80-target.csv) records the SPL, uncapped relative gain,
-and capped target at every ISO frequency. An independent NumPy evaluation of
+and capped target at every shifted ISO frequency (half its source frequency). An independent NumPy evaluation of
 the standard's equation agrees with the C++ values within 1e-9 dB.
 
 ## FIR measurements
 
-A Kaiser-windowed (beta 3), symmetric Type-I FIR implements the target. It is
-normalised at 1.5 kHz after windowing. If that normalization lifts the actual
+A Kaiser-windowed (beta 1), symmetric Type-I FIR implements the target. The
+lighter window preserves the narrower shifted features at the existing tap
+count and latency. It is
+normalised at 750 Hz after windowing. If that normalization lifts the actual
 response above +3 dB, a small blend with a pure delay bounds it while preserving
-unity at 1.5 kHz and exact tap symmetry. This blends only enough to enforce the
+unity at 750 Hz and exact tap symmetry. This blends only enough to enforce the
 existing cap. Coefficients are designed during preparation;
 no coefficient design or allocation occurs in the audio callback. The short FIR
-smooths the contour's fine details: maximum fit error is **1.059 dB**
-from 20 Hz to the smaller of Nyquist and 12.5 kHz over the tested sample rates.
+smooths the contour's fine details: maximum fit error is **1.043 dB**
+from 10 Hz to the smaller of Nyquist and 6.25 kHz over the tested sample rates.
 Maximum actual upward gain is **3.000 dB**, within the requested cap;
-1.5 kHz remains at unity within 1e-5 dB.
+750 Hz remains at unity within 1e-5 dB.
 
 Delay is unchanged: approximately 2.67 ms, or 128 samples for the 257-tap FIR at
 48 kHz. Every measured impulse is exactly symmetric. After compensating its
 centre delay, maximum residual phase error is **1.760e-13 radians**
 across 8192 frequency points per rate.
 
-| Sample rate | FIR taps | Added FIR samples | Added FIR ms | Total plugin samples | Gain at 3.15 kHz |
+| Sample rate | FIR taps | Added FIR samples | Added FIR ms | Total plugin samples | Gain at 1.575 kHz |
 | ---: | ---: | ---: | ---: | ---: | ---: |
-| 8,000 | 43 | 21 | 2.625 | 91 | -4.65 dB |
-| 32,000 | 171 | 85 | 2.656 | 155 | -4.65 dB |
-| 44,100 | 237 | 118 | 2.676 | 188 | -4.65 dB |
-| 48,000 | 257 | 128 | 2.667 | 198 | -4.65 dB |
-| 96,000 | 513 | 256 | 2.667 | 326 | -4.65 dB |
-| 192,000 | 1025 | 512 | 2.667 | 582 | -4.63 dB |
+| 8,000 | 43 | 21 | 2.625 | 91 | -4.62 dB |
+| 32,000 | 171 | 85 | 2.656 | 155 | -4.53 dB |
+| 44,100 | 237 | 118 | 2.676 | 188 | -4.58 dB |
+| 48,000 | 257 | 128 | 2.667 | 198 | -4.55 dB |
+| 96,000 | 513 | 256 | 2.667 | 326 | -4.54 dB |
+| 192,000 | 1025 | 512 | 2.667 | 582 | -4.44 dB |
 
 Total plugin latency includes the FIR, circuit oversampler delay and existing
 64-sample transformer compensation. Clean, filtered-reference and bypass delays
@@ -65,7 +70,7 @@ remain aligned in all modes, Smart states and Mix settings.
 
 ## Regression coverage
 
-C++ checks validate independent 80-phon SPL anchors, the 1.5 kHz reference, the
+C++ checks validate independent 80-phon SPL anchors, the 750 Hz reference and one-octave mapping, the
 unscaled negative gains, the +3 dB target and actual-response ceilings, endpoint
 handling, impulse/streaming agreement, direct-convolution equivalence through
 history wraps and stereo isolation from 8–192 kHz. End-to-end impulse tests

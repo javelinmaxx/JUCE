@@ -7,11 +7,14 @@ namespace zao
 {
 // ISO 226:2003 normal equal-loudness contours, fixed at 80 phons. The standard
 // supplies these 29 frequencies and af/Lu/Tf coefficients for its SPL equation.
-// Filter gains use SPL(f)-SPL(1.5 kHz), with the requested +3 dB ceiling.
+// Move the derived filter down one octave: SPL(2*f)-SPL(1.5 kHz).
+// The applied unity reference is therefore 750 Hz, with a +3 dB ceiling.
 class EqualLoudness80
 {
 public:
-    static constexpr double referenceFrequencyHz = 1500;
+    static constexpr double frequencyScale = 2;
+    static constexpr double sourceReferenceFrequencyHz = 1500;
+    static constexpr double referenceFrequencyHz = sourceReferenceFrequencyHz / frequencyScale;
     static constexpr double maximumBoostDb = 3;
     static constexpr std::array<double, 29> frequencies {
         20, 25, 31.5, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500,
@@ -52,12 +55,12 @@ public:
     }
     static double referenceSpl() noexcept
     {
-        static const auto reference = splDb (referenceFrequencyHz);
+        static const auto reference = splDb (sourceReferenceFrequencyHz);
         return reference;
     }
     static double contourDb (double frequency) noexcept
     {
-        return splDb (frequency)-referenceSpl();
+        return splDb (frequency*frequencyScale)-referenceSpl();
     }
     static double gainDb (double frequency) noexcept
     {

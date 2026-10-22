@@ -459,9 +459,13 @@ void greyNoiseTests()
         { 0, 118.990011 }, { 7, 92.479723 }, { 17, 80.012075 }, { 23, 77.916229 }, { 28, 92.969435 } } })
         check (std::abs (zao::EqualLoudness80::splAtIndex (point.first)-point.second) < 1e-6,
                "80-phon ISO 226 SPL anchors match independent reference values");
-    check (std::abs (Filter::targetDb (1500)) < 1e-12
-           && std::abs (Filter::targetDb (4000)+5.495842) < 1e-6,
-           "80-phon contour is referenced to 1.5 kHz and retains its unscaled midrange valley");
+    check (std::abs (Filter::targetDb (750)) < 1e-12
+           && std::abs (Filter::targetDb (2000)+5.495842) < 1e-6,
+           "one-octave contour shift moves the unity reference to 750 Hz and the valley to 2 kHz");
+    for (double hz : { 10., 50., 315., 500., 750., 1575., 2000., 3150., 6250., 12000. })
+        check (std::abs (Filter::targetDb (hz)-std::min (3.0,
+            zao::EqualLoudness80::splDb (2*hz)-zao::EqualLoudness80::splDb (1500))) < 1e-12,
+               "every shifted contour point matches the original curve at twice its frequency");
     check (std::abs (Filter::targetDb (20)-3) < 1e-12 && std::abs (Filter::targetDb (12500)-3) < 1e-12
            && std::abs (Filter::targetDb (0)-3) < 1e-12 && std::abs (Filter::targetDb (20000)-3) < 1e-12,
            "only upward contour gain is capped at three dB and ISO endpoints are held outside the table");
@@ -495,9 +499,9 @@ void greyNoiseTests()
         }
         check (phaseError < 1e-10 && minimumResponse > .4,
                "delay compensation leaves a real positive response with no frequency-dependent phase rotation");
-        check (std::abs (20*std::log10 (std::abs (response (1500)))) < 1e-5
-               && 20*std::log10 (std::abs (response (3150))) < -1,
-               "implemented 80-phon FIR keeps 1.5 kHz at unity and attenuates the sensitive midrange");
+        check (std::abs (20*std::log10 (std::abs (response (750)))) < 1e-5
+               && 20*std::log10 (std::abs (response (1575))) < -1,
+               "shifted 80-phon FIR keeps 750 Hz at unity and moves midrange attenuation down one octave");
         check (20*std::log10 (maximumResponse) <= 3.00001,
                "the actual FIR response respects the three dB upward gain cap");
         if (rate >= 32000)
@@ -804,7 +808,7 @@ void writeGreyReport (const juce::File& directory)
     target.precision (17); target << "frequency,spl80,uncapped_db,target_db\n";
     for (size_t i = 0; i < zao::EqualLoudness80::frequencies.size(); ++i)
     {
-        const auto hz = zao::EqualLoudness80::frequencies[i];
+        const auto hz = zao::EqualLoudness80::frequencies[i] / zao::EqualLoudness80::frequencyScale;
         target << hz << ',' << zao::EqualLoudness80::splAtIndex (i) << ','
                << zao::EqualLoudness80::contourDb (hz) << ',' << zao::GreyNoiseFilter::targetDb (hz) << '\n';
     }
