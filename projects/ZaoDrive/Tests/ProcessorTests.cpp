@@ -368,10 +368,21 @@ void smartTests()
 void greyNoiseTests()
 {
     using Filter = zao::GreyNoiseFilter;
+    // Published ISO equation reference values at 80 phons, not A weighting.
+    for (const auto& point : std::array<std::pair<size_t, double>, 5> { {
+        { 0, 118.990011 }, { 7, 92.479723 }, { 17, 80.012075 }, { 23, 77.916229 }, { 28, 92.969435 } } })
+        check (std::abs (zao::EqualLoudness80::splAtIndex (point.first)-point.second) < 1e-6,
+               "80-phon ISO 226 SPL anchors match independent reference values");
+    check (std::abs (Filter::targetDb (1000)) < 1e-12
+           && std::abs (Filter::targetDb (4000)+2.095846) < 1e-6,
+           "80-phon contour is referenced to 1 kHz and retains its unscaled midrange valley");
+    check (std::abs (Filter::targetDb (20)-3) < 1e-12 && std::abs (Filter::targetDb (12500)-3) < 1e-12
+           && std::abs (Filter::targetDb (0)-3) < 1e-12 && std::abs (Filter::targetDb (20000)-3) < 1e-12,
+           "only upward contour gain is capped at three dB and ISO endpoints are held outside the table");
     for (double rate : { 8000., 32000., 44100., 48000., 96000., 192000. })
     {
         Filter filter; filter.prepare (rate); const auto h = filter.getImpulseResponse();
-        double sum = 0, symmetry = 0, impulseError = 0, phaseError = 0, minimumResponse = 1;
+        double sum = 0, symmetry = 0, impulseError = 0, phaseError = 0, minimumResponse = 1, maximumResponse = 0;
         for (int i = 0; i < static_cast<int> (h.size()); ++i)
         {
             const auto j = static_cast<size_t> (i);
@@ -379,8 +390,8 @@ void greyNoiseTests()
             impulseError = std::max (impulseError, std::abs (static_cast<double> (filter.process (i == 0 ? 1.0f : 0.0f, 0)-h[j])));
         }
         check (symmetry < 1e-12 && impulseError < 1e-7, "grey FIR has an exactly symmetric impulse and the advertised group delay");
-        check (std::abs (sum-1) < 2e-7 && std::abs (filter.process (0, 1)) < 1e-12f,
-               "grey FIR preserves DC and has independent stereo history");
+        check (sum > 1 && sum <= std::pow (10.0, 3.0/20)+1e-6 && std::abs (filter.process (0, 1)) < 1e-12f,
+               "grey FIR has bounded bass emphasis and independent stereo history");
         const auto response = [&] (double hz)
         {
             std::complex<double> result {};
@@ -394,15 +405,19 @@ void greyNoiseTests()
             const auto compensated = response (hz)*std::polar (1.0, 2*zao::pi*hz*filter.getLatencySamples()/rate);
             phaseError = std::max (phaseError, std::abs (compensated.imag()));
             minimumResponse = std::min (minimumResponse, compensated.real());
+            maximumResponse = std::max (maximumResponse, std::abs (compensated));
         }
         check (phaseError < 1e-10 && minimumResponse > .4,
                "delay compensation leaves a real positive response with no frequency-dependent phase rotation");
-        check (20*std::log10 (std::abs (response (2500))) < -5.1,
-               "grey pre-emphasis reduces midrange drive by approximately six dB across supported rates");
+        check (std::abs (20*std::log10 (std::abs (response (1000)))) < 1e-5
+               && 20*std::log10 (std::abs (response (3150))) < -1,
+               "implemented 80-phon FIR keeps 1 kHz at unity and attenuates the sensitive midrange");
+        check (20*std::log10 (maximumResponse) <= 3.00001,
+               "the actual FIR response respects the three dB upward gain cap");
         if (rate >= 32000)
-            check (std::abs (20*std::log10 (std::abs (response (50)))) < .3
-                   && 20*std::log10 (std::abs (response (15000))) > -1,
-                   "grey contour keeps bass and upper treble near unity without boosting drive");
+            check (20*std::log10 (std::abs (response (50))) > 2
+                   && 20*std::log10 (std::abs (response (15000))) > 2,
+                   "80-phon bass and treble emphasis remain present below the cap");
         filter.reset();
         std::mt19937 random (61); std::uniform_real_distribution<float> noise (-1, 1);
         std::vector<float> input; double error = 0;
@@ -699,6 +714,14 @@ void writeGreyReport (const juce::File& directory)
     directory.createDirectory();
     std::ofstream impulse (directory.getChildFile ("grey-impulse.csv").getFullPathName().toStdString());
     std::ofstream latency (directory.getChildFile ("grey-latency.csv").getFullPathName().toStdString());
+    std::ofstream target (directory.getChildFile ("grey-iso80-target.csv").getFullPathName().toStdString());
+    target.precision (17); target << "frequency,spl80,uncapped_db,target_db\n";
+    for (size_t i = 0; i < zao::EqualLoudness80::frequencies.size(); ++i)
+    {
+        const auto hz = zao::EqualLoudness80::frequencies[i];
+        target << hz << ',' << zao::EqualLoudness80::splAtIndex (i) << ','
+               << zao::EqualLoudness80::contourDb (hz) << ',' << zao::GreyNoiseFilter::targetDb (hz) << '\n';
+    }
     impulse.precision (17); impulse << "rate,tap,coefficient\n";
     latency << "rate,taps,fir_samples,plugin_samples\n";
     for (double rate : { 8000., 32000., 44100., 48000., 96000., 192000. })

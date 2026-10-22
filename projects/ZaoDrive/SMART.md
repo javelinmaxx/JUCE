@@ -29,8 +29,9 @@ Smart applies harmonic shaping `H` to this branch, then
 only the clean branch reaches the output stages. Smart Off makes `H` the identity.
 The clean branch includes the grey FIR's delay plus the circuit oversampler's
 integer delay; the filtered reference needs only the latter delay. The output
-stages retain the existing transformer compensation delay. The grey curve is a
-bounded inverse A-weighting approximation with about 6 dB of midrange reduction.
+stages retain the existing transformer compensation delay. The grey curve uses the
+ISO 226:2003 equal-loudness contour at 80 phons, referenced to 1 kHz. Only
+upward gain is capped at +3 dB; the contour's negative gains are retained.
 A symmetric FIR keeps its added phase strictly linear; filter length scales with
 sample rate to hold approximately 2.67 ms delay (128 samples at 48 kHz). See the
 [grey filter report](Tests/Reports/grey-report.md) for its measured response.

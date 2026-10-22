@@ -20,8 +20,9 @@ The first knob changes with the mode:
 | OPAMP FB | Input | Adjusts input level from −24 to +24 dB. |
 | DIODE SHUNT / CROSSOVER | Knee | Varies driver impedance, current limit and bandwidth from firm to soft. |
 
-Drive adds up to 36 dB of excitation. A linear-phase grey-noise-style FIR reduces
-midrange excitation before the driver, with about 6 dB attenuation near 2–4 kHz.
+Drive adds up to 36 dB of excitation. A linear-phase FIR shapes the driver input
+with the ISO 226:2003 equal-loudness contour at 80 phons, referenced to 0 dB at
+1 kHz and capped at +3 dB upward gain.
 The circuit output minus the aligned filtered reference forms a separate wet
 residual, which Tone filters from 1.2–18 kHz. Mix adds that residual to the clean input;
 Output sets the level entering the optional transformer.

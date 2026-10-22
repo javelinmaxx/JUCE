@@ -3,7 +3,7 @@
 ![Dissonance graph, content-dependent targets and measured wet spectra](smart-report.png)
 
 The driver and clean input run in parallel. A linear-phase grey-noise-style
-FIR shapes the driver feed. The circuit output minus its aligned filtered
+FIR shapes the driver feed using the 80-phon ISO contour with a +3 dB boost cap. The circuit output minus its aligned filtered
 reference forms the wet residual; Tone and Smart process this residual, then Mix
 adds it to the clean branch. Circuit gain/phase changes can remain in that
 residual, so subtraction alone does not mathematically isolate only higher orders.
@@ -24,14 +24,14 @@ and nearby harmonics can affect the measurements.
 
 | Circuit | Chord | Target bands | Weighted harmonic energy reduction | Target harmonic energy retained |
 | --- | --- | ---: | ---: | ---: |
-| BJT CE | C major | 12 | 28.5% | 75.0% |
-| BJT CE | A minor | 14 | 26.7% | 79.5% |
-| Op-Amp feedback | C major | 16 | 31.9% | 73.3% |
-| Op-Amp feedback | A minor | 16 | 36.3% | 70.0% |
-| Diode shunt | C major | 16 | 31.7% | 73.4% |
-| Diode shunt | A minor | 16 | 35.9% | 70.4% |
-| Series crossover | C major | 1 | 13.3% | 86.7% |
-| Series crossover | A minor | 4 | 21.9% | 79.1% |
+| BJT CE | C major | 14 | 28.7% | 75.3% |
+| BJT CE | A minor | 16 | 33.3% | 76.1% |
+| Op-Amp feedback | C major | 16 | 31.8% | 73.5% |
+| Op-Amp feedback | A minor | 16 | 36.4% | 69.9% |
+| Diode shunt | C major | 16 | 31.8% | 73.4% |
+| Diode shunt | A minor | 16 | 36.1% | 70.3% |
+| Series crossover | C major | 3 | 30.5% | 73.0% |
+| Series crossover | A minor | 4 | 19.1% | 81.9% |
 
 The cost is the sum of target harmonic power times its interval dissonance;
 retention is the power remaining at those targets, not total output loudness.

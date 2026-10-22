@@ -72,9 +72,9 @@ symmetry are tested independently of these DC checks.
 ![Circuit waveforms, spectra and transformer](circuit-report.png)
 
 The plots use a −12 dBFS 1 kHz input, Output 0 dB, Mix 100%, Tone 18 kHz and
-transformer Off and Smart Off unless labeled. The driver feed uses the linear-phase grey contour. Tone filters the driver-minus-reference
+transformer Off and Smart Off unless labeled. The driver feed uses the linear-phase 80-phon ISO contour with a +3 dB boost cap. Tone filters the driver-minus-reference
 wet residual, which is then added to the aligned clean branch. The shape plots sweep BJT Bias and diode Knee
-at Drive 12 dB. A 9 kHz op-amp input at Drive 24 dB has **26.2 dB**
+at Drive 12 dB. A 9 kHz op-amp input at Drive 24 dB has **25.0 dB**
 less folded third harmonic with 4× circuit oversampling than at the host rate
 with the same grey-shaped excitation.
 YinYang's directly included transformer still matches the original class within
@@ -101,7 +101,7 @@ The shape, circuit and diode figures have matching PDF versions.
 ## Validation — 2026-10-22
 
 Linux Release VST3 and Standalone builds passed without compiler warnings.
-All 245 circuit/processor/Smart/grey-filter checks passed. Native editor validation passed 294
+All 258 circuit/processor/Smart/grey-filter checks passed. Native editor validation passed 307
 checks with the tooltip visible, including mode-specific control rebinding,
 independent host automation and recall, waveform updates and both resize limits.
 The per-mode native preview checks passed. Windows workflows were not

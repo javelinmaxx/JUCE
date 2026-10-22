@@ -81,7 +81,7 @@ report = f"""# Zao Drive Smart harmonic report
 ![Dissonance graph, content-dependent targets and measured wet spectra](smart-report.png)
 
 The driver and clean input run in parallel. A linear-phase grey-noise-style
-FIR shapes the driver feed. The circuit output minus its aligned filtered
+FIR shapes the driver feed using the 80-phon ISO contour with a +3 dB boost cap. The circuit output minus its aligned filtered
 reference forms the wet residual; Tone and Smart process this residual, then Mix
 adds it to the clean branch. Circuit gain/phase changes can remain in that
 residual, so subtraction alone does not mathematically isolate only higher orders.

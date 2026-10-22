@@ -1,4 +1,5 @@
 #pragma once
+#include "EqualLoudness80.h"
 #include <juce_dsp/juce_dsp.h>
 #include <array>
 #include <cmath>
@@ -6,9 +7,7 @@
 
 namespace zao
 {
-// A bounded inverse A-weighting contour is a practical grey-noise-style
-// pre-shaping: reduce the ear's most sensitive band without intentional bass
-// or treble gain.
+// ISO 226:2003 at 80 phons, relative to 1 kHz and capped at +3 dB.
 // Type-I symmetry gives one frequency-independent delay, scaled with the
 // sample rate to keep the same contour and approximately 2.67 ms of latency.
 class GreyNoiseFilter
@@ -21,15 +20,7 @@ public:
     }
     int getLatencySamples() const noexcept { return latency; }
 
-    static double targetDb (double hz) noexcept
-    {
-        if (hz <= 0) return 0;
-        const auto f2 = hz*hz;
-        const auto response = (12200.0*12200.0*f2*f2)
-            / ((f2+20.6*20.6)*std::sqrt ((f2+107.7*107.7)*(f2+737.9*737.9))*(f2+12200.0*12200.0));
-        const auto aWeightDb = 20*std::log10 (std::max (response, 1e-30))+2.0;
-        return -6*std::clamp ((aWeightDb+6)/7.3, 0.0, 1.0);
-    }
+    static double targetDb (double hz) noexcept { return EqualLoudness80::gainDb (hz); }
 
     void prepare (double sampleRate)
     {
@@ -45,17 +36,19 @@ public:
             spectrum[static_cast<size_t> (i)] = static_cast<float> (std::pow (10.0, targetDb (hz)/20));
         }
         fft.perform (spectrum.data(), impulse.data(), true);
-        double sum = 0;
+        std::vector<float> window (static_cast<size_t> (taps));
+        juce::dsp::WindowingFunction<float>::fillWindowingTables (window.data(), static_cast<size_t> (taps),
+            juce::dsp::WindowingFunction<float>::kaiser, false, 3.0f);
+        double reference = 0;
         for (int i = 0; i <= latency; ++i)
         {
-            const auto phase = juce::MathConstants<double>::pi*i/latency;
-            const auto window = .42+.5*std::cos (phase)+.08*std::cos (2*phase);
-            const auto value = impulse[static_cast<size_t> (i)].real()*window;
+            const auto value = impulse[static_cast<size_t> (i)].real()*window[static_cast<size_t> (latency+i)];
             coefficients[static_cast<size_t> (i)] = static_cast<float> (value);
-            sum += (i == 0 ? 1 : 2)*value;
+            reference += (i == 0 ? 1 : 2)*static_cast<double> (coefficients[static_cast<size_t> (i)])
+                * std::cos (2*juce::MathConstants<double>::pi*1000*i/sampleRate);
         }
-        // DC is unity; both sides of every tap pair use the very same float.
-        for (auto& coefficient : coefficients) coefficient /= static_cast<float> (sum);
+        // Keep 1 kHz at unity; both sides of each pair use the same float.
+        for (auto& coefficient : coefficients) coefficient /= static_cast<float> (reference);
         reset();
     }
 
