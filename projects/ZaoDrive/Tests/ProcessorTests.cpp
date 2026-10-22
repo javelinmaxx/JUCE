@@ -67,6 +67,92 @@ std::vector<float> render (zao::Settings s, int count = 9600, double hz = 1000, 
     return result;
 }
 
+void optimizationTests()
+{
+    // Check the reduced solver against the general pivoted system rather than
+    // assuming that transistor sparsity is safe at every operating point.
+    std::mt19937 random (772);
+    std::uniform_real_distribution<double> value (-1, 1);
+    double matrixError = 0;
+    for (int trial = 0; trial < 200; ++trial)
+    {
+        std::array<std::array<double, 4>, 4> matrix {};
+        std::array<double, 4> rhs {}, generic {}, specialized {};
+        for (size_t row = 0; row < 4; ++row)
+        {
+            rhs[row] = value (random);
+            for (size_t col = 0; col < 4; ++col) matrix[row][col] = value (random);
+            matrix[row][row] += 4;
+        }
+        matrix[0][3] = matrix[2][3] = matrix[3][0] = matrix[3][2] = 0;
+        check (zao::solve4 (matrix, rhs, generic) && zao::solveBjtSystem (matrix, rhs, specialized),
+               "both matrix solvers converge for transistor topology");
+        for (size_t i = 0; i < 4; ++i) matrixError = std::max (matrixError, std::abs (generic[i]-specialized[i]));
+    }
+    check (matrixError < 1e-12, "reduced BJT solve matches the general pivoted reference");
+    for (double v : { -12., -1.5, -.7, -.1, 0., .1, .7, 1.5, 12. })
+    {
+        const auto positive = zao::junctionExponential (v, zao::SchottkyPair::thermal);
+        const auto negative = zao::junctionExponential (-v, zao::SchottkyPair::thermal);
+        const auto expected = zao::SchottkyPair::saturation*(positive.value-negative.value);
+        const auto derivative = zao::SchottkyPair::saturation*(positive.derivative+negative.derivative);
+        const auto actual = zao::SchottkyPair::current (v);
+        check (std::abs (actual.value-expected) <= 1e-14*std::max (1.0, std::abs (expected))
+               && std::abs (actual.derivative-derivative) <= 1e-14*std::max (1.0, derivative),
+               "shared Schottky exponential preserves current, derivative and overload continuation");
+    }
+
+    zao::PreviewAnimation animation;
+    zao::PreviewFrame first, second, third;
+    first.output.fill (.1f); first.peak = .1f;
+    second.output.fill (.9f); second.peak = .9f; second.scale = 1;
+    third.output.fill (-.3f); third.peak = .3f; third.scale = .375f;
+    animation.setTarget (first, 0); animation.setTarget (second, 10);
+    animation.advance (90);
+    check (std::abs (animation.current().output[0]-.5f) < 1e-6f
+           && std::abs (animation.current().scale-.625f) < 1e-6f,
+           "preview waveform and scale ease together between renders");
+    const auto halfway = animation.current().output;
+    animation.setTarget (third, 90);
+    check (animation.current().output == halfway, "retargeting the preview mid-animation does not jump");
+    animation.advance (250);
+    check (animation.current().output == third.output && ! animation.advance (300),
+           "preview animation reaches its exact rendered target and stops repainting");
+
+    // The reusable worker must reproduce a newly prepared reference engine,
+    // including after cancellation, bias/model changes and transformer toggles.
+    zao::PreviewRenderer renderer;
+    zao::PreviewFrame rendered;
+    for (int mode = 0; mode < 4; ++mode)
+    {
+        zao::Settings settings; settings.model = mode; settings.bjtBias = -.4f;
+        settings.driveDb = 20; settings.transformer = mode == 1; settings.diodeKnee = .8f;
+        auto obsolete = settings; obsolete.driveDb = 0;
+        renderer.request (obsolete, {}); renderer.cancel(); renderer.request (settings, {});
+        const auto deadline = juce::Time::getMillisecondCounterHiRes()+3000;
+        bool ready = false;
+        while (! (ready = renderer.read (rendered)) && juce::Time::getMillisecondCounterHiRes() < deadline) juce::Thread::sleep (2);
+        check (ready && rendered.peak > 0, "preview worker publishes the latest requested waveform");
+        zao::DriveEngine reference; reference.prepare (48000, 128, false);
+        juce::AudioBuffer<float> block (2, 128);
+        double error = 0;
+        for (int offset = 0; offset < 4192; offset += 128)
+        {
+            const auto n = std::min (128, 4192-offset);
+            block.setSize (2, n, false, false, true);
+            for (int i = 0; i < n; ++i)
+                for (int ch = 0; ch < 2; ++ch)
+                    block.setSample (ch, i, .25f*std::sin (static_cast<float> (2*zao::pi*(offset+i)/48.0)));
+            reference.process (block, settings);
+            for (int i = 0; i < n; ++i)
+                if (offset+i >= 4096)
+                    error = std::max (error, std::abs (static_cast<double> (block.getSample (0, i)
+                        -rendered.output[static_cast<size_t> (offset+i-4096)])));
+        }
+        check (error < 1e-6, "reused preview matches a fresh audio engine after reset and request replacement");
+    }
+}
+
 void circuitTests()
 {
     zao::BjtCommonEmitter transistor; transistor.prepare (192000);
@@ -797,10 +883,12 @@ void editorTests (const juce::File& destination, bool tooltip, int previewMode, 
 {
     ZaoDriveProcessor processor;
     std::unique_ptr<juce::AudioProcessorEditor> editor (processor.createEditor());
+    editor->addToDesktop (0);
     editor->setVisible (true);
     check (editor->getWidth() == 548 && editor->getHeight() == 690, "Zao shares the plugin family layout");
     auto* zaoEditor = dynamic_cast<ZaoDriveEditor*> (editor.get());
     check (zaoEditor != nullptr, "native Zao editor exists");
+    for (int i = 0; i < 20; ++i) { juce::Thread::sleep (20); juce::Timer::callPendingTimersSynchronously(); }
     auto expectedBefore = zaoEditor->getExpectedOutput();
     juce::Slider* model = nullptr;
     juce::Slider* contextual = nullptr;
@@ -865,7 +953,7 @@ void editorTests (const juce::File& destination, bool tooltip, int previewMode, 
     set (processor, "bjtBias", 0); set (processor, "diodeKnee", 50); selectMode (processor, 2);
     for (int i = 0; i < 12; ++i) { juce::Thread::sleep (20); juce::Timer::callPendingTimersSynchronously(); }
     set (processor, "drive", 0);
-    for (int i = 0; i < 12; ++i) { juce::Thread::sleep (20); juce::Timer::callPendingTimersSynchronously(); }
+    for (int i = 0; i < 24; ++i) { juce::Thread::sleep (20); juce::Timer::callPendingTimersSynchronously(); }
     const auto& expectedAfter = zaoEditor->getExpectedOutput();
     double difference = 0;
     for (size_t i = 0; i < expectedBefore.size(); ++i) difference += std::abs (expectedBefore[i] - expectedAfter[i]);
@@ -901,6 +989,7 @@ void editorTests (const juce::File& destination, bool tooltip, int previewMode, 
         window->displayTip (editor->localPointToGlobal (model->getBounds().getCentre()), model->getTooltip());
         check (window->isVisible(), "four-circuit selector tooltip is visible in the preview");
     }
+    for (int i = 0; i < 24; ++i) { juce::Thread::sleep (20); juce::Timer::callPendingTimersSynchronously(); }
     auto image = editor->createComponentSnapshot (editor->getLocalBounds());
     juce::MemoryOutputStream png;
     check (image.isValid() && juce::PNGImageFormat().writeImageToStream (image, png)
@@ -921,7 +1010,7 @@ int main (int argc, char** argv)
     try
     {
         juce::ScopedJuceInitialiser_GUI gui;
-        circuitTests(); shapeTests(); processorTests(); smartTests(); greyNoiseTests();
+        circuitTests(); shapeTests(); processorTests(); smartTests(); greyNoiseTests(); optimizationTests();
         if (argc > 2 && juce::String (argv[1]) == "--editor")
         {
             const auto option = argc > 3 ? juce::String (argv[3]) : juce::String();

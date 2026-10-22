@@ -97,8 +97,10 @@ buffered latency; its first decision needs approximately 85 ms of audio at
 not host-reported latency.
 
 The expected-output display applies the current live filter snapshot to its
-1 kHz reference using an independent engine without a worker. It is not a live
-oscilloscope, and its reference tone does not determine the live filter targets.
+1 kHz reference using an independent engine on the preview worker, with live
+spectral analysis disabled in that reference engine. The display eases between
+rendered targets over 160 ms. It is not a live oscilloscope, and its reference
+tone does not determine the live filter targets.
 
 ## Validation
 
@@ -109,5 +111,5 @@ See the [measured report](Tests/Reports/smart-report.md), its
 ```bash
 build-zao/ZaoDriveTests --smart-report "$PWD/projects/ZaoDrive/Tests/Reports"
 python3 projects/ZaoDrive/Tests/generate_smart_report.py
-xvfb-run -a build-zao/ZaoDriveTests --editor "$PWD/projects/ZaoDrive/Previews/zao-smart.png" --smart-preview
+xvfb-run -a python3 projects/ZaoDrive/Tests/with_x11_atoms.py build-zao/ZaoDriveTests --editor "$PWD/projects/ZaoDrive/Previews/zao-smart.png" --smart-preview
 ```

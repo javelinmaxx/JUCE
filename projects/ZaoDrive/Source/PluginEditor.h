@@ -1,5 +1,6 @@
 #pragma once
 #include "PluginProcessor.h"
+#include "PreviewRenderer.h"
 
 class ZaoLookAndFeel final : public juce::LookAndFeel_V4
 {
@@ -30,12 +31,11 @@ public:
     ~ZaoDriveEditor() override { stopTimer(); setLookAndFeel (nullptr); }
     void paint (juce::Graphics&) override;
     void resized() override;
-    const std::array<float, 96>& getExpectedOutput() const noexcept { return expectedOutput; }
+    const std::array<float, 96>& getExpectedOutput() const noexcept { return previewAnimation.current().output; }
 private:
     static constexpr int designWidth = 548, designHeight = 690;
     void timerCallback() override;
     void updateInputControl (int circuit);
-    void refreshPreview (const zao::Settings&);
     void paintExpectedOutput (juce::Graphics&);
     ZaoDriveProcessor& processor;
     ZaoLookAndFeel look;
@@ -52,8 +52,10 @@ private:
     std::array<float, 13> previousSettings {};
     int inputControlCircuit = -1;
     uint32_t previousSmartRevision = 0;
-    bool previewReady = false;
-    std::array<float, 96> expectedInput {}, expectedOutput {};
-    float expectedPeak = 0;
+    bool previewRequested = false;
+    double lastPreviewRequest = -1000;
+    zao::PreviewRenderer previewRenderer;
+    zao::PreviewFrame previewFrame;
+    zao::PreviewAnimation previewAnimation;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ZaoDriveEditor)
 };

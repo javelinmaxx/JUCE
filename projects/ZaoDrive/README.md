@@ -40,8 +40,13 @@ separate instance of the actual audio engine. Gray is the delayed input and ambe
 is the predicted output, including Tone, Mix, Output, bypass, and transformer
 settings. It is a reference waveform, not a live oscilloscope or a prediction of
 arbitrary input material. The labeled plot scale fits both input and output,
-starting at ±0.25 FS to keep passive diode behavior visible. Rendering runs on the message thread without sharing
-circuit state or locks with the audio callback.
+starting at ±0.25 FS to keep passive diode behavior visible. Rendering runs on a
+dedicated background worker that reuses its prepared filters and oversampler,
+without sharing circuit state or locks with the audio callback. It updates only
+while the editor is visible, at most five times per second when settings or
+Smart results change. Waveforms and the display scale ease between results over
+160 ms at 30 animation frames per second; new targets continue from the current
+displayed shape rather than jumping.
 
 The optional **Transformer Stage** directly includes YinYang's
 [`OversampledTransformer`](../YinyangCompressor/Source/OversampledTransformer.h)
@@ -108,6 +113,28 @@ each control's saved value. Older states default to Bias 0% and Knee 50%.
 The legacy Input parameter retains its gain behavior for saved presets and host
 automation in every mode; its knob is visible in Op-Amp mode.
 
+## CPU optimization
+
+The circuit solvers reuse junction exponentials and accepted transistor charges;
+the BJT solve eliminates its passive bypass node before solving the remaining
+three nodes with partial pivoting. Iteration limits, convergence tolerances,
+physical circuit equations, and 4× oversampling are unchanged. The contour FIR
+uses SIMD double-precision accumulation where supported, with a scalar fallback
+and the same coefficients, phase and latency. Tone coefficients update during
+automation smoothing and are cached while the control is stationary.
+
+See the [performance report](Tests/Reports/performance-report.md) for benchmark
+conditions, before/after timings and audio comparison. To run the diagnostic
+benchmark in a Release build:
+
+```bash
+cmake --build build-zao --target ZaoDrivePerformanceBench --parallel 2
+build-zao/ZaoDrivePerformanceBench /tmp/zao-audio.bin
+```
+
+The optional argument captures raw stereo float samples for version comparisons;
+timings are CSV on standard output and are not pass/fail test limits.
+
 ## Build and test
 
 From the repository root:
@@ -122,11 +149,12 @@ The VST3 bundle is under `build-zao/ZaoDrive_artefacts/Release/VST3/`.
 AU is enabled when configuring on macOS. Use an appropriate CMake generator
 and toolchain for Windows/macOS; the Windows workflow is unchanged.
 
-Capture a native editor preview on Linux with:
+Capture a native editor preview on Linux with the Xvfb helper (it supplies the
+window-manager atoms needed for a real window on a bare virtual display):
 
 ```bash
-xvfb-run -a build-zao/ZaoDriveTests --editor /tmp/zao-drive.png
-xvfb-run -a build-zao/ZaoDriveTests --editor /tmp/zao-tooltip.png --tooltip
+xvfb-run -a python3 projects/ZaoDrive/Tests/with_x11_atoms.py build-zao/ZaoDriveTests --editor /tmp/zao-drive.png
+xvfb-run -a python3 projects/ZaoDrive/Tests/with_x11_atoms.py build-zao/ZaoDriveTests --editor /tmp/zao-tooltip.png --tooltip
 ```
 
 The tests check circuit residuals through cutoff/saturation, diode shunt limiting,

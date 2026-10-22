@@ -41,6 +41,28 @@ public:
         for (auto* smoother : { &bjtBias, &driverResistance, &driverCurrent, &driverCoefficient })
             smoother->reset (rate * 4, 0.02);
         firstSettings = true; transformerRunning = false; warmSamples = 0;
+        toneCoefficientValid = false;
+    }
+
+    // Rewind a separate preview engine without redesigning its FIR, allocating
+    // buffers, or rebuilding the oversampler. Smart preview bands are set by
+    // the renderer after this reset.
+    void resetSignalPath()
+    {
+        greyNoise.reset(); oversampling->reset();
+        for (size_t ch = 0; ch < 2; ++ch)
+        {
+            bjt[ch].reset(); opamp[ch].reset(); shunt[ch].reset(); crossover[ch].reset();
+            transformers[ch].reset();
+            std::fill (dryDelay[ch].begin(), dryDelay[ch].end(), 0.0f);
+            std::fill (filteredDelay[ch].begin(), filteredDelay[ch].end(), 0.0f);
+            std::fill (bypassDelay[ch].begin(), bypassDelay[ch].end(), 0.0f);
+        }
+        cleanDelay = {}; toneState = {};
+        circuitPosition = dryPosition = transformerPosition = bypassPosition = 0;
+        firstSettings = true; transformerRunning = false; warmSamples = 0;
+        toneCoefficientValid = false;
+        transformerBlend.setCurrentAndTargetValue (0.0f);
     }
 
     void release() { smart.release(); }
@@ -91,9 +113,17 @@ public:
             oversampling->processSamplesDown (hostBlock);
             for (int i = 0; i < count; ++i)
             {
+                // Test before advancing so the final smoothing sample also
+                // receives its exact coefficient, then reuse it while idle.
+                const auto toneMoving = toneCutoff.isSmoothing();
                 const auto cutoff = toneCutoff.getNextValue();
-                const auto k = std::tan (static_cast<float> (pi) * cutoff / static_cast<float> (sampleRate));
-                const auto coefficient = k / (1.0f + k);
+                if (! toneCoefficientValid || toneMoving)
+                {
+                    const auto k = std::tan (static_cast<float> (pi) * cutoff / static_cast<float> (sampleRate));
+                    toneCoefficient = k / (1.0f + k);
+                    toneCoefficientValid = true;
+                }
+                const auto coefficient = toneCoefficient;
                 const auto mix = wetMix.getNextValue(), gain = outputGain.getNextValue();
                 const auto core = coreGain.getNextValue(), asymmetry = bias.getNextValue();
                 if (settings.transformer && warmSamples > 0 && --warmSamples == 0)
@@ -232,6 +262,8 @@ private:
     std::array<std::vector<float>, 2> dryDelay, filteredDelay, bypassDelay;
     std::array<std::array<float, character::OversampledTransformer::latencySamples>, 2> cleanDelay {};
     std::array<float, 2> toneState {};
+    float toneCoefficient = 0;
+    bool toneCoefficientValid = false;
     size_t circuitPosition = 0, dryPosition = 0, transformerPosition = 0, bypassPosition = 0;
     juce::SmoothedValue<float> inputGain, driveGain, toneCutoff, outputGain, wetMix;
     juce::SmoothedValue<float> coreGain, bias, transformerBlend, bypassBlend;

@@ -236,7 +236,7 @@ ZaoDriveEditor::ZaoDriveEditor (ZaoDriveProcessor& p) : AudioProcessorEditor (&p
         "Selects BJT, op-amp feedback, diode shunt, or series-diode crossover distortion.");
     editorScaling::enable (*this, designWidth, designHeight);
     timerCallback();
-    startTimerHz (5);
+    startTimerHz (30);
 }
 
 void ZaoDriveEditor::updateInputControl (int circuit)
@@ -260,43 +260,6 @@ void ZaoDriveEditor::updateInputControl (int circuit)
     inputControlCircuit = circuit;
 }
 
-void ZaoDriveEditor::refreshPreview (const zao::Settings& settings)
-{
-    // This independent engine lives on the message thread; the display never
-    // reads or advances the audio thread's nonlinear circuit states.
-    zao::DriveEngine preview;
-    preview.prepare (48000, 128, false);
-    if (settings.smart && ! settings.bypass)
-    {
-        const auto analysis = processor.getSmartAnalysis();
-        if (analysis.signature == zao::SmartAnalyser::signature (settings)) preview.getSmart().setPreview (analysis);
-    }
-    constexpr int warmup = 4096;
-    const auto total = warmup + static_cast<int> (expectedOutput.size());
-    juce::AudioBuffer<float> block (2, 128);
-    expectedPeak = 0;
-    for (int offset = 0; offset < total; offset += 128)
-    {
-        const auto count = std::min (128, total - offset);
-        block.setSize (2, count, false, false, true);
-        for (int i = 0; i < count; ++i)
-        {
-            const auto sample = 0.25f * std::sin (static_cast<float> (2.0 * zao::pi * (offset + i) / 48.0));
-            block.setSample (0, i, sample); block.setSample (1, i, sample);
-        }
-        preview.process (block, settings);
-        for (int i = 0; i < count; ++i)
-            if (offset + i >= warmup)
-            {
-                const auto index = static_cast<size_t> (offset + i - warmup);
-                expectedInput[index] = 0.25f * std::sin (static_cast<float> (
-                    2.0 * zao::pi * (offset + i - preview.getLatency()) / 48.0));
-                expectedOutput[index] = block.getSample (0, i);
-                expectedPeak = std::max (expectedPeak, std::abs (expectedOutput[index]));
-            }
-    }
-}
-
 void ZaoDriveEditor::timerCallback()
 {
     const auto s = processor.getSettings();
@@ -305,12 +268,25 @@ void ZaoDriveEditor::timerCallback()
     const std::array<float, 13> current { s.inputDb, s.driveDb, s.toneHz, s.outputDb, s.mix,
         s.coreDriveDb, s.dcBias, static_cast<float> (s.model), s.transformer ? 1.0f : 0.0f, s.bypass ? 1.0f : 0.0f, s.bjtBias, s.diodeKnee, s.smart ? 1.0f : 0.0f };
     const auto smartRevision = s.smart ? processor.getSmartAnalysis().revision : 0;
-    if (! previewReady || current != previousSettings || smartRevision != previousSmartRevision)
+    if (! isShowing())
     {
-        refreshPreview (s);
-        previousSettings = current; previousSmartRevision = smartRevision; previewReady = true;
+        if (previewRequested) previewRenderer.cancel();
+        previewRequested = false;
+        return;
     }
-    repaint();
+    const auto now = juce::Time::getMillisecondCounterHiRes();
+    if ((! previewRequested || current != previousSettings || smartRevision != previousSmartRevision)
+        && now-lastPreviewRequest >= 200)
+    {
+        previewRenderer.request (s, processor.getSmartAnalysis());
+        previousSettings = current; previousSmartRevision = smartRevision;
+        previewRequested = true; lastPreviewRequest = now;
+    }
+    const auto updated = previewRenderer.read (previewFrame);
+    if (updated) previewAnimation.setTarget (previewFrame, now);
+    if (previewAnimation.advance (now) || updated)
+        repaint (juce::Rectangle<float> (24, 292, 500, 208)
+            .transformedBy (editorScaling::transform (*this, designWidth, designHeight)).getSmallestIntegerContainer());
 }
 
 void ZaoDriveEditor::paintExpectedOutput (juce::Graphics& g)
@@ -319,7 +295,8 @@ void ZaoDriveEditor::paintExpectedOutput (juce::Graphics& g)
     g.drawText ("EXPECTED OUTPUT", 38, 303, 240, 18, juce::Justification::centredLeft);
     g.setColour (secondary); g.setFont (juce::FontOptions (9.0f));
     g.drawText (processor.getSettings().smart ? "1 kHz reference / Smart follows live input" : "1 kHz sine  /  -12 dBFS reference", 38, 324, 280, 16, juce::Justification::centredLeft);
-    const auto scale = std::max (0.25f, std::ceil (expectedPeak * 8.0f) * 0.125f);
+    const auto& preview = previewAnimation.current();
+    const auto scale = preview.scale;
     g.drawText ("SCALE +/-" + juce::String (scale, 3) + " FS", 350, 324, 154, 16, juce::Justification::centredRight);
     const auto plot = juce::Rectangle<float> (44, 352, 460, 106);
     g.setColour (inset); g.fillRoundedRectangle (plot.expanded (6), 5);
@@ -342,12 +319,12 @@ void ZaoDriveEditor::paintExpectedOutput (juce::Graphics& g)
         }
         g.setColour (colour); g.strokePath (wave, juce::PathStrokeType (thickness));
     };
-    drawWave (expectedInput, secondary.withAlpha (0.7f), 1.0f);
-    drawWave (expectedOutput, amber, 2.0f);
+    drawWave (preview.input, secondary.withAlpha (0.7f), 1.0f);
+    drawWave (preview.output, amber, 2.0f);
     g.setFont (juce::FontOptions (9.0f)); g.setColour (secondary);
     g.drawText ("INPUT", 44, 473, 45, 14, juce::Justification::centredLeft);
     g.setColour (amber); g.drawText ("OUTPUT", 96, 473, 60, 14, juce::Justification::centredLeft);
-    g.drawText ("PEAK " + juce::String (juce::Decibels::gainToDecibels (expectedPeak, -100.0f), 1) + " dBFS",
+    g.drawText ("PEAK " + juce::String (juce::Decibels::gainToDecibels (preview.peak, -100.0f), 1) + " dBFS",
                 300, 473, 204, 14, juce::Justification::centredRight);
 }
 

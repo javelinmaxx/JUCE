@@ -3,6 +3,7 @@
 #include <juce_dsp/juce_dsp.h>
 #include <array>
 #include <cmath>
+#include <cstring>
 #include <vector>
 
 namespace zao
@@ -26,7 +27,7 @@ public:
     {
         latency = latencyForRate (sampleRate); taps = 2*latency+1;
         coefficients.resize (static_cast<size_t> (latency+1));
-        for (auto& channel : history) channel.resize (static_cast<size_t> (2*taps));
+        for (auto& channel : history) channel.resize (static_cast<size_t> (2*taps)+8);
         constexpr int size = 4096;
         juce::dsp::FFT fft (12);
         std::array<juce::dsp::Complex<float>, size> spectrum {}, impulse {};
@@ -50,6 +51,21 @@ public:
         // Keep 1.5 kHz at unity; both sides of each pair use the same float.
         for (auto& coefficient : coefficients) coefficient /= static_cast<float> (reference);
         enforceBoostCeiling();
+#if JUCE_USE_SIMD
+        // Prepack the unchanged impulse in double precision. Four independent
+        // accumulators avoid a long scalar dependency chain without fast-math.
+        packedCoefficients.resize ((static_cast<size_t> (taps)+Vector::size()-1)/Vector::size());
+        for (size_t i = 0; i < packedCoefficients.size(); ++i)
+        {
+            alignas (Vector::SIMDRegisterSize) double values[Vector::size()] {};
+            for (size_t lane = 0; lane < Vector::size(); ++lane)
+            {
+                const auto tap = static_cast<int> (i*Vector::size()+lane);
+                if (tap < taps) values[lane] = coefficients[static_cast<size_t> (std::abs (tap-latency))];
+            }
+            packedCoefficients[i] = Vector::fromRawArray (values);
+        }
+#endif
         reset();
     }
 
@@ -65,10 +81,25 @@ public:
         auto& index = position[channel];
         samples[index] = samples[index+static_cast<size_t> (taps)] = input;
         const auto* span = samples.data()+index+1;
+#if JUCE_USE_SIMD
+        Vector a (0.0), b (0.0), c (0.0), d (0.0);
+        size_t i = 0;
+        for (; i+3 < packedCoefficients.size(); i += 4)
+        {
+            a += packedCoefficients[i]   * loadUnaligned (span+i*Vector::size());
+            b += packedCoefficients[i+1] * loadUnaligned (span+(i+1)*Vector::size());
+            c += packedCoefficients[i+2] * loadUnaligned (span+(i+2)*Vector::size());
+            d += packedCoefficients[i+3] * loadUnaligned (span+(i+3)*Vector::size());
+        }
+        for (; i < packedCoefficients.size(); ++i)
+            a += packedCoefficients[i]*loadUnaligned (span+i*Vector::size());
+        const auto output = ((a+b)+(c+d)).sum();
+#else
         double output = coefficients[0]*static_cast<double> (span[latency]);
         for (int distance = 1; distance <= latency; ++distance)
             output += coefficients[static_cast<size_t> (distance)]
                 * (static_cast<double> (span[latency-distance])+span[latency+distance]);
+#endif
         if (++index == static_cast<size_t> (taps)) index = 0;
         return static_cast<float> (output);
     }
@@ -82,6 +113,18 @@ public:
     }
 
 private:
+#if JUCE_USE_SIMD
+    using Vector = juce::dsp::SIMDRegister<double>;
+    static Vector loadUnaligned (const double* samples) noexcept
+    {
+        // A ring position need not be SIMD-aligned. memcpy permits an unaligned
+        // load on both ARM and x86 without violating the register API contract.
+        Vector result;
+        std::memcpy (&result.value, samples, sizeof (result.value));
+        return result;
+    }
+    std::vector<Vector> packedCoefficients;
+#endif
     void enforceBoostCeiling()
     {
         // Referencing the top of a smoothed contour can lift its plateaus above
@@ -105,7 +148,7 @@ private:
     }
     int latency = referenceLatencySamples, taps = 2*referenceLatencySamples+1;
     std::vector<float> coefficients;
-    std::array<std::vector<float>, 2> history;
+    std::array<std::vector<double>, 2> history;
     std::array<size_t, 2> position {};
 };
 }

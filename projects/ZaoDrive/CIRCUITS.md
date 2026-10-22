@@ -50,7 +50,11 @@ an unloaded high-pass filter. The emitter bypass capacitor uses the same method.
 An output coupling high-pass at 1.6 Hz removes the collector's bias voltage.
 
 The solver uses partial-pivoted elimination, warm starts, and forward-junction
-voltage limiting. Reverse BC voltage can recover freely from saturation. DC
+voltage limiting. Its passive bypass node is eliminated first, leaving a
+three-node system with partial pivoting; the full four-node solver remains a
+fallback. Junction exponentials are shared with their charge stamps, and the
+accepted charges are reused when advancing capacitor history. Reverse BC
+voltage can recover freely from saturation. DC
 initialization allows 80 iterations; audio steps allow 24 and terminate once
 all KCL residuals are below 1e-10 A. The bounded solve avoids unbounded work on
 the audio thread. The report tests its residual across several rates and input

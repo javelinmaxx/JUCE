@@ -47,6 +47,39 @@ inline bool solve4 (std::array<std::array<double, 4>, 4> a,
     return true;
 }
 
+// The bypass-capacitor node couples only to the emitter. Eliminate it first,
+// retaining partial pivoting for the remaining three transistor nodes.
+inline bool solveBjtSystem (const std::array<std::array<double, 4>, 4>& a,
+                            const std::array<double, 4>& b, std::array<double, 4>& x) noexcept
+{
+    if (std::abs (a[3][3]) < 1.0e-20) return solve4 (a, b, x);
+    std::array<std::array<double, 3>, 3> m;
+    std::array<double, 3> rhs { b[0], b[1], b[2] };
+    for (size_t row = 0; row < 3; ++row)
+        for (size_t col = 0; col < 3; ++col) m[row][col] = a[row][col];
+    const auto coupling = a[1][3] / a[3][3];
+    m[1][1] -= coupling * a[3][1]; rhs[1] -= coupling * b[3];
+    for (size_t col = 0; col < 3; ++col)
+    {
+        auto pivot = col;
+        for (size_t row = col+1; row < 3; ++row)
+            if (std::abs (m[row][col]) > std::abs (m[pivot][col])) pivot = row;
+        if (std::abs (m[pivot][col]) < 1.0e-20) return solve4 (a, b, x);
+        std::swap (m[col], m[pivot]); std::swap (rhs[col], rhs[pivot]);
+        for (size_t row = col+1; row < 3; ++row)
+        {
+            const auto scale = m[row][col] / m[col][col];
+            for (size_t k = col+1; k < 3; ++k) m[row][k] -= scale*m[col][k];
+            rhs[row] -= scale*rhs[col];
+        }
+    }
+    x[2] = rhs[2]/m[2][2];
+    x[1] = (rhs[1]-m[1][2]*x[2])/m[1][1];
+    x[0] = (rhs[0]-m[0][1]*x[1]-m[0][2]*x[2])/m[0][0];
+    x[3] = (b[3]-a[3][1]*x[1])/a[3][3];
+    return true;
+}
+
 // A 9 V common-emitter circuit, solved in volts and amperes. The transistor is
 // a charge-based Ebers-Moll model with finite forward/reverse beta and Early
 // modulation. Both BE and BC conduction remain active in saturation/cutoff.
@@ -97,8 +130,10 @@ public:
         inputVoltage = voltage - nodes[0] - sourceResistance * inputCurrent;
         const auto newBypassCurrent = bypassConductance * (nodes[3] - bypassVoltage) - bypassCurrent;
         bypassVoltage = nodes[3]; bypassCurrent = newBypassCurrent;
-        const auto newBeCharge = charge (nodes[0] - nodes[1], 25.0e-12, 0.4e-9).value;
-        const auto newBcCharge = charge (nodes[0] - nodes[2], 4.0e-12, 25.0e-9).value;
+        // The final residual evaluation already calculated these charges at
+        // the accepted nodes, including when the iteration budget is reached.
+        const auto newBeCharge = evaluatedBeCharge;
+        const auto newBcCharge = evaluatedBcCharge;
         beCurrent = 2.0 * rate * (newBeCharge - beCharge) - beCurrent;
         bcCurrent = 2.0 * rate * (newBcCharge - bcCharge) - bcCurrent;
         beCharge = newBeCharge; bcCharge = newBcCharge;
@@ -116,7 +151,7 @@ public:
 
 private:
     struct Charge { double value, derivative; };
-    static Charge charge (double voltage, double capacitance, double transitTime) noexcept
+    static Charge charge (double voltage, double capacitance, double transitTime, Exponential e) noexcept
     {
         // SPICE-style depletion charge with a continuous forward-bias
         // continuation, plus diffusion charge Q = transit-time * junction I.
@@ -126,8 +161,9 @@ private:
         if (voltage < boundary)
         {
             const auto t = 1.0 - voltage / potential;
-            q = capacitance * potential / (1.0 - grading) * (1.0 - std::pow (t, 1.0 - grading));
-            c = capacitance * std::pow (t, -grading);
+            const auto power = std::pow (t, -grading);
+            q = capacitance * potential / (1.0 - grading) * (1.0 - t*power);
+            c = capacitance * power;
         }
         else
         {
@@ -138,13 +174,16 @@ private:
                 * (1.0 - std::pow (1.0 - forward, 1.0 - grading)) + cf * delta + 0.5 * slope * delta * delta;
             c = cf + slope * delta;
         }
-        const auto e = junctionExponential (voltage, thermalVoltage);
         return { q + transitTime * saturationCurrent * (e.value - 1.0),
                  c + transitTime * saturationCurrent * e.derivative };
     }
+    static Charge charge (double voltage, double capacitance, double transitTime) noexcept
+    {
+        return charge (voltage, capacitance, transitTime, junctionExponential (voltage, thermalVoltage));
+    }
 
     void equations (const std::array<double, 4>& v, double input, bool dc,
-                    std::array<double, 4>& f, std::array<std::array<double, 4>, 4>& j) const noexcept
+                    std::array<double, 4>& f, std::array<std::array<double, 4>, 4>& j) noexcept
     {
         const auto ef = junctionExponential (v[0] - v[1], thermalVoltage);
         const auto er = junctionExponential (v[0] - v[2], thermalVoltage);
@@ -179,18 +218,20 @@ private:
         j[0][0] += inputConductance;
         f[3] += bypassConductance * (v[3] - bypassVoltage) - bypassCurrent;
         j[3][3] += bypassConductance;
-        const auto stampCharge = [&] (size_t to, double capacitance, double transitTime,
+        const auto stampCharge = [&] (size_t to, Charge q,
                                       double previousCharge, double previousCurrent)
         {
-            const auto q = charge (v[0] - v[to], capacitance, transitTime);
             const auto current = 2.0 * rate * (q.value - previousCharge) - previousCurrent;
             const auto conductance = 2.0 * rate * q.derivative;
             f[0] += current; f[to] -= current;
             j[0][0] += conductance; j[0][to] -= conductance;
             j[to][0] -= conductance; j[to][to] += conductance;
         };
-        stampCharge (1, 25.0e-12, 0.4e-9, beCharge, beCurrent);
-        stampCharge (2, 4.0e-12, 25.0e-9, bcCharge, bcCurrent);
+        const auto be = charge (v[0]-v[1], 25.0e-12, 0.4e-9, ef);
+        const auto bc = charge (v[0]-v[2], 4.0e-12, 25.0e-9, er);
+        evaluatedBeCharge = be.value; evaluatedBcCharge = bc.value;
+        stampCharge (1, be, beCharge, beCurrent);
+        stampCharge (2, bc, bcCharge, bcCurrent);
     }
 
     void solve (double input, bool dc, int iterations) noexcept
@@ -203,7 +244,7 @@ private:
             residual = 0;
             for (auto x : f) residual = std::max (residual, std::abs (x));
             if (residual < 1.0e-10) return;
-            if (! solve4 (j, f, step)) return;
+            if (! solveBjtSystem (j, f, step)) return;
             // Limit only movement into forward conduction. Reverse-biased BC
             // voltage can change by several volts at a clipping edge; limiting
             // that harmless movement to 100 mV would leave saturation recovery
@@ -227,6 +268,7 @@ private:
     std::array<double, 4> nodes {}, operatingPoint {};
     double inputVoltage = 0, inputCurrent = 0, bypassVoltage = 0, bypassCurrent = 0;
     double beCharge = 0, bcCharge = 0, beCurrent = 0, bcCurrent = 0;
+    double evaluatedBeCharge = 0, evaluatedBcCharge = 0;
     double dcBlockCoefficient = 0, dcInput = 0, dcOutput = 0, residual = 0;
 };
 
@@ -241,10 +283,14 @@ struct SchottkyPair
     static constexpr double seriesResistance = 220.0;
     static DiodeCurrent current (double junctionVoltage) noexcept
     {
-        const auto positive = junctionExponential (junctionVoltage, thermal);
-        const auto negative = junctionExponential (-junctionVoltage, thermal);
-        return { saturation * (positive.value - negative.value),
-                 saturation * (positive.derivative + negative.derivative) };
+        // Antiparallel junctions share an exponential: exp(-x) = 1/exp(x).
+        // Preserve the original continuation and reverse limit at overload.
+        const auto x = std::abs (junctionVoltage) / thermal;
+        const auto e = std::exp (std::min (x, 40.0));
+        const auto reverse = x <= 40.0 ? 1.0/e : std::exp (-std::min (x, 80.0));
+        const auto forward = x > 40.0 ? e*(1.0+x-40.0) : e;
+        return { std::copysign (saturation*(forward-reverse), junctionVoltage),
+                 saturation*(e+reverse)/thermal };
     }
 };
 
@@ -286,26 +332,29 @@ public:
                 + derivative * (groundResistance * (1.0 + outputResistance / loadResistance) + outputResistance);
             return std::array<double, 6> { v, current, derivative, external, internal, slope };
         };
+        std::array<double, 6> accepted {};
         const auto solve = [&] (double feedbackGain, double target)
         {
             auto junction = junctionVoltage;
             for (int iteration = 0; iteration < 24; ++iteration)
             {
-                const auto e = evaluate (junction);
+                accepted = evaluate (junction);
+                const auto& e = accepted;
                 const auto f = e[4] + feedbackGain * groundResistance * e[1] - target;
-                if (std::abs (f) < 1.0e-10) break;
+                if (std::abs (f) < 1.0e-10) return junction;
                 junction -= std::clamp (f / (e[5] + feedbackGain * groundResistance * e[2]), -0.10, 0.10);
             }
+            accepted = evaluate (junction);
             return junction;
         };
         auto junction = solve (loopGain, reference);
-        auto e = evaluate (junction);
+        auto e = accepted;
         const auto lower = std::max (-rail, internalOutput - slewStep);
         const auto upper = std::min (rail, internalOutput + slewStep);
         const auto limited = std::clamp (e[4], lower, upper);
         if (std::abs (limited - e[4]) > 1.0e-10)
         {
-            junction = solve (0, limited); e = evaluate (junction);
+            junction = solve (0, limited); e = accepted;
             residual = std::abs (e[4] - limited);
         }
         else residual = std::abs (e[4] + loopGain * groundResistance * e[1] - reference);
@@ -375,11 +424,14 @@ inline double solveDiodeVoltage (double previous, Equation equation) noexcept
     for (int iteration = 0; iteration < 40; ++iteration)
     {
         const auto f = equation (voltage);
-        if (std::abs (f.value) < 1.0e-12) break;
+        if (std::abs (f.value) < 1.0e-12) return voltage;
         if (f.value > 0) upper = voltage; else lower = voltage;
         const auto next = voltage - f.value / f.derivative;
         voltage = next > lower && next < upper ? next : (lower + upper) * 0.5;
     }
+    // Keep the equation's cached physical node values at the returned root,
+    // even when the final iteration took a step without converging.
+    (void) equation (voltage);
     return voltage;
 }
 
@@ -396,19 +448,21 @@ public:
     {
         driver.process (input);
         const auto history = -conductance * outputVoltage - capacitorCurrent;
+        double solvedNode = 0;
         const auto equation = [&] (double voltage)
         {
             const auto diode = SchottkyPair::current (voltage);
             const auto node = voltage + SchottkyPair::seriesResistance * diode.value;
             const auto slope = 1.0 + SchottkyPair::seriesResistance * diode.derivative;
             const auto source = driver.current (node, sourceResistance);
-            return DiodeCurrent { node / loadResistance + conductance * node + history + diode.value - source.value,
+            const auto value = node / loadResistance + conductance * node + history + diode.value - source.value;
+            solvedNode = node; residual = std::abs (value);
+            return DiodeCurrent { value,
                                   slope * (1.0 / loadResistance + conductance + source.derivative) + diode.derivative };
         };
         const auto junction = solveDiodeVoltage (junctionVoltage, equation);
-        const auto voltage = junction + SchottkyPair::seriesResistance * SchottkyPair::current (junction).value;
+        const auto voltage = solvedNode;
         junctionVoltage = junction;
-        residual = std::abs (equation (junction).value);
         capacitorCurrent = conductance * (voltage - outputVoltage) - capacitorCurrent;
         outputVoltage = voltage;
         return voltage / 4.0;
@@ -441,6 +495,7 @@ public:
         const auto loadHistory = -loadConductance * outputVoltage - loadCurrent;
         const auto diodeHistory = -junctionConductance * diodeVoltage - junctionCurrent;
         const auto load = 1.0 / loadResistance + loadConductance;
+        double solvedDrop = 0, solvedOutput = 0;
         const auto equation = [&] (double voltage)
         {
             const auto diode = SchottkyPair::current (voltage);
@@ -450,15 +505,15 @@ public:
             const auto slope = diode.derivative + junctionConductance * dropSlope;
             const auto nextOutput = (current - loadHistory) / load;
             const auto source = driver.current (drop + nextOutput, sourceResistance);
-            return DiodeCurrent { current - source.value,
+            const auto value = current-source.value;
+            solvedDrop = drop; solvedOutput = nextOutput; residual = std::abs (value);
+            return DiodeCurrent { value,
                                   slope + source.derivative * (dropSlope + slope / load) };
         };
         const auto junction = solveDiodeVoltage (junctionVoltage, equation);
-        const auto diode = SchottkyPair::current (junction);
-        const auto voltage = junction + SchottkyPair::seriesResistance * diode.value;
-        const auto nextOutput = (diode.value + junctionConductance * voltage + diodeHistory - loadHistory) / load;
+        const auto voltage = solvedDrop;
+        const auto nextOutput = solvedOutput;
         junctionVoltage = junction;
-        residual = std::abs (equation (junction).value);
         junctionCurrent = junctionConductance * (voltage - diodeVoltage) - junctionCurrent;
         loadCurrent = loadConductance * (nextOutput - outputVoltage) - loadCurrent;
         diodeVoltage = voltage; outputVoltage = nextOutput;

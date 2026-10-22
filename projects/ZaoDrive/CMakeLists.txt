@@ -17,7 +17,7 @@ juce_add_plugin(ZaoDrive
     IS_SYNTH FALSE NEEDS_MIDI_INPUT FALSE NEEDS_MIDI_OUTPUT FALSE
     COPY_PLUGIN_AFTER_BUILD FALSE NEEDS_WEB_BROWSER FALSE NEEDS_CURL FALSE
     VST3_CATEGORIES Fx Distortion)
-target_sources(ZaoDrive PRIVATE Source/PluginProcessor.cpp Source/PluginEditor.cpp Source/SmartHarmonics.cpp)
+target_sources(ZaoDrive PRIVATE Source/PluginProcessor.cpp Source/PluginEditor.cpp Source/SmartHarmonics.cpp Source/PreviewRenderer.cpp)
 target_compile_features(ZaoDrive PUBLIC cxx_std_17)
 target_compile_definitions(ZaoDrive PUBLIC
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
@@ -31,4 +31,8 @@ if(ZAO_BUILD_TESTS)
     target_compile_definitions(ZaoDriveTests PRIVATE JUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1)
     target_link_libraries(ZaoDriveTests PRIVATE ZaoDrive)
     add_test(NAME ZaoDriveProcessor COMMAND ZaoDriveTests)
+    add_executable(ZaoDrivePerformanceBench Tests/PerformanceBench.cpp)
+    target_include_directories(ZaoDrivePerformanceBench PRIVATE "${JUCE_SOURCE_DIR}/modules")
+    target_compile_definitions(ZaoDrivePerformanceBench PRIVATE JUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1)
+    target_link_libraries(ZaoDrivePerformanceBench PRIVATE ZaoDrive)
 endif()
