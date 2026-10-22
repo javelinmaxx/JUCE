@@ -43,7 +43,8 @@ editor closed. Control-driven recalculation has no polling delay or fixed rate
 limit: if changes arrive during a render, the next render uses the latest
 settings immediately. Completed snapshots keep updating the gain during
 continuous adjustments; unchanged settings do not rerender. Smart-only updates
-retain their 200 ms limit to save CPU. Only changes to the correction fade over 20 ms;
+follow the 50 ms Smart cadence with Auto On, or retain a 200 ms display-only
+limit with Auto Off to save CPU. Only changes to the correction fade over 20 ms;
 this avoids clicks without continuously modulating the gain. Auto defaults Off,
 is saved with presets and follows host automation. Existing presets load Off.
 The Output knob still controls gain entering the transformer; Auto compensates
@@ -55,7 +56,9 @@ reference guard. See the [Auto report](Tests/Reports/auto-report.md) and
 **Smart**, beside the circuit header, compares the input and generated wet
 spectra using the supplied 12-TET dissonance curve. It suppresses clashing
 harmonic components directly while leaving the manual circuit settings intact.
-Analysis runs on a worker, filter changes crossfade over 50 ms, and Smart adds
+Analysis runs on a worker at up to 20 updates per second after the first full
+4,096-sample window; successive windows overlap with a 50 ms hop. Filter changes
+use endpoint-smooth sigmoid crossfades over that same 50 ms interval, and Smart adds
 no latency. It defaults Off and saves CPU when Off. See [SMART.md](SMART.md)
 for the signal path and separation limits, the [measured report](Tests/Reports/smart-report.md),
 and the [Smart preview](Previews/zao-smart.png).
@@ -70,7 +73,8 @@ dedicated background worker that reuses its prepared filters and oversampler,
 without sharing circuit state or locks with the audio callback. The processor and editor share this worker; every control change requests an
 update, with no fixed render-rate cap. New changes during rendering coalesce
 into the next latest snapshot, rather than building a queue. Smart-only updates
-remain limited to five times per second. It also runs with the editor
+follow the 20 Hz analysis cadence with Auto On and remain limited to five
+times per second for the display alone with Auto Off. It also runs with the editor
 closed while Auto is enabled, keeping audio and preview calibration identical. Waveforms and the display scale ease between results over
 160 ms at 30 animation frames per second; new targets continue from the current
 displayed shape rather than jumping.

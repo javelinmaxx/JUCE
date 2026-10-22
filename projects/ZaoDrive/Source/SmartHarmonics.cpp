@@ -159,9 +159,11 @@ void SmartHarmonics::prepare (double rate, bool worker)
     release(); sampleRate = rate; ring = {}; job = {}; banks = {}; settings = {};
     position = filled = sinceJob = active = 0; pending = 1; previousSignature = appliedVersion = 0;
     enabled = false; firstJob = true; previewMode = ! worker; generation.store (1); submitted.store (0); jobState.store (0);
+    analysisActive.store (false, std::memory_order_relaxed);
     resultVersion.store (0); resultGeneration.store (0); resultSignature.store (0);
     for (auto& value : values) value.store (0);
-    transition.reset (rate, .05); transition.setCurrentAndTargetValue (1);
+    updateSamples = std::max (1, juce::roundToInt (rate*updateSeconds));
+    transition.reset (updateSamples); transition.setCurrentAndTargetValue (1);
     if (worker) startThread (juce::Thread::Priority::low);
 }
 void SmartHarmonics::setPreview (const SmartAnalyser::Result& result) noexcept
@@ -181,10 +183,15 @@ void SmartHarmonics::beginBlock (const Settings& s) noexcept
         previousSignature = key; generation.fetch_add (1); filled = sinceJob = position = 0; firstJob = true;
     }
     enabled = s.smart && ! s.bypass && s.mix > .001f;
+    analysisActive.store (enabled, std::memory_order_relaxed);
+    updateFilters();
+}
+void SmartHarmonics::updateFilters() noexcept
+{
     if (transition.isSmoothing()) return;
     auto result = readResult();
     const auto version = result.revision;
-    const auto valid = enabled && result.generation == generation.load() && result.signature == key;
+    const auto valid = enabled && result.generation == generation.load() && result.signature == previousSignature;
     if (valid && version == appliedVersion) return;
     if (! valid && banks[static_cast<size_t> (active)].count == 0) return;
     pending = 1-active;
@@ -201,7 +208,9 @@ void SmartHarmonics::process (const std::array<float, 2>& input, std::array<floa
         const auto p = static_cast<size_t> (position);
         ring.left[p] = input[0]; ring.right[p] = input[1]; ring.wetLeft[p] = wet[0]; ring.wetRight[p] = wet[1];
         position = (position+1)%SmartAnalyser::fftSize; filled = std::min (SmartAnalyser::fftSize, filled+1); ++sinceJob;
-        const auto interval = firstJob ? SmartAnalyser::fftSize : std::max (SmartAnalyser::fftSize, static_cast<int> (sampleRate*.25));
+        // Keep the full spectral window, but overlap successive frames so the
+        // hop matches the 50 ms filter transition even below 81.92 kHz.
+        const auto interval = firstJob ? SmartAnalyser::fftSize : updateSamples;
         if (filled == SmartAnalyser::fftSize && sinceJob >= interval)
         {
             int expected = 0;
@@ -224,14 +233,23 @@ void SmartHarmonics::process (const std::array<float, 2>& input, std::array<floa
     }
     else
     {
-        const auto blend = transition.getNextValue();
+        const auto phase = transition.getNextValue();
+        // Quintic smoothstep is an endpoint-exact sigmoid with zero first and
+        // second derivatives at each end, avoiding slope jumps between banks.
+        const auto blend = phase*phase*phase*(phase*(phase*6.0f-15.0f)+10.0f);
         for (size_t ch = 0; ch < 2; ++ch)
         {
             const auto old = banks[static_cast<size_t> (active)].tick (wet[ch], ch);
             const auto next = banks[static_cast<size_t> (pending)].tick (wet[ch], ch);
             wet[ch] = old+blend*(next-old);
         }
-        if (! transition.isSmoothing()) active = pending;
+        if (! transition.isSmoothing())
+        {
+            active = pending;
+            // A ready target starts on the next sample, without waiting for
+            // another host block or interrupting the fade that just finished.
+            updateFilters();
+        }
     }
 }
 void SmartHarmonics::run()
@@ -240,7 +258,11 @@ void SmartHarmonics::run()
     while (! threadShouldExit())
     {
         int expected = 2;
-        if (! jobState.compare_exchange_strong (expected, 3, std::memory_order_acquire)) { wait (20); continue; }
+        if (! jobState.compare_exchange_strong (expected, 3, std::memory_order_acquire))
+        {
+            wait (analysisActive.load (std::memory_order_relaxed) ? 2 : 20);
+            continue;
+        }
         const auto result = analyser.analyse (job);
         if (result.generation == generation.load()) publish (result);
         jobState.store (0, std::memory_order_release);

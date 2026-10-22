@@ -47,6 +47,7 @@ class SmartHarmonics final : private juce::Thread
                    "Smart audio publication requires lock-free scalar atomics");
 public:
     SmartHarmonics();
+    static constexpr double updateSeconds = .05;
     ~SmartHarmonics() override;
     void prepare (double rate, bool worker = true);
     void release();
@@ -70,6 +71,7 @@ private:
         float tick (float, size_t) noexcept;
     };
     void run() override;
+    void updateFilters() noexcept;
     void publish (const SmartAnalyser::Result&) noexcept;
     SmartAnalyser analyser;
     SmartAnalyser::Frame job, ring;
@@ -77,11 +79,12 @@ private:
     std::array<Bank, 2> banks;
     juce::SmoothedValue<float> transition;
     std::atomic<int> jobState { 0 };
+    std::atomic<bool> analysisActive { false };
     std::atomic<uint32_t> generation { 1 }, submitted { 0 };
     // Atomic payload plus sequence validation: readers never wait for a writer.
     std::atomic<uint32_t> resultVersion { 0 }, resultGeneration { 0 }, resultSignature { 0 };
     std::array<std::atomic<float>, 4 + 2*(SmartAnalyser::orders+1) + 4*SmartAnalyser::maxBands> values {};
-    int position = 0, filled = 0, sinceJob = 0, active = 0, pending = 1;
+    int position = 0, filled = 0, sinceJob = 0, active = 0, pending = 1, updateSamples = 2400;
     uint32_t previousSignature = 0, appliedVersion = 0;
     double sampleRate = 48000;
     bool enabled = false, firstJob = true, previewMode = false;

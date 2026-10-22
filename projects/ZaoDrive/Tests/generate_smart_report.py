@@ -122,8 +122,15 @@ and stale-result rejection, checks that Smart Off submits no FFT jobs, verifies
 unchanged reported latency and unchanged manual controls, and saves/restores
 Smart including legacy presets. Silence, noise, anti-phase stereo, consonance
 anchors and bounded harmonic cuts are covered. New filter banks crossfade over
-50 ms; analysis refreshes at most four times per second after the first full
-frame. No FFT or circuit search runs in the audio callback.
+50 ms using a quintic smoothstep sigmoid with exact, flat endpoints. Analysis
+refreshes at up to 20 times per second after the first full frame, retaining
+the 4,096-sample window with overlapping 50 ms hops. Real-worker scheduling tests
+verify the first full window and successive sample-accurate 50 ms submissions at
+8/44.1/48/96/192 kHz. Audio tests compare both channels against independent
+dry/filtered signals throughout the sigmoid fade and verify exact target-bank
+output at 50 ms. A ready target starts on the next sample at the fade endpoint;
+worker scheduling can add gaps if the target is not ready. New targets never
+interrupt an unfinished fade. No FFT or circuit search runs in the audio callback.
 
 Source data: [audio](smart-audio.csv), [target bands](smart-bands.csv),
 [predicted scores](smart-scores.csv), [dissonance curve](smart-dissonance.csv).

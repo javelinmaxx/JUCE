@@ -86,13 +86,20 @@ resynthesis of every harmonic.
 ## Scheduling and transitions
 
 Analysis runs on a low-priority worker after the first full frame and at most
-four times per second thereafter. A preallocated single-owner job slot and
+20 times per second thereafter, using overlapping 4,096-sample windows with a
+50 ms hop (2,400 samples at 48 kHz). A preallocated single-owner job slot and
 atomic result publication let the audio callback skip a busy worker without
 waiting. No FFT, circuit search, allocation, or mutex runs in that callback.
 The callback processes at most two banks of 16 biquads during a transition.
 Stereo channels use identical targets and independent filter states.
 
-Each new bank crossfades over 50 ms. Turning Smart Off fades to the neutral bank,
+Each new bank crossfades over the same 50 ms interval using a quintic smoothstep
+sigmoid, `6t^5 − 15t^4 + 10t^3`, with exact endpoints and zero first and second
+derivatives at both ends. Nominally the fade finishes as the next target arrives;
+a ready target starts on the next sample when the current fade ends. Worker
+scheduling and initial host-block pickup can add small gaps if no target is ready.
+A new bank never interrupts an unfinished fade. The active worker polls every 2 ms to reduce
+publication jitter, retaining 20 ms idle polling while Smart is suspended. Turning Smart Off fades to the neutral bank,
 then stops spectral jobs and harmonic filters. Bypass and Mix 0% also suspend
 analysis. Manual circuit changes invalidate earlier results. Smart adds no
 buffered latency; its first decision needs approximately 85 ms of audio at

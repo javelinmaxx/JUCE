@@ -77,7 +77,8 @@ void PreviewRenderer::run()
             const auto controlsChanged = ! haveKey || requestedKey != previousKey || changed != previousControlRevision;
             // Control notifications have no polling delay or render-rate cap.
             // Only Smart-only updates need polling and the existing CPU limit.
-            if (! controlsChanged && (analysis.revision == previousAnalysis || now-lastRender < 200))
+            const auto smartIntervalMs = settings.autoCompensate ? 1000*SmartHarmonics::updateSeconds : 200;
+            if (! controlsChanged && (analysis.revision == previousAnalysis || now-lastRender < smartIntervalMs))
             {
                 wait (settings.smart ? 10 : -1);
                 continue;

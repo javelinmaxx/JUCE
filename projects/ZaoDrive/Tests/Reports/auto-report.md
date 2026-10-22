@@ -37,7 +37,8 @@ previous 50 ms polling and 200 ms render limit. Control-driven calculations can
 run back to back without a fixed rate cap. Changes during a render coalesce
 into the next latest snapshot; each completed snapshot updates the gain, so
 continuous automation no longer starves correction by discarding every result.
-Smart-only changes retain their 200 ms limit. Unchanged reference settings do
+Smart-only changes follow the 50 ms analysis cadence with Auto On, while the
+display alone with Auto Off retains its 200 ms limit. Unchanged reference settings do
 not rerender, and a closed editor with Auto Off leaves the worker asleep.
 The listener only marks a revision and signals the worker; preview rendering,
 result locking and buffer allocation stay off the audio callback. Audio reads

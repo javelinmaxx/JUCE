@@ -429,15 +429,59 @@ void smartTests()
     const auto deadline = juce::Time::getMillisecondCounter()+2000;
     while (worker.readResult().count == 0 && juce::Time::getMillisecondCounter() < deadline) juce::Thread::sleep (5);
     check (worker.getSubmittedJobs() == 1 && worker.readResult().count > 0, "worker publishes its first complete spectral frame");
-    worker.beginBlock (frame.settings);
-    double liveDifference = 0;
-    for (int i = 0; i < A::fftSize; ++i)
+    const auto firstResult = worker.readResult();
+    // Offset the analysis hop from the first fade, then let the next worker
+    // result arrive before that fade ends to exercise sample-exact handoff.
+    for (int i = 0; i < 1200; ++i)
     {
         const auto j = static_cast<size_t> (i);
+        std::array<float, 2> wet { frame.wetLeft[j], frame.wetRight[j] };
+        worker.process ({ frame.left[j], frame.right[j] }, wet);
+    }
+    zao::SmartHarmonics target; target.prepare (48000, false); target.setPreview (firstResult);
+    A::Result secondResult;
+    worker.beginBlock (frame.settings);
+    double liveDifference = 0, sigmoidError = 0, endpointError = 0;
+    for (int i = 0; i < 2400; ++i)
+    {
+        if (i == 1500)
+        {
+            const auto until = juce::Time::getMillisecondCounterHiRes()+2000;
+            while (worker.readResult().revision == firstResult.revision && juce::Time::getMillisecondCounterHiRes() < until)
+                juce::Thread::sleep (1);
+            secondResult = worker.readResult();
+            check (secondResult.revision != firstResult.revision, "next Smart target is ready before the current fade ends");
+        }
+        const auto j = static_cast<size_t> (i);
         std::array<float, 2> in { frame.left[j], frame.right[j] }, wet { frame.wetLeft[j], frame.wetRight[j] };
+        auto targetWet = wet; target.process (in, targetWet);
         worker.process (in, wet); liveDifference += std::abs (wet[0]-frame.wetLeft[j]);
+        const auto phase = std::min (1.0, (i+1)/2400.0);
+        const auto blend = 10*std::pow (phase, 3)-15*std::pow (phase, 4)+6*std::pow (phase, 5);
+        for (size_t ch = 0; ch < 2; ++ch)
+        {
+            const auto dry = ch == 0 ? frame.wetLeft[j] : frame.wetRight[j];
+            sigmoidError = std::max (sigmoidError, std::abs (wet[ch]-(dry+blend*(targetWet[ch]-dry))));
+            if (i >= 2399) endpointError = std::max (endpointError, std::abs (static_cast<double> (wet[ch]-targetWet[ch])));
+        }
     }
     check (liveDifference > .1, "published harmonic targets affect live audio through the crossfaded bank");
+    check (sigmoidError < 1e-6 && endpointError < 1e-7,
+           "both Smart channels follow a sigmoid crossfade and reach the exact target bank after 50 ms");
+    zao::SmartHarmonics nextTarget; nextTarget.prepare (48000, false); nextTarget.setPreview (secondResult);
+    double handoffError = 0;
+    for (int i = 0; i < 2400; ++i)
+    {
+        const auto j = static_cast<size_t> ((2400+i)%A::fftSize);
+        std::array<float, 2> in { frame.left[j], frame.right[j] }, wet { frame.wetLeft[j], frame.wetRight[j] };
+        auto oldWet = wet, newWet = wet;
+        target.process (in, oldWet); nextTarget.process (in, newWet); worker.process (in, wet);
+        const auto phase = (i+1)/2400.0;
+        const auto blend = 10*std::pow (phase, 3)-15*std::pow (phase, 4)+6*std::pow (phase, 5);
+        for (size_t ch = 0; ch < 2; ++ch)
+            handoffError = std::max (handoffError, std::abs (wet[ch]-(oldWet[ch]+blend*(newWet[ch]-oldWet[ch]))));
+    }
+    check (handoffError < 1e-6, "a ready Smart target starts its next sigmoid fade immediately without waiting for a host block");
     auto manual = frame.settings; manual.driveDb = 23; worker.beginBlock (manual);
     check (worker.readResult().count == 0, "manual circuit changes invalidate stale harmonic targets");
     manual.smart = false; worker.beginBlock (manual);
@@ -448,6 +492,41 @@ void smartTests()
         worker.process (in, out); if (i >= 6000) exact &= std::abs (out[0]-.3f) < 1e-8f && std::abs (out[1]+.3f) < 1e-8f;
     }
     check (exact && worker.getSubmittedJobs() == jobs, "Off is exactly transparent and submits no spectral jobs");
+    // Let each real worker job finish between sample-accurate hops, so scheduler
+    // contention cannot hide an incorrect FFT-size minimum or old 250 ms hop.
+    for (double rate : { 8000., 44100., 48000., 96000., 192000. })
+    {
+        zao::SmartHarmonics cadence; cadence.prepare (rate); cadence.beginBlock (frame.settings);
+        const auto feed = [&cadence] (int count)
+        {
+            for (int i = 0; i < count; ++i)
+            {
+                std::array<float, 2> wet { .2f, -.2f };
+                cadence.process ({ .1f, -.1f }, wet);
+            }
+        };
+        const auto awaitResult = [&cadence] (uint32_t previous)
+        {
+            const auto until = juce::Time::getMillisecondCounterHiRes()+2000;
+            while (cadence.readResult().revision == previous && juce::Time::getMillisecondCounterHiRes() < until)
+                juce::Thread::sleep (1);
+            check (cadence.readResult().revision != previous, "Smart worker completes each scheduled cadence-test frame");
+            juce::Thread::sleep (1);
+        };
+        feed (A::fftSize-1);
+        check (cadence.getSubmittedJobs() == 0, "Smart waits for its first complete spectral window");
+        feed (1); awaitResult (0);
+        const auto hop = juce::roundToInt (rate*.05);
+        for (uint32_t update = 1; update <= 3; ++update)
+        {
+            const auto previous = cadence.readResult().revision;
+            feed (hop-1);
+            check (cadence.getSubmittedJobs() == update, "Smart does not submit before its 50 ms hop");
+            feed (1);
+            check (cadence.getSubmittedJobs() == update+1, "Smart submits every 50 ms using overlapping full-size windows at all sample rates");
+            awaitResult (previous);
+        }
+    }
     ZaoDriveProcessor processor; processor.prepareToPlay (48000, 64); set (processor, "smart", 1);
     const auto latency = processor.getLatencySamples();
     juce::MemoryBlock state; processor.getStateInformation (state);
