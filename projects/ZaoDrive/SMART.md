@@ -100,7 +100,9 @@ buffered latency; its first decision needs approximately 85 ms of audio at
 not host-reported latency.
 
 Auto compensation runs after the transformer, using a fixed gain from the
-preview reference RMS. It does not affect Smart analysis or introduce live
+preview reference RMS, followed by the Output knob gain offset. At 0 dB the
+reference levels match; positive and negative values raise and lower that level.
+It does not affect Smart analysis or introduce live
 level averaging. Changes to Smart filter snapshots update the preview reference
 and its correction on the shared reference worker.
 

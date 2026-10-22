@@ -12,8 +12,8 @@
 | Op-Amp Input | Adjusts the level entering the selected circuit after optional Clear shaping. |
 | Drive | Increases the signal driving the selected overdrive circuit after optional Clear shaping. |
 | Tone | Sets the low-pass cutoff of the driver-minus-reference wet signal. |
-| Auto | Matches the preview input and output RMS with fixed stereo-linked gain compensation. |
-| Output | Adjusts gain before the output transformer and optional automatic RMS compensation. |
+| Auto | Matches the preview RMS before applying the Output knob as a gain offset. |
+| Output | Adjusts gain before the transformer and offsets the matched level when Auto is enabled. |
 | Mix | Adds the driver-minus-reference wet signal to the latency-aligned clean input. |
 | Core drive | Increases saturation in the enabled output transformer. |
 | DC bias | Adds transformer asymmetry to increase even harmonics. |

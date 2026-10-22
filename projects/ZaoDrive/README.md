@@ -32,7 +32,9 @@ residual, which Tone filters from 1.2–18 kHz. Mix adds that residual to the cl
 Output sets the level entering the optional transformer.
 
 **Auto**, in the Output section, matches the RMS of the preview's input and
-processed output using a fixed correction after the transformer. It uses the
+processed output using a fixed correction after the transformer, then applies
+the Output knob as an offset from that matched level. At 0 dB it matches RMS,
+at +6 dB it is 6 dB louder, and at −6 dB it is 6 dB quieter. It uses the
 same −12 dBFS, 1 kHz triangle reference waveform shown in Expected Output. There is no
 live RMS detector, averaging or automatic reaction to the music: the correction
 stays constant between reference updates, preserving the input's dynamics.
@@ -41,7 +43,8 @@ even with the editor closed. Only changes to the correction fade over 20 ms;
 this avoids clicks without continuously modulating the gain. Auto defaults Off,
 is saved with presets and follows host automation. Existing presets load Off.
 The Output knob still controls gain entering the transformer; Auto compensates
-its resulting reference level. Correction is bounded to ±36 dB, with a silent
+its resulting reference level before adding the same knob value as a final trim.
+This retains the transformer coloration while allowing manual level adjustment. Correction is bounded to ±36 dB, with a silent
 reference guard. See the [Auto report](Tests/Reports/auto-report.md) and
 [enabled preview](Previews/zao-auto.png).
 

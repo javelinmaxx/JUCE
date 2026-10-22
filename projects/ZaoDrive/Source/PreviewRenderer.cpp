@@ -96,6 +96,7 @@ void PreviewRenderer::run()
         engine.getSmart().setPreview (settings.smart && ! settings.bypass
             && analysis.signature == SmartAnalyser::signature (settings) ? analysis : SmartAnalyser::Result {});
         const auto matchPreview = settings.autoCompensate && ! settings.bypass;
+        const auto outputTrim = juce::Decibels::decibelsToGain (std::clamp (settings.outputDb, -24.0f, 12.0f));
         // Render without compensation, then derive the exact fixed RMS ratio
         // from this same preview snapshot for both the UI and live audio.
         settings.autoCompensate = false;
@@ -128,7 +129,7 @@ void PreviewRenderer::run()
             frame.peak = 0;
             for (auto& sample : frame.output)
             {
-                if (matchPreview) sample *= amount;
+                if (matchPreview) sample *= amount*outputTrim;
                 frame.peak = std::max (frame.peak, std::abs (sample));
             }
         }

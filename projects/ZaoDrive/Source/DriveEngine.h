@@ -37,7 +37,7 @@ public:
         cleanDelay = {}; toneState = {};
         circuitPosition = dryPosition = transformerPosition = bypassPosition = 0;
         for (auto* smoother : { &inputGain, &driveGain, &toneCutoff, &outputGain, &wetMix,
-                                 &coreGain, &bias, &transformerBlend, &bypassBlend })
+                                 &coreGain, &bias, &transformerBlend, &bypassBlend, &autoTrimBlend })
             smoother->reset (rate, 0.02);
         for (auto& weight : modelWeights) weight.reset (rate * 4, 0.01);
         for (auto* smoother : { &bjtBias, &driverResistance, &driverCurrent, &driverCoefficient })
@@ -135,6 +135,9 @@ public:
                 }
                 const auto coefficient = toneCoefficient;
                 const auto mix = wetMix.getNextValue(), gain = outputGain.getNextValue();
+                // Auto corrects the complete circuit/transformer reference, then
+                // Output offsets that matched level instead of being cancelled.
+                const auto trim = 1.0f + autoTrimBlend.getNextValue() * (gain-1.0f);
                 const auto core = coreGain.getNextValue(), asymmetry = bias.getNextValue();
                 if (settings.transformer && warmSamples > 0 && --warmSamples == 0)
                     transformerBlend.setTargetValue (1.0f);
@@ -183,7 +186,7 @@ public:
                 for (int ch = 0; ch < channels; ++ch)
                 {
                     const auto c = static_cast<size_t> (ch);
-                    const auto wet = matched[c], bypassed = bypassedSamples[c];
+                    const auto wet = matched[c]*trim, bypassed = bypassedSamples[c];
                     const auto output = bypassAmount >= 1.0f ? bypassed : wet + bypassAmount * (bypassed - wet);
                     buffer.setSample (ch, offset + i, std::isfinite (output) ? output : 0.0f);
                 }
@@ -231,6 +234,7 @@ private:
         set (driveGain, juce::Decibels::decibelsToGain (std::clamp (s.driveDb, 0.0f, 36.0f)));
         set (toneCutoff, std::clamp (s.toneHz, 1200.0f, static_cast<float> (std::min (18000.0, sampleRate * 0.45))));
         set (outputGain, juce::Decibels::decibelsToGain (std::clamp (s.outputDb, -24.0f, 12.0f)));
+        set (autoTrimBlend, s.autoCompensate ? 1.0f : 0.0f);
         set (wetMix, std::clamp (s.mix, 0.0f, 1.0f));
         set (coreGain, juce::Decibels::decibelsToGain (std::clamp (s.coreDriveDb, 0.0f, 18.0f)));
         set (bias, std::clamp (s.dcBias, 0.0f, 1.0f));
@@ -286,7 +290,7 @@ private:
     bool toneCoefficientValid = false;
     size_t circuitPosition = 0, dryPosition = 0, transformerPosition = 0, bypassPosition = 0;
     juce::SmoothedValue<float> inputGain, driveGain, toneCutoff, outputGain, wetMix;
-    juce::SmoothedValue<float> coreGain, bias, transformerBlend, bypassBlend;
+    juce::SmoothedValue<float> coreGain, bias, transformerBlend, bypassBlend, autoTrimBlend;
     juce::SmoothedValue<float> bjtBias, driverResistance, driverCurrent, driverCoefficient;
     std::array<juce::SmoothedValue<float>, circuitCount> modelWeights;
 };

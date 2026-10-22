@@ -14,7 +14,7 @@ std::vector<DiodeMeasurement> diodeMeasurements;
 double aliasReductionDb = 0, siliconFlatFraction = 0, schottkyFlatFraction = 0;
 struct ShapeResidual { double rate, control, bjt, shunt, series; };
 std::vector<ShapeResidual> shapeResiduals;
-struct AutoMeasurement { double rate; int mode; bool transformer; double gain, errorDb; };
+struct AutoMeasurement { double rate; int mode; bool transformer; double outputDb, gain, errorDb; };
 std::vector<AutoMeasurement> autoMeasurements;
 void check (bool pass, const char* message)
 {
@@ -500,9 +500,12 @@ void autoCompensatorTests()
     zao::PreviewRenderer renderer;
     zao::PreviewFrame frame;
     for (int mode = 0; mode < 4; ++mode)
+    for (bool transformer : { false, true })
+    for (float outputDb : { -12.f, 0.f, 6.f })
     {
         zao::Settings settings; settings.model = mode; settings.autoCompensate = true;
-        settings.transformer = mode % 2 == 1; settings.outputDb = -12;
+        settings.transformer = transformer; settings.outputDb = outputDb;
+        const auto trim = juce::Decibels::decibelsToGain (outputDb);
         renderer.request (settings, {});
         const auto deadline = juce::Time::getMillisecondCounterHiRes()+3000;
         bool ready = false;
@@ -514,9 +517,9 @@ void autoCompensatorTests()
             in += static_cast<double> (frame.input[i])*frame.input[i];
             out += static_cast<double> (frame.output[i])*frame.output[i];
         }
-        const auto errorDb = 10*std::log10 (out/in);
-        autoMeasurements.push_back ({ 48000, mode, settings.transformer, frame.matchingGain, errorDb });
-        check (std::abs (errorDb) < 1e-5, "Auto preview input and output have the same RMS without time averaging");
+        const auto errorDb = 10*std::log10 (out/in)-outputDb;
+        autoMeasurements.push_back ({ 48000, mode, settings.transformer, outputDb, frame.matchingGain, errorDb });
+        check (std::abs (errorDb) < 1e-5, "Auto preview RMS follows negative, zero and positive Output offsets with either transformer state");
 
         // Compare the same live engine with and without a fixed published
         // correction while changing input level; only the final gain may differ.
@@ -539,9 +542,9 @@ void autoCompensatorTests()
                 for (int ch = 0; ch < 2; ++ch)
                     for (int i = 0; i < 128; ++i)
                         error = std::max (error, std::abs (static_cast<double> (b.getSample (ch, i)
-                            -a.getSample (ch, i)*frame.matchingGain)));
+                            -a.getSample (ch, i)*frame.matchingGain*trim)));
         }
-        check (error < 1e-6, "Auto applies the exact fixed reference gain after coloration without live RMS tracking");
+        check (error < 1e-6, "Auto applies fixed reference correction plus manual Output offset after coloration without live RMS tracking");
         compensated.bypass = true;
         for (int i = 0; i < 16; ++i) { b.clear(); matched.process (b, compensated); }
         std::vector<float> impulse;
@@ -1140,13 +1143,18 @@ void editorTests (const juce::File& destination, bool tooltip, int previewMode, 
            "Auto starts Off beside the Output section header");
     automatic->setToggleState (true, juce::sendNotificationSync);
     check (processor.getSettings().autoCompensate, "Auto button updates its host parameter");
-    for (int i = 0; i < 24; ++i) { juce::Thread::sleep (20); juce::Timer::callPendingTimersSynchronously(); }
-    double previewPower = 0;
-    for (auto value : zaoEditor->getExpectedOutput()) previewPower += static_cast<double> (value)*value;
     // Exact RMS of a sampled triangle with 24 samples per ramp, including vertices.
     const auto triangleRms = .25*std::sqrt ((1.0+2.0/(24*24))/3.0);
-    check (std::abs (std::sqrt (previewPower/96)-triangleRms) < 1e-4,
-           "Auto preview shows the level-matched steady reference without extra circuit warmup");
+    for (float outputDb : { -6.f, 0.f, 6.f })
+    {
+        set (processor, "output", outputDb);
+        for (int i = 0; i < 24; ++i) { juce::Thread::sleep (20); juce::Timer::callPendingTimersSynchronously(); }
+        double previewPower = 0;
+        for (auto value : zaoEditor->getExpectedOutput()) previewPower += static_cast<double> (value)*value;
+        check (std::abs (std::sqrt (previewPower/96)-triangleRms*juce::Decibels::decibelsToGain (outputDb)) < 1e-4,
+               "Auto preview follows host Output offsets below, at and above the matched level");
+    }
+    set (processor, "output", -6);
     set (processor, "autoCompensate", 0);
     check (! automatic->getToggleState(), "Auto button follows host automation");
     check (model && contextual && transformer && window && model->getTextFromValue (0) == "BJT CE",
@@ -1260,8 +1268,8 @@ int main (int argc, char** argv)
         {
             juce::File directory (argv[2]); directory.createDirectory();
             std::ofstream csv (directory.getChildFile ("auto-rms.csv").getFullPathName().toStdString());
-            csv.precision (12); csv << "rate,mode,transformer,gain,error_db\n";
-            for (const auto& m : autoMeasurements) csv << m.rate << ',' << m.mode << ',' << m.transformer << ',' << m.gain << ',' << m.errorDb << '\n';
+            csv.precision (12); csv << "rate,mode,transformer,output_db,gain,error_db\n";
+            for (const auto& m : autoMeasurements) csv << m.rate << ',' << m.mode << ',' << m.transformer << ',' << m.outputDb << ',' << m.gain << ',' << m.errorDb << '\n';
         }
         std::cout << checks << " Zao Drive checks passed\n";
         return 0;

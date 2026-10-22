@@ -166,7 +166,7 @@ ZaoDriveEditor::ZaoDriveEditor (ZaoDriveProcessor& p) : AudioProcessorEditor (&p
     smartAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "smart", smart);
     clear.setTooltip ("Saves CPU when Off; applies the octave-shifted equal-loudness contour without frequency boosts.");
     clearAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "clear", clear);
-    autoCompensate.setTooltip ("Matches the preview input and output RMS with fixed stereo-linked gain compensation.");
+    autoCompensate.setTooltip ("Matches the preview RMS before applying the Output knob as a gain offset.");
     autoCompensateAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "autoCompensate", autoCompensate);
     bypass.setTooltip ("Bypasses the overdrive and transformer while preserving plugin latency.");
     transformer.setTooltip ("Saves CPU when Off; adds YinYang's transformer coloration when On.");
@@ -179,7 +179,7 @@ ZaoDriveEditor::ZaoDriveEditor (ZaoDriveProcessor& p) : AudioProcessorEditor (&p
         "Adjusts the level entering the selected circuit after optional Clear shaping.",
         "Increases the signal driving the selected overdrive circuit after optional Clear shaping.",
         "Sets the low-pass cutoff of the driver-minus-reference wet signal.",
-        "Adjusts gain before the output transformer and optional automatic RMS compensation.",
+        "Adjusts gain before the transformer and offsets the matched level when Auto is enabled.",
         "Adds the driver-minus-reference wet signal to the latency-aligned clean input.",
         "Increases saturation in the enabled output transformer.",
         "Adds transformer asymmetry to increase even harmonics."

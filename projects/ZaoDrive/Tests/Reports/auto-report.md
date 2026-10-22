@@ -4,7 +4,8 @@
 
 Auto uses a **fixed correction from the rendered preview waveform's RMS**.
 There is no live-input RMS detector, moving average, attack/release envelope or
-signal-dependent gain tracking. It matches the 1 kHz triangle preview reference; live
+signal-dependent gain tracking. It matches the 1 kHz triangle preview reference
+at Output 0 dB; other Output values add or subtract gain from that matched level. Live
 music keeps its dynamics and receives the same fixed gain between reference
 updates. The audio path and display use one shared reference calculation.
 
@@ -12,19 +13,23 @@ updates. The audio path and display use one shared reference calculation.
 
 The worker renders the same −12 dBFS, 1 kHz triangle reference and existing 4,096-sample
 warmup as the display. The triangle retains the previous ±0.25 FS peak
-and 48-sample period at 48 kHz, with two cycles in the snapshot. It measures the 96-sample, two-cycle input and processed
-output snapshot after Clear, the circuit, Tone, Mix, Output and the transformer:
+and 48-sample period at 48 kHz. It measures the 96-sample, two-cycle input
+and processed output snapshot after Clear, the circuit, Tone, Mix, Output and the transformer:
 
 ```text
 reference gain = sqrt(sum(preview input²) / sum(uncompensated preview output²))
-output = processed audio × reference gain
+output = processed audio × reference gain × 10^(Output dB / 20)
 ```
 
 The correction uses the rendered target snapshot, not the display's interpolated
 animation frames. Auto is applied after the transformer and before the host
 bypass crossfade. Both stereo channels use one gain, so stereo balance is
-preserved. Output still sets the level entering the transformer; Auto corrects
-its resulting reference level. Reported latency does not change.
+preserved. Output still sets the level entering the transformer, retaining its
+coloration behavior; Auto corrects its resulting reference level and then applies
+the knob value as a final trim. Thus −12 dB, 0 dB and +6 dB produce those RMS
+offsets from the preview input. Auto Off retains the original signal path.
+The trim fades on Auto switching and follows the existing 20 ms Output smoothing.
+Reported latency does not change.
 
 The processor owns the reference worker, so calibration works with the editor
 closed. Control and Smart-snapshot changes trigger an updated reference, at most
@@ -41,18 +46,22 @@ invalid reference uses unity, and correction is bounded to ±36 dB.
 ## Measurements
 
 The independent reference test uses default Drive/Tone/Mix/Clear settings,
-Output −12 dB, and the transformer enabled in the two cases indicated below.
+Output −12/0/+6 dB, and every circuit with the transformer both Off and On.
 All cases use the display's 48 kHz reference engine. Host sample rate does not
 change that reference definition.
 
-| Circuit | Transformer | Fixed correction | Preview output/input RMS error |
-| --- | --- | ---: | ---: |
-| BJT CE | Off | +4.420 dB | -6.622e-09 dB |
-| OPAMP FB | On | +12.926 dB | -1.458e-07 dB |
-| DIODE SHUNT | Off | +14.741 dB | -2.894e-08 dB |
-| CROSSOVER | On | +13.137 dB | -2.190e-07 dB |
+| Circuit | Transformer | RMS offset at −12 dB | At 0 dB | At +6 dB | Maximum error |
+| --- | --- | ---: | ---: | ---: | ---: |
+| BJT CE | Off | -12.000 dB | -0.000 dB | +6.000 dB | 4.293e-07 dB |
+| BJT CE | On | -12.000 dB | +0.000 dB | +6.000 dB | 4.467e-07 dB |
+| OPAMP FB | Off | -12.000 dB | -0.000 dB | +6.000 dB | 3.188e-07 dB |
+| OPAMP FB | On | -12.000 dB | -0.000 dB | +6.000 dB | 8.459e-07 dB |
+| DIODE SHUNT | Off | -12.000 dB | -0.000 dB | +6.000 dB | 3.309e-07 dB |
+| DIODE SHUNT | On | -12.000 dB | +0.000 dB | +6.000 dB | 3.335e-07 dB |
+| CROSSOVER | Off | -12.000 dB | +0.000 dB | +6.000 dB | 6.575e-07 dB |
+| CROSSOVER | On | -12.000 dB | -0.000 dB | +6.000 dB | 3.611e-07 dB |
 
-Data: [auto-rms.csv](auto-rms.csv). Each measured RMS error is below 1e-5 dB.
+Data: [auto-rms.csv](auto-rms.csv). Each measured RMS error relative to the requested Output offset is below 1e-5 dB.
 These measurements describe the preview-reference criterion, not a promise of
 continuous RMS normalization of arbitrary input material.
 
@@ -65,7 +74,7 @@ the optional transformer: only the published fixed output gain may differ.
 Host bypass remains an exact delayed impulse. Separate tests check hidden-editor
 calibration, recalculation after Output changes, no gain change from live
 content, saved-state recall and legacy Auto-Off migration. Native editor tests
-check placement, host automation, reference-RMS equality and preview updates.
+check placement, host automation, negative/zero/positive RMS offsets and preview updates.
 Linux Release VST3 and Standalone builds passed. macOS and Windows builds were
 not run.
 
