@@ -1,7 +1,0 @@
-Target dependency graph (3 targets)
-Target 'CharacterCompressor_AU' in project 'CharacterCompressor'
-➜ Explicit dependency on target 'ZERO_CHECK' in project 'CharacterCompressor'
-➜ Explicit dependency on target 'CharacterCompressor' in project 'CharacterCompressor'
-Target 'CharacterCompressor' in project 'CharacterCompressor'
-➜ Explicit dependency on target 'ZERO_CHECK' in project 'CharacterCompressor'
-Target 'ZERO_CHECK' in project 'CharacterCompressor' (no dependencies)

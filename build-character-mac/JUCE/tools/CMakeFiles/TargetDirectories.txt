@@ -1,7 +1,0 @@
-/Users/andy/git repos/JUCE/build-character-mac/JUCE/tools/CMakeFiles/install.dir
-/Users/andy/git repos/JUCE/build-character-mac/JUCE/tools/CMakeFiles/ALL_BUILD.dir
-/Users/andy/git repos/JUCE/build-character-mac/JUCE/tools/CMakeFiles/ZERO_CHECK.dir
-/Users/andy/git repos/JUCE/build-character-mac/JUCE/tools/modules/CMakeFiles/install.dir
-/Users/andy/git repos/JUCE/build-character-mac/JUCE/tools/extras/Build/CMakeFiles/install.dir
-/Users/andy/git repos/JUCE/build-character-mac/JUCE/tools/extras/Build/juceaide/CMakeFiles/juceaide.dir
-/Users/andy/git repos/JUCE/build-character-mac/JUCE/tools/extras/Build/juceaide/CMakeFiles/install.dir
