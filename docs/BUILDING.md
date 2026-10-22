@@ -4,13 +4,13 @@
 
 ## Get the source and build scripts
 
-This repository includes the JUCE framework and six independent plug-in
+This repository includes the JUCE framework and seven independent plug-in
 projects: [`projects/YinyangCompressor`](../projects/YinyangCompressor),
 [`projects/ShunDeEss`](../projects/ShunDeEss),
 [`projects/KuoStereo`](../projects/KuoStereo),
 [`projects/ZaoDrive`](../projects/ZaoDrive),
-[`projects/RenTransformer`](../projects/RenTransformer), and
-[`projects/KuoVelvet`](../projects/KuoVelvet). Zao Drive models a common-emitter BJT
+[`projects/RenTransformer`](../projects/RenTransformer), [`projects/KuoVelvet`](../projects/KuoVelvet), and
+[`projects/XuanPhase`](../projects/XuanPhase). Zao Drive models a common-emitter BJT
 amplifier with adjustable bias, a Schottky op-amp feedback clipper, a diode shunt
 clipper, and series-diode crossover distortion with adjustable driver impedance,
 plus an expected-output display
@@ -18,14 +18,14 @@ and YinYang's optional transformer stage.
 [`Ren Transformer`](../projects/RenTransformer/README.md) isolates YinYang's transformer
 and output controls, and [`Kuo Velvet`](../projects/KuoVelvet/README.md) isolates
 Kuo Stereo's Velvet widening with spectral transient protection in a compact UI.
-All six projects share an analog visual style while keeping independent processors and
+All seven projects share an analog visual style while keeping independent processors and
 build targets. You do not need another JUCE download. All build commands below
 run from the repository root.
 
 Build SHUN DE-ESS, Kuo Stereo, and Zao Drive with CMake using their
 [SHUN](../projects/ShunDeEss/README.md), [Kuo](../projects/KuoStereo/README.md), and
 [Zao](../projects/ZaoDrive/README.md)
-instructions. The `build-macos-all.sh` script builds all six projects as
+instructions. The `build-macos-all.sh` script builds all seven projects as
 VST3 and AU; the individual platform scripts build YinYang Compressor. The Windows
 GitHub workflows provide a manual build of all six plugins and the existing
 automatic YinYang Compressor and SHUN DE-ESS builds.
@@ -98,7 +98,7 @@ rescan its plug-ins. The build links the MSVC runtime statically.
 
 ### Build with GitHub Actions
 
-To build **all six plugins**, open
+To build **the original six plugins**, open
 [All Plugins - Windows VST3](https://github.com/javelinmaxx/Multi-Compressor/actions/workflows/all-plugins-windows.yml)
 in Actions and select **Run workflow** on `master`. This workflow runs only
 when manually requested; pushes and pull requests do not start it. Each plugin
@@ -135,7 +135,7 @@ Install **CMake 3.22 or newer** compatible with your macOS version. Ensure
 sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
 ```
 
-To build **all six plugins as both VST3 and AU**, run:
+To build **all seven plugins as both VST3 and AU**, run:
 
 ```bash
 ./build-macos-all.sh
@@ -264,6 +264,7 @@ and test option below when following a single-project example:
 | `projects/ZaoDrive` | `ZaoDrive_VST3` | `ZAO_BUILD_TESTS` |
 | `projects/RenTransformer` | `RenTransformer_VST3` | `REN_BUILD_TESTS` |
 | `projects/KuoVelvet` | `KuoVelvet_VST3` | `VELVET_BUILD_TESTS` |
+| `projects/XuanPhase` | `XuanPhase_VST3` | `XUAN_BUILD_TESTS` |
 
 Replace `_VST3` with `_Standalone` for the standalone application, or `_AU`
 for an Audio Unit on macOS. AU targets are available only on macOS.

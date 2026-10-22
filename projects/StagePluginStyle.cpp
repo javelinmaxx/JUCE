@@ -107,7 +107,7 @@ void StageBypassButton::paintButton (juce::Graphics& g, bool highlighted, bool d
     g.drawRoundedRectangle (bounds, 6, 1.0f);
     g.setColour (active ? foreground : secondary);
     g.setFont (juce::FontOptions (10.0f).withStyle ("bold"));
-    g.drawText ("BYPASS", bounds.toNearestInt(), juce::Justification::centred);
+    g.drawText (getButtonText(), bounds.toNearestInt(), juce::Justification::centred);
 }
 
 void StageTransformerSwitch::paintButton (juce::Graphics& g, bool, bool)

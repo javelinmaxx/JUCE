@@ -1,7 +1,7 @@
 # Multi-Compressor
 
-Six J-SONIC audio plugins for dynamics, de-essing, stereo width, overdrive,
-and transformer coloration. Built with JUCE and C++17, with VST3 and Standalone
+Seven J-SONIC audio plugins for dynamics, de-essing, stereo width, overdrive,
+transformer coloration, and phase alignment. Built with JUCE and C++17, with VST3 and Standalone
 targets on Windows, macOS, and Linux, plus Audio Units on macOS.
 
 The editors support 50%–120% resizing, one-sentence hover hints, host automation,
@@ -21,6 +21,7 @@ the JUCE framework is included in this repository.
 | [Zao Drive](projects/ZaoDrive/README.md) | Overdrive | Four circuit models, Smart harmonic shaping, Clear contour, waveform preview, Auto compensation |
 | [Ren Transformer](projects/RenTransformer/README.md) | Transformer coloration | YinYang's transformer stage in a compact four-knob interface |
 | [Kuo Velvet](projects/KuoVelvet/README.md) | Convolution widening | Kuo's Velvet stage with Width, Transient, Attack, and Output controls |
+| [Xuan Phase](projects/XuanPhase/README.md) | Phase rotation | Independent low/high rotation, fixed 25 ms reference, spectral transient alignment and Auto Depth |
 
 ### YinYang Compressor
 
@@ -123,6 +124,19 @@ attacks; this compact version omits Haas search, meters, and band controls.
 [Controls and processing](projects/KuoVelvet/README.md) ·
 [Processor checks](projects/KuoVelvet/Tests/REPORT.md)
 
+### Xuan Phase
+
+![Xuan Phase with independent Low Phase and High Phase knobs, Crossover, Auto Depth, and Output](projects/XuanPhase/Previews/xuan-phase.png)
+
+Rotate the low and high frequencies independently through ±180°, with a smooth
+adjustable crossover and a fixed **25 ms** reference delay. **Auto** detects
+clear transients and uses their spectrogram phase and phase slopes to align
+narrow frequency bands; **Auto Depth** scales that correction independently of
+the manual settings. Shared stereo processing preserves channel relationships.
+
+[Controls and signal path](projects/XuanPhase/README.md) ·
+[Phase and transient measurements](projects/XuanPhase/Tests/Reports/REPORT.md)
+
 ## Measured examples
 
 ### Four approaches to compression
@@ -159,7 +173,7 @@ git clone --branch master https://github.com/javelinmaxx/Multi-Compressor.git
 cd Multi-Compressor
 ```
 
-**macOS — build all six plugins as VST3 and AU:** install full Xcode and CMake,
+**macOS — build all seven plugins as VST3 and AU:** install full Xcode and CMake,
 then run:
 
 ```bash
@@ -172,7 +186,8 @@ installing by default. See `./build-macos-all.sh --help` for all options.
 
 **Windows — build VST3:** the manual
 [All Plugins - Windows VST3 workflow](https://github.com/javelinmaxx/Multi-Compressor/actions/workflows/all-plugins-windows.yml)
-builds all six projects. For a local YinYang build, use
+packages the original six projects; Xuan Phase can be built locally with
+`XuanPhase_VST3`. For a local YinYang build, use
 [`build-windows-vst3.ps1`](build-windows-vst3.ps1) with Visual Studio 2022's C++
 tools. The [build guide](docs/BUILDING.md#windows-vst3) covers local commands,
 workflow artifacts, and installation.
