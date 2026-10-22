@@ -12,6 +12,7 @@ struct Settings
     float coreDriveDb = 6, dcBias = 0;
     int model = 0;
     bool transformer = false, bypass = false;
+    float bjtBias = 0, diodeKnee = 0.5f;
 };
 
 class DriveEngine
@@ -40,6 +41,8 @@ public:
                                  &coreGain, &bias, &transformerBlend, &bypassBlend })
             smoother->reset (rate, 0.02);
         for (auto& weight : modelWeights) weight.reset (rate * 4, 0.01);
+        for (auto* smoother : { &bjtBias, &driverResistance, &driverCurrent, &driverCoefficient })
+            smoother->reset (rate * 4, 0.02);
         firstSettings = true; transformerRunning = false; warmSamples = 0;
     }
 
@@ -65,11 +68,15 @@ public:
             auto highRate = oversampling->processSamplesUp (hostBlock);
             for (size_t i = 0; i < highRate.getNumSamples(); ++i)
             {
+                const auto biasVolts = static_cast<double> (bjtBias.getNextValue());
+                const DriverParameters driver { driverResistance.getNextValue(), driverCurrent.getNextValue(), driverCoefficient.getNextValue() };
                 std::array<float, circuitCount> weights;
                 for (size_t mode = 0; mode < circuitCount; ++mode) weights[mode] = modelWeights[mode].getNextValue();
                 for (int ch = 0; ch < channels; ++ch)
                 {
                     const auto c = static_cast<size_t> (ch);
+                    bjt[c].setBiasVolts (biasVolts);
+                    shunt[c].setDriverParameters (driver); crossover[c].setDriverParameters (driver);
                     const auto input = static_cast<double> (highRate.getSample (c, i));
                     double output = 0;
                     for (size_t mode = 0; mode < circuitCount; ++mode)
@@ -157,6 +164,17 @@ private:
         set (coreGain, juce::Decibels::decibelsToGain (std::clamp (s.coreDriveDb, 0.0f, 18.0f)));
         set (bias, std::clamp (s.dcBias, 0.0f, 1.0f));
         set (bypassBlend, s.bypass ? 1.0f : 0.0f);
+        set (bjtBias, std::clamp (s.bjtBias, -1.0f, 1.0f) * 0.8f);
+        const auto driver = DriverParameters::fromKnee (sampleRate * 4.0, s.diodeKnee);
+        set (driverResistance, static_cast<float> (driver.resistance));
+        set (driverCurrent, static_cast<float> (driver.currentLimit));
+        set (driverCoefficient, static_cast<float> (driver.coefficient));
+        if (firstSettings)
+            for (auto& circuit : bjt)
+            {
+                circuit.setBiasVolts (bjtBias.getCurrentValue());
+                circuit.reset();
+            }
         const auto selected = static_cast<size_t> (std::clamp (s.model, 0, static_cast<int> (circuitCount - 1)));
         for (size_t mode = 0; mode < circuitCount; ++mode)
         {
@@ -193,6 +211,7 @@ private:
     size_t circuitPosition = 0, transformerPosition = 0, bypassPosition = 0;
     juce::SmoothedValue<float> inputGain, driveGain, toneCutoff, outputGain, wetMix;
     juce::SmoothedValue<float> coreGain, bias, transformerBlend, bypassBlend;
+    juce::SmoothedValue<float> bjtBias, driverResistance, driverCurrent, driverCoefficient;
     std::array<juce::SmoothedValue<float>, circuitCount> modelWeights;
 };
 }

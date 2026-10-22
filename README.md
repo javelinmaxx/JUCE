@@ -81,8 +81,9 @@ projects: [`projects/CharacterCompressor`](projects/CharacterCompressor),
 [`projects/ZaoDrive`](projects/ZaoDrive),
 [`projects/RenTransformer`](projects/RenTransformer), and
 [`projects/KuoVelvet`](projects/KuoVelvet). Zao Drive models a common-emitter BJT
-amplifier, an op-amp feedback diode clipper, a diode shunt clipper, and
-series-diode crossover distortion, with an expected-output display
+amplifier with adjustable bias, a Schottky op-amp feedback clipper, a diode shunt
+clipper, and series-diode crossover distortion with adjustable driver impedance,
+plus an expected-output display
 and YinYang's optional transformer stage.
 [`Ren Transformer`](projects/RenTransformer/README.md) isolates YinYang's transformer
 and output controls, and [`Kuo Velvet`](projects/KuoVelvet/README.md) isolates

@@ -11,8 +11,16 @@ An [op-amp mode preview](Previews/zao-opamp.png) shows the feedback clipper with
 the output transformer enabled; [Diode Shunt](Previews/zao-shunt.png) and
 [Crossover](Previews/zao-crossover.png) previews show the two passive circuits.
 
-The **Circuit** knob selects BJT CE, OPAMP FB, DIODE SHUNT, or CROSSOVER. Input adjusts the level entering
-the circuit, Drive adds up to 36 dB of excitation, and Tone filters the circuit
+The **Circuit** knob selects BJT CE, OPAMP FB, DIODE SHUNT, or CROSSOVER.
+The first knob changes with the mode:
+
+| Mode | First knob | Behavior |
+| --- | --- | --- |
+| BJT CE | Bias | Shifts the base-bias voltage by up to ±0.8 V around the nominal operating point. |
+| OPAMP FB | Input | Adjusts input level from −24 to +24 dB. |
+| DIODE SHUNT / CROSSOVER | Knee | Varies driver impedance, current limit and bandwidth from firm to soft. |
+
+Drive adds up to 36 dB of excitation, and Tone filters the circuit
 output from 1.2–18 kHz. Mix blends with the original input after latency alignment;
 Output sets the level entering the optional transformer.
 
@@ -51,18 +59,22 @@ topologies, device parameters, integration method, and model limits.
   all four circuit nodes at every oversampled step. Its physical inversion is
   corrected at the output so parallel mixing retains polarity.
 - **OPAMP FB:** a non-inverting amplifier with a 4.7 kΩ ground leg and 47 kΩ
-  feedback leg. Antiparallel Shockley diodes and a 51 pF capacitor sit inside the
+  feedback leg. Ballasted antiparallel Schottky diodes and a 51 pF capacitor sit inside the
   feedback loop. The solve includes 100 dB open-loop gain, a 3 MHz gain-bandwidth
-  product, ±4 V output rails, and a 1 V/µs slew limit.
-- **DIODE SHUNT:** a 4.7 kΩ source feeds a 100 kΩ load with antiparallel silicon
+  product, 100 Ω output impedance, a 100 kΩ receiver, ±4 V internal rails and a
+  1 V/µs slew limit.
+- **DIODE SHUNT:** a 4.7 kΩ source feeds a 100 kΩ load with ballasted antiparallel Schottky
   diodes shunting the output to ground. Quiet signals pass through; higher
   voltages flatten into diode-limited peaks.
-- **CROSSOVER:** antiparallel silicon diodes sit in series between a 1 kΩ source
+- **CROSSOVER:** ballasted antiparallel Schottky diodes sit in series between a 1 kΩ source
   and a 10 kΩ load. Their forward-voltage drop creates a central dead zone, with
   real leakage and capacitive feedthrough instead of a hard mathematical gate.
   Drive brings more of the signal above that conduction region. Both passive
   circuits use Shockley currents and trapezoidal capacitor companions, with a
-  fixed ×4 input-conditioning gain to make their default Drive setting useful.
+  fixed ×4 input-conditioning gain before a finite-current, finite-bandwidth
+  amplifier. At Knee 50% its output resistance is 2.2 kΩ, current limit 3.162 mA
+  and pole 15 kHz. All diode models use nominal Schottky junctions (200 nA Is,
+  31.02 mV nVt) with 220 Ω series ballast for a softer conducting knee.
 
 All four circuits keep independent left/right states. Parameters are smoothed;
 changing circuit crossfades over 10 ms, and inactive circuits then stop
@@ -72,7 +84,11 @@ audio callback.
 Existing two-mode sessions and normalized `model` automation remain compatible:
 the original 0/1 parameter still selects BJT/Op-Amp. The added `diodeCircuit`
 parameter selects the diode pair, where the same 0/1 parameter selects
-Shunt/Crossover. The UI combines both parameters into one four-position knob.
+Shunt/Crossover. The UI combines both parameters into one four-position knob. Bias and Knee
+are appended as independent parameters, so switching the first knob retains
+each control's saved value. Older states default to Bias 0% and Knee 50%.
+The legacy Input parameter retains its gain behavior for saved presets and host
+automation in every mode; its knob is visible in Op-Amp mode.
 
 ## Build and test
 

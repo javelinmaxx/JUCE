@@ -34,6 +34,7 @@ public:
 private:
     static constexpr int designWidth = 548, designHeight = 690;
     void timerCallback() override;
+    void updateInputControl (int circuit);
     void refreshPreview (const zao::Settings&);
     void paintExpectedOutput (juce::Graphics&);
     ZaoDriveProcessor& processor;
@@ -48,7 +49,8 @@ private:
     using State = juce::AudioProcessorValueTreeState;
     std::array<std::unique_ptr<State::SliderAttachment>, 7> attachments;
     std::unique_ptr<State::ButtonAttachment> bypassAttachment, transformerAttachment;
-    std::array<float, 10> previousSettings {};
+    std::array<float, 12> previousSettings {};
+    int inputControlCircuit = -1;
     bool previewReady = false;
     std::array<float, 96> expectedInput {}, expectedOutput {};
     float expectedPeak = 0;

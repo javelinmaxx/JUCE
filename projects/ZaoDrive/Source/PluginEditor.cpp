@@ -228,12 +228,34 @@ ZaoDriveEditor::ZaoDriveEditor (ZaoDriveProcessor& p) : AudioProcessorEditor (&p
         character->setValueNotifyingHost (selected % 2 == 1 ? 1.0f : 0.0f);
         diodePair->setValueNotifyingHost (selected >= 2 ? 1.0f : 0.0f);
         diodePair->endChangeGesture(); character->endChangeGesture();
+        updateInputControl (selected);
     };
     editorTooltips::setHint (model, modelLabel,
         "Selects BJT, op-amp feedback, diode shunt, or series-diode crossover distortion.");
     editorScaling::enable (*this, designWidth, designHeight);
     timerCallback();
     startTimerHz (5);
+}
+
+void ZaoDriveEditor::updateInputControl (int circuit)
+{
+    if (inputControlCircuit == circuit) return;
+    attachments[0].reset();
+    const auto* id = circuit == 0 ? "bjtBias" : circuit == 1 ? "input" : "diodeKnee";
+    const auto* name = circuit == 0 ? "BIAS" : circuit == 1 ? "INPUT" : "KNEE";
+    const auto* hint = circuit == 0
+        ? "Shifts the BJT base-bias voltage away from its nominal operating point."
+        : circuit == 1 ? "Adjusts the level entering the selected overdrive circuit."
+        : "Increases amplifier output impedance and softens current delivery into the Schottky diodes.";
+    auto& slider = sliders[0];
+    slider.setName (name); slider.setTitle (name);
+    slider.setTextValueSuffix (circuit == 1 ? " dB" : " %");
+    labels[0].setText (name, juce::dontSendNotification);
+    auto* parameter = processor.parameters.getParameter (id);
+    attachments[0] = std::make_unique<State::SliderAttachment> (processor.parameters, id, slider);
+    slider.setDoubleClickReturnValue (true, parameter->convertFrom0to1 (parameter->getDefaultValue()));
+    editorTooltips::setHint (slider, labels[0], hint);
+    inputControlCircuit = circuit;
 }
 
 void ZaoDriveEditor::refreshPreview (const zao::Settings& settings)
@@ -271,9 +293,10 @@ void ZaoDriveEditor::refreshPreview (const zao::Settings& settings)
 void ZaoDriveEditor::timerCallback()
 {
     const auto s = processor.getSettings();
+    updateInputControl (s.model);
     if (juce::roundToInt (model.getValue()) != s.model) model.setValue (s.model, juce::dontSendNotification);
-    const std::array<float, 10> current { s.inputDb, s.driveDb, s.toneHz, s.outputDb, s.mix,
-        s.coreDriveDb, s.dcBias, static_cast<float> (s.model), s.transformer ? 1.0f : 0.0f, s.bypass ? 1.0f : 0.0f };
+    const std::array<float, 12> current { s.inputDb, s.driveDb, s.toneHz, s.outputDb, s.mix,
+        s.coreDriveDb, s.dcBias, static_cast<float> (s.model), s.transformer ? 1.0f : 0.0f, s.bypass ? 1.0f : 0.0f, s.bjtBias, s.diodeKnee };
     if (! previewReady || current != previousSettings)
     {
         refreshPreview (s);

@@ -19,7 +19,7 @@ diode_dc = np.genfromtxt(destination / "diode-transfer.csv", delimiter=",", name
 diode_residuals = np.genfromtxt(destination / "diode-residuals.csv", delimiter=",", names=True)
 
 
-def dc_kcl(v):
+def dc_kcl(v, bias_offset=0):
     """Independent residual formulation from the documented component network."""
     base, emitter, collector, bypass = v
     forward = 6.734e-15 * np.expm1((base - emitter) / 0.02585)
@@ -27,7 +27,7 @@ def dc_kcl(v):
     collector_current = forward * (1 + (collector - emitter) / 100) - 1.25 * reverse
     base_current = forward / 200 + reverse / 4
     return np.array([
-        (base - 9) / 100000 + base / 22000 + base_current,
+        (base - 9) / 100000 + base / 22000 - bias_offset * (1/100000 + 1/22000) + base_current,
         (emitter - bypass) / 220 - collector_current - base_current,
         (collector - 9) / 4700 + collector_current,
         (bypass - emitter) / 220 + bypass / 820,
@@ -43,21 +43,55 @@ if dc_error > 1e-6:
     raise RuntimeError(f"DC reference mismatch: {dc_error} V")
 
 
-def diode_current(voltage):
-    return 2e-9 * (np.expm1(voltage / 0.049115) - np.expm1(-voltage / 0.049115))
+def diode_current(junction):
+    return 200e-9 * (np.expm1(junction / 0.03102) - np.expm1(-junction / 0.03102))
 
 
-shunt_reference = []
-series_reference = []
-for source in diode_dc["input_volts"]:
-    shunt_reference.append(brentq(lambda v: (v - source) / 4700 + v / 100000 + diode_current(v),
-                                  -1.5, 1.5, xtol=1e-14))
-    drop = brentq(lambda d: d + 11000 * diode_current(d) - source, -1.5, 1.5, xtol=1e-14)
-    series_reference.append((source - drop) * 10000 / 11000)
+def diode_reference(source, knee=0.5):
+    command = 9 * np.tanh(source/9)
+    resistance = 220 * 100**knee
+    limit = 0.01 * 0.1**knee
+    def shunt_kcl(j):
+        current = diode_current(j)
+        node = j + 220 * current
+        delivered = limit * np.tanh((command-node) / ((4700+resistance)*limit))
+        return node/100000 + current - delivered
+    junction = brentq(shunt_kcl, -1.5, 1.5, xtol=1e-14)
+    shunt = junction + 220 * diode_current(junction)
+    def series_kcl(j):
+        current = diode_current(j)
+        drop = j + 220*current
+        delivered = limit * np.tanh((command-drop-10000*current) / ((1000+resistance)*limit))
+        return current-delivered
+    junction = brentq(series_kcl, -1.5, 1.5, xtol=1e-14)
+    return shunt, 10000*diode_current(junction)
+
+
+references = np.array([diode_reference(source) for source in diode_dc["input_volts"]])
+shunt_reference, series_reference = references[:, 0], references[:, 1]
 shunt_error = np.max(np.abs(diode_dc["shunt_volts"] - shunt_reference))
 series_error = np.max(np.abs(diode_dc["series_volts"] - series_reference))
 if max(shunt_error, series_error) > 1e-6:
-    raise RuntimeError(f"Passive diode DC mismatch: {shunt_error}, {series_error} V")
+    raise RuntimeError(f"Loaded Schottky DC mismatch: {shunt_error}, {series_error} V")
+
+shape = np.genfromtxt(destination / "shape-waveforms.csv", delimiter=",", names=True)
+bias_dc = np.genfromtxt(destination / "bias-operating-points.csv", delimiter=",", names=True)
+knee_dc = np.genfromtxt(destination / "knee-transfer.csv", delimiter=",", names=True)
+shape_residuals = np.genfromtxt(destination / "shape-residuals.csv", delimiter=",", names=True)
+softness = np.genfromtxt(destination / "softness.csv", delimiter=",", names=True)
+bias_error = 0
+for row in bias_dc:
+    ref = root(lambda v: dc_kcl(v, row["bias"] * .008), [1.5, .9, 5, .7], tol=1e-11)
+    measured = np.array([row[n] for n in ("base", "emitter", "collector", "bypass")])
+    if not ref.success or np.max(np.abs(dc_kcl(ref.x, row["bias"]*.008))) > 1e-10:
+        raise RuntimeError("Biased BJT reference did not converge")
+    bias_error = max(bias_error, np.max(np.abs(measured-ref.x)))
+knee_error = 0
+for row in knee_dc:
+    ref = diode_reference(row["input_volts"], row["knee"]*.01)
+    knee_error = max(knee_error, abs(ref[0]-row["shunt_volts"]), abs(ref[1]-row["series_volts"]))
+if max(bias_error, knee_error) > 1e-6:
+    raise RuntimeError(f"Bias/Knee DC mismatch: {bias_error}, {knee_error}")
 
 
 def signal(model, drive, transformer=0):
@@ -110,7 +144,7 @@ for column, (mode, name, measured, reference_curve) in enumerate((
     ax = diode_axes[0, column]
     ax.plot(diode_dc["input_volts"], measured, color="#b77b45", label="C++ circuit")
     ax.plot(diode_dc["input_volts"][::12], np.asarray(reference_curve)[::12], ".", color="#333333", label="Independent DC root")
-    ax.set(title=f"{name}: static transfer", xlabel="Input voltage (V)", ylabel="Output voltage (V)")
+    ax.set(title=f"{name}: static transfer", xlabel="Amplifier command (V)", ylabel="Output voltage (V)")
     ax.legend(fontsize=8)
     ax.grid(alpha=0.15)
     for drive, color in zip((0, 12, 24), colors):
@@ -129,101 +163,148 @@ for column, (mode, name, measured, reference_curve) in enumerate((
     diode_axes[2, column].bar(np.arange(1, 16), levels + 120, bottom=-120, color="#b77b45", width=0.55)
     diode_axes[2, column].set(title="Harmonics at Drive 24 dB", xlabel="Harmonic number", ylabel="dBFS", ylim=(-120, 6))
     diode_axes[2, column].grid(axis="y", alpha=0.15)
-diode_fig.suptitle("Zao Drive passive diode circuits · 48 kHz / 4× oversampling", fontsize=15)
+diode_fig.suptitle("Zao Drive loaded Schottky circuits · 48 kHz / 4× oversampling", fontsize=15)
 diode_fig.savefig(destination / "diode-report.png", dpi=170)
 diode_fig.savefig(destination / "diode-report.pdf")
 
-rows = "\n".join(f"| {name} | {actual[i]:.9f} V | {reference.x[i]:.9f} V |"
-                 for i, name in enumerate(("Base", "Emitter", "Collector", "Emitter bypass")))
-opamp_second = (f"{harmonics[1][1]:.1f} dBFS" if harmonics[1][1] > -120 else "below −120 dBFS")
+shape_fig, shape_axes = plt.subplots(3, 3, figsize=(14, 10), constrained_layout=True)
+shape_axes[0, 0].plot(bias_dc["bias"], bias_dc["collector"], "o-", color="#b77b45", label="Collector")
+shape_axes[0, 0].plot(bias_dc["bias"], bias_dc["base"], "o-", color="#63646e", label="Base")
+shape_axes[0, 0].set(title="BJT idle operating point", xlabel="Bias (%)", ylabel="Voltage (V)")
+shape_axes[0, 0].legend(fontsize=8)
+for column, mode in enumerate((0, 2, 3)):
+    controls = (-100, 0, 100) if mode == 0 else (0, 50, 100)
+    for control, color in zip(controls, colors):
+        selected = shape[(shape["model"] == mode) & (shape["control"] == control)]
+        shape_axes[1, column].plot(np.arange(96)/48, selected["output"][-96:], color=color,
+                                  label=f"{'Bias' if mode == 0 else 'Knee'} {control}%")
+        spectrum = np.abs(np.fft.rfft(selected["output"])) * 2 / len(selected)
+        bins = np.arange(1, 12)*20
+        shape_axes[2, column].plot(np.arange(1, 12), 20*np.log10(np.maximum(spectrum[bins], 1e-9)),
+                                   "o-", color=color, markersize=3, label=f"{control}%")
+        if mode != 0:
+            rows = diode_dc if control == 50 else knee_dc[knee_dc["knee"] == control]
+            field = "shunt_volts" if mode == 2 else "series_volts"
+            shape_axes[0, column].plot(rows["input_volts"], rows[field], color=color, label=f"Knee {control}%")
+    shape_axes[1, column].set(title=("BJT Bias", "Shunt Knee", "Crossover Knee")[column]+" at Drive 12 dB",
+                              xlabel="Time (ms)", ylabel="Output (FS)")
+    shape_axes[1, column].legend(fontsize=8)
+    shape_axes[2, column].set(title="Harmonic balance", xlabel="Harmonic number", ylabel="dBFS", ylim=(-120, 6))
+    if mode != 0:
+        shape_axes[0, column].set(title="Loaded Schottky transfer", xlabel="Amplifier command (V)", ylabel="Receiver voltage (V)")
+        shape_axes[0, column].legend(fontsize=8)
+for ax in shape_axes.flat:
+    ax.grid(alpha=.15)
+shape_fig.suptitle("Zao Drive: BJT Bias and finite-impedance Schottky Knee", fontsize=15)
+shape_fig.savefig(destination / "shape-report.png", dpi=170)
+shape_fig.savefig(destination / "shape-report.pdf")
+
+rows = "\n".join(f"| {int(r['bias'])}% | {r['base']:.6f} V | {r['collector']:.6f} V |" for r in bias_dc)
 report = f"""# Zao Drive circuit test report
 
-![Circuit waveforms and spectra](circuit-report.png)
+![Bias and Knee behavior](shape-report.png)
 
-## Numerical circuit accuracy
+## Schottky diodes and amplifier impedance
 
-The four-node BJT DC solution is checked against a separate SciPy hybrid root
-solve of the resistor network and documented transistor currents, initialized
-independently of the C++ solution. Maximum node-voltage disagreement is
-**{dc_error:.3e} V**. This checks the nominal equations; it is not hardware calibration.
+All three diode circuits use nominal Schottky junctions (Is 200 nA, nVt
+31.02 mV) and a 220 Ω series ballast. A lower forward voltage alone does not
+ensure softness: the ballast gives the conducting pair a finite incremental
+resistance. The two external diode networks are driven by a loaded amplifier
+whose output impedance, current delivery and bandwidth depend on Knee:
 
-| Node | C++ model | Independent DC reference |
+| Knee | Driver resistance | Current limit | Bandwidth |
+| --- | --- | --- | --- |
+| 0% | 220 Ω | 10 mA | 45 kHz |
+| 50% | 2.2 kΩ | 3.162 mA | 15 kHz |
+| 100% | 22 kΩ | 1 mA | 5 kHz |
+
+These resistances add to the circuit's own source resistor. The amplifier's
+smooth ±9 V swing and smooth current limit enter the receiving circuit's KCL;
+the driver is not an ideal gain feeding a square voltage clamp. Knee controls
+impedance and headroom, so it also changes level. The feedback mode additionally
+models 100 Ω op-amp output resistance supplying the feedback network and a
+100 kΩ receiver, while retaining its ±4 V internal rail and 1 V/µs slew limits.
+
+For a 4 V, 1 kHz shunt command at 192 kHz internal rate, the fraction of samples
+above 95% of each waveform's own peak falls from
+**{float(softness['silicon_flat_fraction'])*100:.1f}%** in an independent static
+solve of the former ideal-source silicon network to
+**{float(softness['schottky_flat_fraction'])*100:.1f}%** in the new loaded
+Schottky circuit. This is a specified flat-top benchmark, not a listening test.
+
+## BJT nonideal bias
+
+Bias shifts the base divider's Thevenin voltage by −0.8 to +0.8 V while retaining
+its source impedance. It changes the transistor's actual DC operating point and
+asymmetric headroom; it is not a digital offset added after clipping. The input
+and emitter coupling states are initialized at that operating point. During
+automation, Bias and the diode driver parameters are smoothed over 20 ms.
+
+| Bias | Base | Collector |
 | --- | --- | --- |
 {rows}
 
-Sustained 1.3 kHz input voltages of 0.035, 0.35, 3.5, and 12 V were exercised at
-128, 192, and 384 kHz internal rates. These cover forward-active operation,
-cutoff, saturation, and overload. Maximum BJT KCL residual was
-**{max(residuals['bjt_residual_amps']):.3e} A**; maximum op-amp equation residual
-was **{max(residuals['opamp_residual_volts']):.3e} V**. Op-amp output stayed within
-its ±4 V rails. Antiparallel-diode symmetry was checked with inverse inputs.
-Broadband ±12 V noise and abrupt polarity reversals also check convergence and
-the op-amp's slew limit through transient overload.
+Independent SciPy DC solves agree within **{bias_error:.3e} V** across these bias
+settings; nominal-bias node error is **{dc_error:.3e} V**. Maximum BJT KCL residual
+under ±12 V noise and overload, across Bias −100/0/+100% and internal rates
+128/192/384 kHz, is **{max(shape_residuals['bjt_amps']):.3e} A**.
 
-## Overdrive and expected-output display
+## Numerical validation
 
-The upper plots use a −12 dBFS 1 kHz reference at Drive 0, 12, and 24 dB with
-Output 0 dB, Mix 100%, Tone 18 kHz, and transformer Off. The BJT's asymmetric
-clipping differs from the odd-symmetric op-amp feedback characteristic. At Drive
-12 dB, the second harmonic is **{harmonics[0][1]:.1f} dBFS** for BJT and
-**{opamp_second}** for op-amp. The UI runs this same engine with the
-current controls, using a fresh independent state and a settled reference input.
+![Schottky transfer curves and waveforms](diode-report.png)
 
-A 9 kHz op-amp input at Drive 24 dB tests the 21 kHz folded third harmonic.
-The oversampled audio path reduces that component by
-**{float(alias['reduction_db']):.1f} dB** against the circuit run directly at 48 kHz.
-This comparison includes the oversampled path's post-circuit Tone filter.
+Independent bracketing solves include the Schottky ballast, amplifier current
+limit, amplifier resistance and receiving load. The settled C++ transfer curves
+agree within **{shunt_error:.3e} V** (shunt) and **{series_error:.3e} V** (crossover)
+at Knee 50%; maximum error at the Knee endpoints is **{knee_error:.3e} V**.
+The largest shunt/crossover KCL residuals at all three Knee positions under
+noise and abrupt overload at 128/192/384 kHz are
+**{max(shape_residuals['shunt_amps']):.3e} A** and
+**{max(shape_residuals['series_amps']):.3e} A**. The scalar solves are bounded to
+40 iterations; very stiff capacitor transitions can stop above the 1e-12 A
+convergence target while remaining within the tested 1e-9 A bound.
+The feedback circuit's largest equation residual in the level sweep is
+**{max(residuals['opamp_residual_volts']):.3e} V**. Its rails, slew rate and diode
+symmetry are tested independently of these DC checks.
 
-## Transformer and host behavior
+## Audio, transformer and host behavior
 
-The lower plots toggle the directly reused YinYang transformer at Core Drive
-12 dB and DC Bias 30%. A separate sample-for-sample test isolates the transformer
-with Mix 0% and verifies agreement with the original YinYang class below 1e-6 FS.
-Dry mix and bypass impulse tests verify the reported integer latency and stereo
-isolation. Maximum-drive processing remains finite at 44.1, 48, and 96 kHz,
-including blocks larger than prepareToPlay's block size. Host state round trips
-retain the circuit and transformer settings. Editor tests verify named model
-initialization, parameter updates, waveform changes, tooltips, and resizing.
+![Circuit waveforms, spectra and transformer](circuit-report.png)
 
-## Diode shunt and series crossover modes
+The plots use a −12 dBFS 1 kHz input, Output 0 dB, Mix 100%, Tone 18 kHz and
+transformer Off unless labeled. The shape plots sweep BJT Bias and diode Knee
+at Drive 12 dB. A 9 kHz op-amp input at Drive 24 dB has **{float(alias['reduction_db']):.1f} dB**
+less folded third harmonic with 4× circuit oversampling than at the host rate.
+YinYang's directly included transformer still matches the original class within
+1e-6 FS when isolated with Mix 0%. Dry mix and bypass preserve reported latency.
+Mono/stereo, oversized blocks, parameter recall, and maximum-drive stability
+while Bias/Knee automation changes are also exercised.
 
-![Passive diode transfer curves and waveforms](diode-report.png)
+The first knob binds to BJT Bias, Op-Amp Input, or the shared diode Knee according
+to mode. Bias and Knee use new independent host parameters, preserving the
+existing parameter IDs, normalized circuit mapping and input-gain automation.
+Old presets default to Bias 0% and Knee 50% even after another preset has used
+different values. The expected-output display uses the same engine and includes
+the new controls. Native editor checks cover all four contextual bindings,
+parameter changes, one-sentence hints, and 50–120% scaling.
 
-The shunt pair limits peaks across its load, while the series pair creates a
-central dead zone before conducting. Both are passive networks, so their
-levels differ from the active amplifier modes. The same Input, Drive, Tone,
-Output, Mix, and transformer controls remain available.
-Both passive modes use ×4 input conditioning; the static plots specify source
-voltage after that gain, while waveform plots use the common digital reference.
+The models specify nominal components; they are not a calibrated particular
+pedal or Schottky part. Full equations and limits are in
+[CIRCUITS.md](../../CIRCUITS.md). Raw data includes
+[shape-waveforms.csv](shape-waveforms.csv), [bias-operating-points.csv](bias-operating-points.csv),
+[knee-transfer.csv](knee-transfer.csv), [shape-residuals.csv](shape-residuals.csv),
+[waveforms.csv](waveforms.csv) and [diode-transfer.csv](diode-transfer.csv).
+The shape, circuit and diode figures have matching PDF versions.
 
-For DC source voltages from −3 to +3 V, independent SciPy bracketing solves
-check the settled C++ outputs against the documented resistor and Shockley
-equations. Maximum voltage disagreements are **{shunt_error:.3e} V** for shunt
-and **{series_error:.3e} V** for crossover. Broadband ±12 V noise and abrupt
-polarity reversals at 128, 192, and 384 kHz internal rates have maximum KCL
-residuals of **{max(diode_residuals['shunt_residual_amps']):.3e} A** and
-**{max(diode_residuals['series_residual_amps']):.3e} A**, respectively. Both
-networks retain odd symmetry, including their capacitor states.
+## Validation — 2026-10-22
 
-All four circuit positions are checked through host state recall, automation,
-and maximum-drive processing. A two-mode legacy state is also loaded after a
-diode-mode session to verify that it restores the original Op-Amp selection.
-The selector uses the original normalized two-choice parameter plus a diode-pair
-flag, preserving existing BJT/Op-Amp automation. The expected-output display
-uses these same models and scales to keep the passive circuits visible.
-
-Raw diode checks are in [diode-transfer.csv](diode-transfer.csv) and
-[diode-residuals.csv](diode-residuals.csv); the diode plots also have a
-[PDF version](diode-report.pdf).
-
-These are simulated circuit tests. The model limits are documented in
-[CIRCUITS.md](../../CIRCUITS.md); no full SPICE transient or physical-device
-calibration is claimed. Raw renders are in [waveforms.csv](waveforms.csv),
-[solver-residuals.csv](solver-residuals.csv), and
-[operating-point.csv](operating-point.csv). A printable figure is available as
-[PDF](circuit-report.pdf).
+Linux Release VST3 and Standalone builds passed without compiler warnings.
+All 137 circuit/processor checks passed. Native editor validation passed 182
+checks with the tooltip visible, including mode-specific control rebinding,
+independent host automation and recall, waveform updates and both resize limits.
+The per-mode preview runs each passed 181 checks. Windows workflows were not
+changed or run.
 """
 (destination / "report.md").write_text(report)
-print(f"Independent DC error: {dc_error:.3e} V")
-print(f"Diode reference errors: shunt {shunt_error:.3e} V, crossover {series_error:.3e} V")
+print(f"DC errors: nominal BJT {dc_error:.3e}, biased BJT {bias_error:.3e}, shunt {shunt_error:.3e}, crossover {series_error:.3e}, Knee endpoints {knee_error:.3e} V")
 print(f"Wrote {destination / 'report.md'}")

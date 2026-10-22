@@ -72,6 +72,10 @@ public:
         reset();
     }
 
+    // Shift the divider's Thevenin voltage while keeping its source resistance.
+    void setBiasVolts (double offset) noexcept { biasOffset = std::clamp (offset, -0.8, 0.8); }
+    double getBiasVoltage() const noexcept { return supply * bottomResistance / (topResistance + bottomResistance) + biasOffset; }
+
     void reset() noexcept
     {
         nodes = { 1.45, 0.80, 5.4, 0.63 };
@@ -154,7 +158,8 @@ private:
             -gm * early - forward / earlyVoltage, forward / earlyVoltage + (1.0 + 1.0 / betaReverse) * gr };
         const std::array<double, 3> dib { gm / betaForward + gr / betaReverse,
             -gm / betaForward, -gr / betaReverse };
-        f = { (v[0] - supply) / topResistance + v[0] / bottomResistance + ib,
+        f = { (v[0] - supply) / topResistance + v[0] / bottomResistance
+                  - biasOffset * (1.0 / topResistance + 1.0 / bottomResistance) + ib,
               (v[1] - v[3]) / emitterResistance - ic - ib,
               (v[2] - supply) / collectorResistance + ic,
               (v[3] - v[1]) / emitterResistance + v[3] / bypassResistance };
@@ -218,24 +223,42 @@ private:
         for (auto x : f) residual = std::max (residual, std::abs (x));
     }
 
-    double rate = 192000, inputConductance = 0, bypassConductance = 0;
+    double rate = 192000, inputConductance = 0, bypassConductance = 0, biasOffset = 0;
     std::array<double, 4> nodes {}, operatingPoint {};
     double inputVoltage = 0, inputCurrent = 0, bypassVoltage = 0, bypassCurrent = 0;
     double beCharge = 0, bcCharge = 0, beCurrent = 0, bcCurrent = 0;
     double dcBlockCoefficient = 0, dcInput = 0, dcOutput = 0, residual = 0;
 };
 
-// Non-inverting op-amp with antiparallel silicon diodes and a capacitor inside
-// its feedback loop. Solve the feedback voltage, not a post-amplifier waveshaper.
+struct DiodeCurrent { double value, derivative; };
+
+// Nominal Schottky junctions plus explicit series ballast: the lower forward
+// voltage alone is not used as a claim of softness. Solve the junction voltage
+// and include the ballast drop and its analytic derivative in the circuit KCL.
+struct SchottkyPair
+{
+    static constexpr double saturation = 200.0e-9, thermal = 1.2 * 0.02585;
+    static constexpr double seriesResistance = 220.0;
+    static DiodeCurrent current (double junctionVoltage) noexcept
+    {
+        const auto positive = junctionExponential (junctionVoltage, thermal);
+        const auto negative = junctionExponential (-junctionVoltage, thermal);
+        return { saturation * (positive.value - negative.value),
+                 saturation * (positive.derivative + negative.derivative) };
+    }
+};
+
+// Non-inverting feedback circuit with finite op-amp output resistance. The
+// internal amplifier must supply both feedback current and receiver loading.
 class OpAmpFeedbackClipper
 {
 public:
     static constexpr double groundResistance = 4700, feedbackResistance = 47000;
-    static constexpr double diodeIs = 2.0e-9, diodeThermalVoltage = 1.9 * 0.02585;
+    static constexpr double diodeIs = SchottkyPair::saturation, diodeThermalVoltage = SchottkyPair::thermal;
     static constexpr double feedbackCapacitance = 51.0e-12;
     static constexpr double openLoopGain = 100000, gainBandwidth = 3.0e6;
     static constexpr double rail = 4.0, slewRate = 1.0e6;
-
+    static constexpr double outputResistance = 100, loadResistance = 100000;
     void prepare (double rate) noexcept
     {
         const auto poleStep = 2.0 * pi * gainBandwidth / (openLoopGain * rate);
@@ -245,72 +268,101 @@ public:
         slewStep = slewRate / rate;
         reset();
     }
-    void reset() noexcept { output = feedbackVoltage = capacitorCurrent = residual = 0; }
-
+    void reset() noexcept { output = internalOutput = feedbackVoltage = junctionVoltage = capacitorCurrent = residual = 0; }
     double process (double input) noexcept
     {
         const auto history = -capacitorConductance * feedbackVoltage - capacitorCurrent;
-        const auto oldOutput = output;
-        const auto reference = memory * oldOutput + loopGain * std::clamp (input, -12.0, 12.0);
-        const auto current = [&] (double v)
+        const auto reference = memory * internalOutput + loopGain * std::clamp (input, -12.0, 12.0);
+        const auto evaluate = [&] (double junction)
         {
-            const auto positive = junctionExponential (v, diodeThermalVoltage);
-            const auto negative = junctionExponential (-v, diodeThermalVoltage);
-            return std::array<double, 2> {
-                v / feedbackResistance + diodeIs * (positive.value - negative.value)
-                    + capacitorConductance * v + history,
-                1.0 / feedbackResistance + diodeIs * (positive.derivative + negative.derivative)
-                    + capacitorConductance };
+            const auto diode = SchottkyPair::current (junction);
+            const auto v = junction + SchottkyPair::seriesResistance * diode.value;
+            const auto dv = 1.0 + SchottkyPair::seriesResistance * diode.derivative;
+            const auto current = v / feedbackResistance + diode.value + capacitorConductance * v + history;
+            const auto derivative = dv * (1.0 / feedbackResistance + capacitorConductance) + diode.derivative;
+            const auto external = v + groundResistance * current;
+            const auto internal = external + outputResistance * (current + external / loadResistance);
+            const auto slope = dv * (1.0 + outputResistance / loadResistance)
+                + derivative * (groundResistance * (1.0 + outputResistance / loadResistance) + outputResistance);
+            return std::array<double, 6> { v, current, derivative, external, internal, slope };
         };
-        const auto solve = [&] (double multiplier, double target)
+        const auto solve = [&] (double feedbackGain, double target)
         {
-            auto v = feedbackVoltage;
-            for (int iteration = 0; iteration < 18; ++iteration)
+            auto junction = junctionVoltage;
+            for (int iteration = 0; iteration < 24; ++iteration)
             {
-                const auto i = current (v);
-                const auto f = v + multiplier * groundResistance * i[0] - target;
+                const auto e = evaluate (junction);
+                const auto f = e[4] + feedbackGain * groundResistance * e[1] - target;
                 if (std::abs (f) < 1.0e-10) break;
-                v -= std::clamp (f / (1.0 + multiplier * groundResistance * i[1]), -0.15, 0.15);
+                junction -= std::clamp (f / (e[5] + feedbackGain * groundResistance * e[2]), -0.10, 0.10);
             }
-            return v;
+            return junction;
         };
-        auto v = solve (1.0 + loopGain, reference);
-        auto i = current (v);
-        auto nextOutput = v + groundResistance * i[0];
-        const auto lower = std::max (-rail, oldOutput - slewStep);
-        const auto upper = std::min (rail, oldOutput + slewStep);
-        const auto limited = std::clamp (nextOutput, lower, upper);
-        if (std::abs (limited - nextOutput) > 1.0e-10)
+        auto junction = solve (loopGain, reference);
+        auto e = evaluate (junction);
+        const auto lower = std::max (-rail, internalOutput - slewStep);
+        const auto upper = std::min (rail, internalOutput + slewStep);
+        const auto limited = std::clamp (e[4], lower, upper);
+        if (std::abs (limited - e[4]) > 1.0e-10)
         {
-            v = solve (1.0, limited);
-            i = current (v);
-            nextOutput = v + groundResistance * i[0];
-            residual = std::abs (nextOutput - limited);
+            junction = solve (0, limited); e = evaluate (junction);
+            residual = std::abs (e[4] - limited);
         }
-        else
-            residual = std::abs (v + (1.0 + loopGain) * groundResistance * i[0] - reference);
-        capacitorCurrent = capacitorConductance * (v - feedbackVoltage) - capacitorCurrent;
-        feedbackVoltage = v;
-        output = nextOutput;
+        else residual = std::abs (e[4] + loopGain * groundResistance * e[1] - reference);
+        capacitorCurrent = capacitorConductance * (e[0] - feedbackVoltage) - capacitorCurrent;
+        feedbackVoltage = e[0]; junctionVoltage = junction;
+        output = e[3]; internalOutput = e[4];
         return output / 4.0;
     }
     double getResidual() const noexcept { return residual; }
     double getOutputVolts() const noexcept { return output; }
+    double getInternalVolts() const noexcept { return internalOutput; }
     double getFeedbackVoltage() const noexcept { return feedbackVoltage; }
 private:
     double loopGain = 0, memory = 0, capacitorConductance = 0, slewStep = 0;
-    double output = 0, feedbackVoltage = 0, capacitorCurrent = 0, residual = 0;
+    double output = 0, internalOutput = 0, feedbackVoltage = 0, junctionVoltage = 0, capacitorCurrent = 0, residual = 0;
 };
 
-struct DiodeCurrent { double value, derivative; };
-inline DiodeCurrent antiparallelDiodes (double voltage) noexcept
+struct DriverParameters
 {
-    constexpr double saturation = 2.0e-9, thermal = 1.9 * 0.02585;
-    const auto positive = junctionExponential (voltage, thermal);
-    const auto negative = junctionExponential (-voltage, thermal);
-    return { saturation * (positive.value - negative.value),
-             saturation * (positive.derivative + negative.derivative) };
-}
+    double resistance = 2200, currentLimit = 0.0031622776601683794, coefficient = 0;
+    static DriverParameters fromKnee (double rate, double knee) noexcept
+    {
+        knee = std::clamp (knee, 0.0, 1.0);
+        return { 220.0 * std::pow (100.0, knee), 0.01 * std::pow (0.1, knee),
+                 1.0 - std::exp (-2.0 * pi * (45000.0 * std::pow (1.0 / 9.0, knee)) / rate) };
+    }
+};
+
+// A loaded Thevenin driver, not an ideal gain feeding a hard voltage clamp.
+// The current limit is part of each receiving circuit's nonlinear KCL solve.
+class DiodeDriver
+{
+public:
+    static constexpr double rail = 9.0;
+    void prepare (double sampleRate) noexcept { rate = sampleRate; setKnee (0.5); reset(); }
+    void reset() noexcept { voltage = 0; }
+    void setKnee (double knee) noexcept { parameters = DriverParameters::fromKnee (rate, knee); }
+    void setParameters (DriverParameters p) noexcept { parameters = p; }
+    double process (double input) noexcept
+    {
+        const auto target = rail * std::tanh (input / rail);
+        voltage += parameters.coefficient * (target - voltage);
+        return voltage;
+    }
+    DiodeCurrent current (double receivingVoltage, double networkResistance) const noexcept
+    {
+        const auto resistance = parameters.resistance + networkResistance;
+        const auto t = std::tanh ((voltage - receivingVoltage) / (resistance * parameters.currentLimit));
+        // derivative is the positive conductance with respect to the voltage drop.
+        return { parameters.currentLimit * t, (1.0 - t * t) / resistance };
+    }
+    double getVoltage() const noexcept { return voltage; }
+    DriverParameters getParameters() const noexcept { return parameters; }
+private:
+    DriverParameters parameters;
+    double rate = 192000, voltage = 0;
+};
 
 // Both passive networks reduce to a strictly increasing scalar KCL equation.
 // Bracketing prevents an overload reversal from sending Newton outside the
@@ -336,21 +388,27 @@ class DiodeShuntClipper
 public:
     static constexpr double sourceResistance = 4700, loadResistance = 100000;
     static constexpr double capacitance = 100.0e-12;
-    void prepare (double rate) noexcept { conductance = 2.0 * rate * capacitance; reset(); }
-    void reset() noexcept { outputVoltage = capacitorCurrent = residual = 0; }
+    void prepare (double rate) noexcept { conductance = 2.0 * rate * capacitance; driver.prepare (rate); reset(); }
+    void setKnee (double knee) noexcept { driver.setKnee (knee); }
+    void setDriverParameters (DriverParameters p) noexcept { driver.setParameters (p); }
+    void reset() noexcept { outputVoltage = junctionVoltage = capacitorCurrent = residual = 0; driver.reset(); }
     double process (double input) noexcept
     {
-        const auto source = std::clamp (input, -12.0, 12.0);
+        driver.process (input);
         const auto history = -conductance * outputVoltage - capacitorCurrent;
         const auto equation = [&] (double voltage)
         {
-            const auto diode = antiparallelDiodes (voltage);
-            return DiodeCurrent { (voltage - source) / sourceResistance + voltage / loadResistance
-                                    + conductance * voltage + history + diode.value,
-                                  1.0 / sourceResistance + 1.0 / loadResistance + conductance + diode.derivative };
+            const auto diode = SchottkyPair::current (voltage);
+            const auto node = voltage + SchottkyPair::seriesResistance * diode.value;
+            const auto slope = 1.0 + SchottkyPair::seriesResistance * diode.derivative;
+            const auto source = driver.current (node, sourceResistance);
+            return DiodeCurrent { node / loadResistance + conductance * node + history + diode.value - source.value,
+                                  slope * (1.0 / loadResistance + conductance + source.derivative) + diode.derivative };
         };
-        const auto voltage = solveDiodeVoltage (outputVoltage, equation);
-        residual = std::abs (equation (voltage).value);
+        const auto junction = solveDiodeVoltage (junctionVoltage, equation);
+        const auto voltage = junction + SchottkyPair::seriesResistance * SchottkyPair::current (junction).value;
+        junctionVoltage = junction;
+        residual = std::abs (equation (junction).value);
         capacitorCurrent = conductance * (voltage - outputVoltage) - capacitorCurrent;
         outputVoltage = voltage;
         return voltage / 4.0;
@@ -358,7 +416,8 @@ public:
     double getResidual() const noexcept { return residual; }
     double getOutputVolts() const noexcept { return outputVoltage; }
 private:
-    double conductance = 0, outputVoltage = 0, capacitorCurrent = 0, residual = 0;
+    DiodeDriver driver;
+    double conductance = 0, outputVoltage = 0, junctionVoltage = 0, capacitorCurrent = 0, residual = 0;
 };
 
 class SeriesDiodeCrossover
@@ -368,29 +427,38 @@ public:
     static constexpr double loadCapacitance = 100.0e-12, junctionCapacitance = 4.0e-12;
     void prepare (double rate) noexcept
     {
+        driver.prepare (rate);
         loadConductance = 2.0 * rate * loadCapacitance;
         junctionConductance = 2.0 * rate * junctionCapacitance;
         reset();
     }
-    void reset() noexcept { outputVoltage = diodeVoltage = loadCurrent = junctionCurrent = residual = 0; }
+    void setKnee (double knee) noexcept { driver.setKnee (knee); }
+    void setDriverParameters (DriverParameters p) noexcept { driver.setParameters (p); }
+    void reset() noexcept { outputVoltage = diodeVoltage = junctionVoltage = loadCurrent = junctionCurrent = residual = 0; driver.reset(); }
     double process (double input) noexcept
     {
-        const auto source = std::clamp (input, -12.0, 12.0);
+        driver.process (input);
         const auto loadHistory = -loadConductance * outputVoltage - loadCurrent;
         const auto diodeHistory = -junctionConductance * diodeVoltage - junctionCurrent;
         const auto load = 1.0 / loadResistance + loadConductance;
-        const auto denominator = 1.0 + sourceResistance * load;
         const auto equation = [&] (double voltage)
         {
-            const auto diode = antiparallelDiodes (voltage);
-            return DiodeCurrent {
-                diode.value + junctionConductance * voltage + diodeHistory
-                    - (load * (source - voltage) + loadHistory) / denominator,
-                diode.derivative + junctionConductance + load / denominator };
+            const auto diode = SchottkyPair::current (voltage);
+            const auto drop = voltage + SchottkyPair::seriesResistance * diode.value;
+            const auto dropSlope = 1.0 + SchottkyPair::seriesResistance * diode.derivative;
+            const auto current = diode.value + junctionConductance * drop + diodeHistory;
+            const auto slope = diode.derivative + junctionConductance * dropSlope;
+            const auto nextOutput = (current - loadHistory) / load;
+            const auto source = driver.current (drop + nextOutput, sourceResistance);
+            return DiodeCurrent { current - source.value,
+                                  slope + source.derivative * (dropSlope + slope / load) };
         };
-        const auto voltage = solveDiodeVoltage (diodeVoltage, equation);
-        const auto nextOutput = (source - voltage - sourceResistance * loadHistory) / denominator;
-        residual = std::abs (equation (voltage).value);
+        const auto junction = solveDiodeVoltage (junctionVoltage, equation);
+        const auto diode = SchottkyPair::current (junction);
+        const auto voltage = junction + SchottkyPair::seriesResistance * diode.value;
+        const auto nextOutput = (diode.value + junctionConductance * voltage + diodeHistory - loadHistory) / load;
+        junctionVoltage = junction;
+        residual = std::abs (equation (junction).value);
         junctionCurrent = junctionConductance * (voltage - diodeVoltage) - junctionCurrent;
         loadCurrent = loadConductance * (nextOutput - outputVoltage) - loadCurrent;
         diodeVoltage = voltage; outputVoltage = nextOutput;
@@ -400,7 +468,8 @@ public:
     double getOutputVolts() const noexcept { return outputVoltage; }
     double getDiodeVoltage() const noexcept { return diodeVoltage; }
 private:
+    DiodeDriver driver;
     double loadConductance = 0, junctionConductance = 0;
-    double outputVoltage = 0, diodeVoltage = 0, loadCurrent = 0, junctionCurrent = 0, residual = 0;
+    double outputVoltage = 0, diodeVoltage = 0, junctionVoltage = 0, loadCurrent = 0, junctionCurrent = 0, residual = 0;
 };
 }

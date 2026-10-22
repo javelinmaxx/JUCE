@@ -11,7 +11,9 @@ struct SolverMeasurement { double rate, level, bjtResidual, opampResidual; };
 std::vector<SolverMeasurement> solverMeasurements;
 struct DiodeMeasurement { double rate, shuntResidual, seriesResidual; };
 std::vector<DiodeMeasurement> diodeMeasurements;
-double aliasReductionDb = 0;
+double aliasReductionDb = 0, siliconFlatFraction = 0, schottkyFlatFraction = 0;
+struct ShapeResidual { double rate, control, bjt, shunt, series; };
+std::vector<ShapeResidual> shapeResiduals;
 void check (bool pass, const char* message)
 {
     ++checks;
@@ -154,17 +156,92 @@ void circuitTests()
     zao::SeriesDiodeCrossover series; series.prepare (192000);
     const auto lowShunt = dcOutput (shunt, 0.02), highShunt = dcOutput (shunt, 4.0);
     const auto lowSeries = dcOutput (series, 0.05), highSeries = dcOutput (series, 1.0);
-    check (lowShunt > 0.018 && lowShunt < 0.020 && highShunt > 0.55 && highShunt < 0.75,
+    check (lowShunt > 0.015 && lowShunt < 0.020 && highShunt > 0.25 && highShunt < 0.5,
            "diode shunt passes quiet input and limits high-amplitude peaks");
-    check (lowSeries < 0.001 && highSeries > 0.4 && highSeries < 0.6,
+    check (lowSeries < 0.01 && highSeries > 0.4 && highSeries < 0.8,
            "series diodes suppress the zero-crossing region and conduct above their forward voltage");
+}
+
+void shapeTests()
+{
+    double previousCollector = 10;
+    for (double control : { -1.0, 0.0, 1.0 })
+    {
+        zao::BjtCommonEmitter bjt; bjt.prepare (192000); bjt.setBiasVolts (control * 0.8); bjt.reset();
+        check (bjt.getOperatingPoint()[2] < previousCollector && bjt.getResidual() < 1.0e-9,
+               "BJT Bias physically shifts the DC operating point and clipping headroom");
+        previousCollector = bjt.getOperatingPoint()[2];
+        for (double rate : { 128000.0, 192000.0, 384000.0 })
+        {
+            bjt.prepare (rate); bjt.setBiasVolts (control * 0.8); bjt.reset();
+            zao::DiodeShuntClipper shunt; zao::SeriesDiodeCrossover series;
+            shunt.prepare (rate); series.prepare (rate);
+            const auto knee = 0.5 * (control + 1.0); shunt.setKnee (knee); series.setKnee (knee);
+            double rb = 0, rs = 0, rc = 0; bool valid = true;
+            std::mt19937 random (73); std::uniform_real_distribution<double> noise (-12, 12);
+            for (int i = 0; i < 4096; ++i)
+            {
+                const auto input = i < 2048 ? noise (random) : (i % 128 < 64 ? 12.0 : -12.0);
+                valid &= std::isfinite (bjt.process (input)) && std::isfinite (shunt.process (input)) && std::isfinite (series.process (input));
+                rb = std::max (rb, bjt.getResidual()); rs = std::max (rs, shunt.getResidual()); rc = std::max (rc, series.getResidual());
+            }
+            check (valid && rb < 1.0e-7 && rs < 1.0e-9 && rc < 1.0e-9,
+                   "nonideal Bias and all Knee settings converge under broadband overload at three rates");
+            shapeResiduals.push_back ({ rate, control, rb, rs, rc });
+        }
+    }
+    for (double knee : { 0.0, 0.5, 1.0 })
+    {
+        zao::DiodeDriver driver; driver.prepare (192000); driver.setKnee (knee);
+        for (int i = 0; i < 2048; ++i) driver.process (100);
+        check (driver.getVoltage() <= zao::DiodeDriver::rail
+               && std::abs (driver.current (-100, 1000).value) <= driver.getParameters().currentLimit,
+               "loaded driver respects finite voltage swing and delivered current");
+    }
+    // Compare normalized flat tops with an independent static solve of the old
+    // silicon network at the same 4 V, 1 kHz command (the old 100 pF is negligible here).
+    zao::DiodeShuntClipper schottky; schottky.prepare (192000);
+    std::vector<double> actual, silicon;
+    for (int i = 0; i < 15360; ++i)
+    {
+        const auto input = 4.0 * std::sin (2 * zao::pi * 1000 * i / 192000.0);
+        const auto output = schottky.process (input);
+        if (i < 11520) continue;
+        double low = -1.5, high = 1.5;
+        for (int iteration = 0; iteration < 48; ++iteration)
+        {
+            const auto voltage = 0.5 * (low + high);
+            const auto current = (voltage-input) / 4700 + voltage / 100000
+                + 2.0e-9 * (std::exp (voltage/0.049115) - std::exp (-voltage/0.049115));
+            if (current > 0) high = voltage; else low = voltage;
+        }
+        actual.push_back (output); silicon.push_back (0.125 * (low+high));
+    }
+    const auto flatFraction = [] (const auto& values)
+    {
+        double peak = 0; for (auto x : values) peak = std::max (peak, std::abs (x));
+        int flat = 0; for (auto x : values) if (std::abs (x) >= 0.95 * peak) ++flat;
+        return static_cast<double> (flat) / static_cast<double> (values.size());
+    };
+    siliconFlatFraction = flatFraction (silicon); schottkyFlatFraction = flatFraction (actual);
+    check (schottkyFlatFraction < siliconFlatFraction * 0.85,
+           "Schottky ballast and the loaded amplifier produce less flat-topped clipping than the old silicon source");
+    for (int mode : { 0, 2, 3 })
+    {
+        zao::Settings settings; settings.model = mode; settings.outputDb = 0;
+        settings.bjtBias = -1; settings.diodeKnee = 0; const auto low = render (settings);
+        settings.bjtBias = 1; settings.diodeKnee = 1; const auto high = render (settings);
+        double difference = 0;
+        for (size_t i = low.size()-4800; i < low.size(); ++i) difference += std::abs (low[i]-high[i]);
+        check (difference > 1, "Bias and Knee change the audio generated by their intended circuit");
+    }
 }
 
 void processorTests()
 {
     ZaoDriveProcessor processor;
-    check (processor.getName() == "Zao Drive" && processor.getParameters().size() == 11,
-           "fourth plugin registers the legacy circuit parameter and added diode pair");
+    check (processor.getName() == "Zao Drive" && processor.getParameters().size() == 13,
+           "all circuits register compatible legacy parameters plus independent Bias and Knee");
     processor.prepareToPlay (48000, 64);
     const auto latency = processor.getLatencySamples();
     check (latency >= 64 && latency < 100, "host latency includes circuit oversampling and the shared transformer delay");
@@ -195,10 +272,12 @@ void processorTests()
     }
     set (processor, "model", 1); set (processor, "drive", 29); set (processor, "transformer", 1);
     set (processor, "dcBias", 37); set (processor, "tone", 4321);
+    set (processor, "bjtBias", -45); set (processor, "diodeKnee", 73);
     juce::MemoryBlock state; processor.getStateInformation (state);
     ZaoDriveProcessor restored; restored.setStateInformation (state.getData(), static_cast<int> (state.getSize()));
     const auto saved = restored.getSettings();
     check (saved.model == 1 && saved.transformer && std::abs (saved.driveDb - 29) < 0.01f
+           && std::abs (saved.bjtBias + 0.45f) < 0.001f && std::abs (saved.diodeKnee - 0.73f) < 0.001f
            && std::abs (saved.dcBias - 0.37f) < 0.001f && std::abs (saved.toneHz - 4321) < 0.1f,
            "circuit and transformer settings survive host state recall");
     for (int mode = 0; mode < 4; ++mode)
@@ -208,10 +287,13 @@ void processorTests()
         check (restored.getSettings().model == mode, "all four circuits survive saved-state round trips");
     }
     auto legacyState = processor.parameters.copyState();
-    legacyState.removeChild (legacyState.getChildWithProperty ("id", "diodeCircuit"), nullptr);
+    for (const auto* id : { "diodeCircuit", "bjtBias", "diodeKnee" })
+        legacyState.removeChild (legacyState.getChildWithProperty ("id", id), nullptr);
     legacyState.getChildWithProperty ("id", "model").setProperty ("value", 1.0f, nullptr);
     juce::AudioProcessor::copyXmlToBinary (*legacyState.createXml(), state);
     restored.setStateInformation (state.getData(), static_cast<int> (state.getSize()));
+    check (std::abs (restored.getSettings().bjtBias) < 1.0e-6f && std::abs (restored.getSettings().diodeKnee - 0.5f) < 1.0e-6f,
+           "legacy states reset new Bias and Knee to neutral defaults after another preset");
     check (restored.getSettings().model == 1, "loading an old two-mode state restores Op-Amp after a diode-mode session");
     restored.parameters.getParameter ("model")->setValueNotifyingHost (0.0f);
     check (restored.getSettings().model == 0, "legacy normalized circuit automation still selects BJT and Op-Amp");
@@ -226,11 +308,13 @@ void processorTests()
             juce::AudioBuffer<float> signal (2, 513);
             for (int block = 0; block < 5; ++block)
             {
+                set (stress, "bjtBias", block % 2 == 0 ? 100.0f : -100.0f);
+                set (stress, "diodeKnee", block % 2 == 0 ? 100.0f : 0.0f);
                 for (int i = 0; i < signal.getNumSamples(); ++i)
                     for (int ch = 0; ch < 2; ++ch)
                         signal.setSample (ch, i, static_cast<float> (0.9 * std::sin (i * 0.17 + block)));
                 stress.processBlock (signal, midi);
-                check (finite (signal), "all four circuits remain finite under maximum drive and transformer bias");
+                check (finite (signal), "all four circuits remain finite under maximum drive, Bias/Knee automation and transformer bias");
             }
         }
     }
@@ -347,6 +431,44 @@ void writeReport (const juce::File& directory)
         for (int i = 0; i < 16384; ++i) { shunt.process (input); series.process (input); }
         diodeDc << input << ',' << shunt.getOutputVolts() << ',' << series.getOutputVolts() << '\n';
     }
+    std::ofstream shape (directory.getChildFile ("shape-waveforms.csv").getFullPathName().toStdString());
+    shape << "model,control,sample,input,output\n";
+    for (int mode : { 0, 2, 3 })
+        for (float control : { -1.0f, 0.0f, 1.0f })
+        {
+            zao::Settings settings; settings.model = mode; settings.outputDb = 0; settings.toneHz = 18000;
+            settings.driveDb = 12; settings.bjtBias = control; settings.diodeKnee = 0.5f * (control + 1);
+            const auto samples = render (settings);
+            for (size_t i = samples.size()-960; i < samples.size(); ++i)
+                shape << mode << ',' << (mode == 0 ? control*100 : (control+1)*50) << ',' << i << ','
+                      << 0.25 * std::sin (2*zao::pi * (static_cast<double> (i)-latencyEngine.getLatency()) / 48.0)
+                      << ',' << samples[i] << '\n';
+        }
+    std::ofstream biasDc (directory.getChildFile ("bias-operating-points.csv").getFullPathName().toStdString());
+    biasDc.precision (16); biasDc << "bias,base,emitter,collector,bypass,residual\n";
+    for (double bias : { -1.0, 0.0, 1.0 })
+    {
+        zao::BjtCommonEmitter biased; biased.prepare (192000); biased.setBiasVolts (bias*0.8); biased.reset();
+        biasDc << bias*100 << ','; for (auto value : biased.getOperatingPoint()) biasDc << value << ',';
+        biasDc << biased.getResidual() << '\n';
+    }
+    std::ofstream knees (directory.getChildFile ("knee-transfer.csv").getFullPathName().toStdString());
+    knees.precision (16); knees << "knee,input_volts,shunt_volts,series_volts\n";
+    for (double knee : { 0.0, 1.0 })
+    {
+        shunt.reset(); series.reset(); shunt.setKnee (knee); series.setKnee (knee);
+        for (int index = -60; index <= 60; ++index)
+        {
+            const auto input = index*0.05;
+            for (int i = 0; i < 16384; ++i) { shunt.process (input); series.process (input); }
+            knees << knee*100 << ',' << input << ',' << shunt.getOutputVolts() << ',' << series.getOutputVolts() << '\n';
+        }
+    }
+    std::ofstream shapeResidual (directory.getChildFile ("shape-residuals.csv").getFullPathName().toStdString());
+    shapeResidual << "rate,control,bjt_amps,shunt_amps,series_amps\n";
+    for (const auto& m : shapeResiduals) shapeResidual << m.rate << ',' << m.control << ',' << m.bjt << ',' << m.shunt << ',' << m.series << '\n';
+    std::ofstream softness (directory.getChildFile ("softness.csv").getFullPathName().toStdString());
+    softness << "silicon_flat_fraction,schottky_flat_fraction\n" << siliconFlatFraction << ',' << schottkyFlatFraction << '\n';
     std::cout << "Measurements written to " << directory.getFullPathName() << '\n';
 }
 
@@ -360,11 +482,13 @@ void editorTests (const juce::File& destination, bool tooltip, int previewMode)
     check (zaoEditor != nullptr, "native Zao editor exists");
     auto expectedBefore = zaoEditor->getExpectedOutput();
     juce::Slider* model = nullptr;
+    juce::Slider* contextual = nullptr;
     juce::Button* transformer = nullptr;
     juce::TooltipWindow* window = nullptr;
     for (auto* child : editor->getChildren())
     {
         if (auto* slider = dynamic_cast<juce::Slider*> (child); slider && slider->getName() == "CIRCUIT") model = slider;
+        if (auto* slider = dynamic_cast<juce::Slider*> (child); slider && slider->getName() == "BIAS") contextual = slider;
         if (auto* button = dynamic_cast<juce::Button*> (child); button && button->getButtonText() == "TRANSFORMER") transformer = button;
         if (auto* tip = dynamic_cast<juce::TooltipWindow*> (child)) window = tip;
         if (dynamic_cast<juce::Slider*> (child) || dynamic_cast<juce::Button*> (child) || dynamic_cast<juce::Label*> (child))
@@ -375,7 +499,7 @@ void editorTests (const juce::File& destination, bool tooltip, int previewMode)
                    "all Zao controls and captions have one-sentence hover hints");
         }
     }
-    check (model && transformer && window && model->getTextFromValue (0) == "BJT CE",
+    check (model && contextual && transformer && window && model->getTextFromValue (0) == "BJT CE",
            "initial circuit caption displays the model name");
     model->setValue (1, juce::sendNotificationSync);
     check (processor.getSettings().model == 1 && model->getTextFromValue (1) == "OPAMP FB",
@@ -385,10 +509,33 @@ void editorTests (const juce::File& destination, bool tooltip, int previewMode)
         model->setValue (mode, juce::sendNotificationSync);
         check (processor.getSettings().model == mode && model->getTextFromValue (mode) == zao::circuitNames[static_cast<size_t> (mode)],
                "all four named circuit positions update compatible host parameters");
+        const auto id = mode == 0 ? "bjtBias" : mode == 1 ? "input" : "diodeKnee";
+        const auto name = mode == 0 ? "BIAS" : mode == 1 ? "INPUT" : "KNEE";
+        check (contextual->getName() == name && contextual->getTooltip().isNotEmpty(),
+               "first knob name and hover hint follow the selected circuit");
+        contextual->setValue (mode == 0 ? -35 : mode == 1 ? 8 : 72, juce::sendNotificationSync);
+        check (std::abs (processor.parameters.getRawParameterValue (id)->load() - contextual->getValue()) < 0.01,
+               "contextual knob writes the correct independent host parameter");
     }
+    set (processor, "input", 0); set (processor, "bjtBias", 0); set (processor, "diodeKnee", 50);
     selectMode (processor, 2);
     for (int i = 0; i < 12; ++i) { juce::Thread::sleep (20); juce::Timer::callPendingTimersSynchronously(); }
     check (juce::roundToInt (model->getValue()) == 2, "circuit selector follows diode-pair host automation");
+    check (contextual->getName() == "KNEE", "contextual knob follows host-selected diode mode");
+    set (processor, "diodeKnee", 25);
+    check (std::abs (contextual->getValue()-25) < 0.01, "Knee readout follows host automation");
+    selectMode (processor, 0);
+    for (int i = 0; i < 12; ++i) { juce::Thread::sleep (20); juce::Timer::callPendingTimersSynchronously(); }
+    check (contextual->getName() == "BIAS", "host circuit automation rebinds the first knob to BJT Bias");
+    set (processor, "bjtBias", -40);
+    check (std::abs (contextual->getValue()+40) < 0.01, "BJT Bias readout follows host automation");
+    selectMode (processor, 3);
+    for (int i = 0; i < 12; ++i) { juce::Thread::sleep (20); juce::Timer::callPendingTimersSynchronously(); }
+    check (contextual->getName() == "KNEE" && std::abs (contextual->getValue()-25) < 0.01
+           && std::abs (processor.getSettings().bjtBias+0.4f) < 0.001f,
+           "mode switching recalls independent Bias and Knee settings without overwriting either");
+    set (processor, "bjtBias", 0); set (processor, "diodeKnee", 50); selectMode (processor, 2);
+    for (int i = 0; i < 12; ++i) { juce::Thread::sleep (20); juce::Timer::callPendingTimersSynchronously(); }
     set (processor, "drive", 0);
     for (int i = 0; i < 12; ++i) { juce::Thread::sleep (20); juce::Timer::callPendingTimersSynchronously(); }
     const auto& expectedAfter = zaoEditor->getExpectedOutput();
@@ -428,7 +575,7 @@ int main (int argc, char** argv)
     try
     {
         juce::ScopedJuceInitialiser_GUI gui;
-        circuitTests(); processorTests();
+        circuitTests(); shapeTests(); processorTests();
         if (argc > 2 && juce::String (argv[1]) == "--editor")
         {
             const auto option = argc > 3 ? juce::String (argv[3]) : juce::String();
