@@ -100,6 +100,20 @@ void dspTests (const juce::File& directory)
     check (applied.readRotation (rotation, rotationVersion) && rotation[2*xuan::meterBins] > .999f
            && std::abs (rotation[xuan::meterBins]) < 1e-6 && std::abs (rotation[0]-1) < 1e-6,
            "host bypass displays zero applied rotation");
+    // Widely separated equal-angle peaks must not fall back to zero between
+    // them, and opposite wrapped angles must connect through +/-180 degrees.
+    xuan::Analysis joined; joined.count = 2;
+    joined.targets[0] = {500, 25, .6f, .001f};
+    joined.targets[1] = {2000, 50, .6f, .001f};
+    check (std::abs (xuan::PhaseEngine::bandValue (1250, joined, true)-.001) < 1e-8,
+           "timing colours stay connected across gaps between detected peaks");
+    joined.targets[0].delay = joined.targets[1].delay = 0;
+    check (std::abs (xuan::PhaseEngine::bandValue (1250, joined, false)-.6) < 1e-6,
+           "equal phase targets remain connected instead of returning to neutral between peaks");
+    joined.targets[0].angle = static_cast<float> (179*juce::MathConstants<double>::pi/180);
+    joined.targets[1].angle = -joined.targets[0].angle;
+    check (std::abs (xuan::PhaseEngine::bandValue (1250, joined, false)-juce::MathConstants<double>::pi) < 1e-6,
+           "adjacent phase targets unwrap across the +/-180 degree seam");
     // Staggered narrow-band wave packets simulate a dispersed percussive hit.
     std::vector<float> hit (2048);
     for (int i = 0; i < 2048; ++i)
@@ -110,11 +124,42 @@ void dspTests (const juce::File& directory)
             const auto envelope = std::exp (-.5*std::pow ((i-centre)/70., 2));
             hit[static_cast<size_t> (i)] += static_cast<float> (.15*envelope*std::cos (2*juce::MathConstants<double>::pi*hz*(i-centre)/48000));
         }
+    // More than 24 distinct low/mid peaks must not consume every target before
+    // the high-frequency part of a broadband transient is inspected.
+    std::vector<float> broadHit (2048);
+    for (int i = 0; i < 2048; ++i)
+    {
+        const auto t = i-1050;
+        for (int bin = 4; bin <= 830; bin += 13)
+            broadHit[static_cast<size_t> (i)] += static_cast<float> (.01*std::exp (-.5*std::pow (t/100., 2))
+                *std::cos (2*juce::MathConstants<double>::pi*bin*t/2048));
+    }
+    std::vector<float> broadPrevious; double broadEnergy = 0;
+    const auto broad = xuan::PhaseEngine::analyse (broadHit, 48000, broadPrevious, broadEnergy);
+    check (broad.count == 24 && broad.targets[static_cast<size_t> (broad.count-1)].frequency > 16000
+           && broad.targets[0].frequency < 1000,
+           "24 automatic bands cover low and high frequencies instead of filling exclusively from low peaks");
     std::vector<float> previous; double energy = 0;
     const auto targets = xuan::PhaseEngine::analyse (hit, 48000, previous, energy);
     check (targets.count >= 3, "transient spectrogram phase produces multiple narrow-band alignment targets");
     for (int i = 0; i < targets.count; ++i)
         check (std::abs (targets.targets[static_cast<size_t> (i)].delay) <= .025, "automatic group-delay targets stay inside the lookahead budget");
+    xuan::Settings full; full.automatic = true; full.depth = 100;
+    const auto autoIr = xuan::PhaseEngine::impulse (48000, full, targets);
+    std::ofstream curve (directory.getChildFile ("auto-phase.csv").getFullPathName().toStdString());
+    curve << "frequency,target_deg,measured_deg,gain_db\n";
+    for (double f = 60; f <= 12000; f += 5)
+    {
+        const auto h = response (autoIr, f, 48000);
+        curve << f << ',' << xuan::PhaseEngine::phaseAt (f, full, targets)*180/juce::MathConstants<double>::pi
+              << ',' << std::arg (h)*180/juce::MathConstants<double>::pi << ',' << 20*std::log10 (std::abs (h)) << '\n';
+    }
+    for (int t = 1; t < targets.count; ++t)
+    {
+        const auto f = targets.targets[static_cast<size_t> (t)].frequency;
+        check (std::abs (xuan::PhaseEngine::phaseAt (f-.001, full, targets)-xuan::PhaseEngine::phaseAt (f+.001, full, targets)) < .001,
+               "detected automatic phase bands join continuously at each target");
+    }
     std::ofstream transient (directory.getChildFile ("transient.csv").getFullPathName().toStdString());
     transient << "sample,dry,depth0,depth50,depth100\n";
     std::array<std::vector<float>, 3> outputs;
@@ -148,7 +193,10 @@ void dspTests (const juce::File& directory)
     for (int at : {4096, 20480, 36864})
         for (int i = 0; i < 2048; ++i) stream[static_cast<size_t> (at+i)] = hit[static_cast<size_t> (i)];
     juce::MidiBuffer midi; juce::AudioBuffer<float> block (2, 128);
-    double liveDifference = 0; bool linked = true;
+    std::ofstream liveAudio (directory.getChildFile ("auto-live.csv").getFullPathName().toStdString());
+    liveAudio << "sample,reference,automatic\n";
+    double liveDifference = 0, settledInputEnergy = 0, settledOutputEnergy = 0;
+    float settledInputPeak = 0, settledOutputPeak = 0; bool linked = true;
     for (int at = 0; at < static_cast<int> (stream.size()); at += 128)
     {
         for (int i = 0; i < 128; ++i)
@@ -157,12 +205,24 @@ void dspTests (const juce::File& directory)
         for (int i = 0; i < 128; ++i)
         {
             const auto expected = at+i >= 1200 ? stream[static_cast<size_t> (at+i-1200)] : 0;
+            liveAudio << at+i << ',' << expected << ',' << block.getSample (0, i) << '\n';
             liveDifference += std::abs (block.getSample (0, i)-expected);
+            if (at+i >= 36864+1200 && at+i < 36864+1200+4096)
+            {
+                const auto out = block.getSample (0, i);
+                settledInputPeak = std::max (settledInputPeak, std::abs (expected));
+                settledOutputPeak = std::max (settledOutputPeak, std::abs (out));
+                settledInputEnergy += expected*expected; settledOutputEnergy += out*out;
+            }
             linked &= std::isfinite (block.getSample (0, i)) && std::abs (block.getSample (1, i)+.5f*block.getSample (0, i)) < 2e-6;
         }
     }
     check (live.targetCount() > 0 && liveDifference > .1 && linked,
            "live transient worker publishes audible phase responses while preserving linked stereo through kernel changes");
+    check (settledOutputPeak > settledInputPeak*1.05f,
+           "live Auto increases the settled dispersed transient peak without a preloaded target");
+    check (std::abs (std::sqrt (settledOutputEnergy/settledInputEnergy)-1) < .02,
+           "live Auto punch improvement is phase alignment rather than a substantial RMS boost");
     set (live, "depth", 0);
     for (int i = 0; i < 32; ++i) { block.clear(); live.processBlock (block, midi); juce::Thread::sleep (2); }
     check (live.targetCount() == 0, "zero Depth clears automatic targets in the live worker");

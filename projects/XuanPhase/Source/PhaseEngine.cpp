@@ -23,22 +23,42 @@ float dot (const float* a, const float* b, int n)
 #endif
 }
 }
+double PhaseEngine::bandValue (double frequency, const Analysis& a, bool timing)
+{
+    if (a.count == 0) return 0;
+    // Analyse emits ascending peak frequencies. Unwrap adjacent angles before
+    // interpolation so +179/-179 degrees join across the phase seam, not zero.
+    int left = 0; double angle = a.targets[0].angle;
+    while (left+1 < a.count && frequency > a.targets[static_cast<size_t> (left+1)].frequency)
+    {
+        ++left;
+        angle += std::remainder (a.targets[static_cast<size_t> (left)].angle-angle, 2*pi);
+    }
+    const auto& lo = a.targets[static_cast<size_t> (left)];
+    const auto local = [&] (const Target& t, double unwrapped)
+    {
+        return timing ? static_cast<double> (t.delay)
+                      : unwrapped+std::clamp (2*pi*(frequency-t.frequency)*t.delay, -pi, pi);
+    };
+    if (frequency < lo.frequency || left+1 == a.count)
+    {
+        const auto distance = (frequency-lo.frequency)/std::max (1.f, lo.width);
+        // Only the outside edges taper to neutral; internal bands remain joined.
+        return local (lo, angle)*std::exp (-.5*distance*distance);
+    }
+    const auto& hi = a.targets[static_cast<size_t> (left+1)];
+    const auto next = angle+std::remainder (hi.angle-angle, 2*pi);
+    const auto t = std::clamp ((frequency-lo.frequency)/std::max (1.0, static_cast<double> (hi.frequency-lo.frequency)), 0.0, 1.0);
+    const auto blend = t*t*(3-2*t);
+    return (1-blend)*local (lo, angle)+blend*local (hi, next);
+}
 float PhaseEngine::phaseAt (double frequency, const Settings& s, const Analysis& a)
 {
     const auto weight = 1.0/(1+std::pow (frequency/std::clamp (s.split, 80.f, 4000.f), 4));
     auto phase = (s.low*weight+s.high*(1-weight))*pi/180;
     if (s.automatic && s.depth > 0)
     {
-        double correction = 0, totalWeight = 0;
-        for (int i = 0; i < a.count; ++i)
-        {
-            const auto& t = a.targets[static_cast<size_t> (i)];
-            const auto distance = (frequency-t.frequency)/t.width;
-            const auto w = std::exp (-.5*distance*distance);
-            correction += w*std::clamp (t.angle+2*pi*(frequency-t.frequency)*t.delay, -pi, pi);
-            totalWeight += w;
-        }
-        phase += std::clamp (s.depth*.01f, 0.f, 1.f)*correction/std::max (1.0, totalWeight);
+        phase += std::clamp (s.depth*.01f, 0.f, 1.f)*bandValue (frequency, a, false);
     }
     return static_cast<float> (phase);
 }
@@ -123,12 +143,15 @@ Analysis PhaseEngine::analyse (const std::vector<float>& input, double rate, std
     if (meter != nullptr && onset) (*meter)[meterTransient] = std::clamp ((result.crest-2)/4, 0.f, 1.f);
     if (! onset) return result;
     const auto sign = input[static_cast<size_t> (anchor)] < 0 ? pi : 0;
-    // Local spectral peaks define narrow bands. Their complex phase and phase
-    // slope predict how each wave packet can meet the strongest onset sample.
-    for (int k = 2; k < n/2-1 && result.count < static_cast<int> (result.targets.size()); ++k)
+    // Reserve a strongest peak per logarithmic region before filling remaining
+    // slots by magnitude: a low-to-high first-24 scan starves the upper bands.
+    struct Candidate { Target target; float magnitude; bool selected = false; };
+    std::vector<Candidate> candidates;
+    const auto ceiling = std::min (20000.0, rate*.45);
+    for (int k = 2; k < n/2-1; ++k)
     {
         const auto frequency = rate*k/n;
-        if (frequency < 60 || frequency > std::min (12000.0, rate*.45)) continue;
+        if (frequency < 60 || frequency > ceiling) continue;
         const auto m = previous[static_cast<size_t> (k)];
         if (m < largest*.08f || m <= previous[static_cast<size_t> (k-1)] || m < previous[static_cast<size_t> (k+1)]) continue;
         const auto angle = std::remainder (sign-2*pi*k*anchor/n-std::arg (spectrum[static_cast<size_t> (k)]), 2*pi);
@@ -136,11 +159,32 @@ Analysis PhaseEngine::analyse (const std::vector<float>& input, double rate, std
         // otherwise a late transient aliases its group delay by half a frame.
         const auto slope = std::remainder (std::arg (spectrum[static_cast<size_t> (k+1)])-std::arg (spectrum[static_cast<size_t> (k-1)])+4*pi*anchor/n, 2*pi);
         const auto relativeTime = -slope/(4*pi*rate/n);
-        result.targets[static_cast<size_t> (result.count++)] = {
+        candidates.push_back ({ {
             static_cast<float> (frequency), static_cast<float> (std::max (rate/n, frequency*.025)),
-            static_cast<float> (angle), static_cast<float> (std::clamp (relativeTime, -.025, .025)) };
+            static_cast<float> (angle), static_cast<float> (std::clamp (relativeTime, -.025, .025)) }, m });
         ++k;
     }
+    std::array<int, 24> regions; regions.fill (-1);
+    for (size_t i = 0; i < candidates.size(); ++i)
+    {
+        const auto region = std::clamp (static_cast<int> (24*std::log (candidates[i].target.frequency/60)/std::log (ceiling/60)), 0, 23);
+        auto& strongest = regions[static_cast<size_t> (region)];
+        if (strongest < 0 || candidates[i].magnitude > candidates[static_cast<size_t> (strongest)].magnitude)
+            strongest = static_cast<int> (i);
+    }
+    for (int i : regions)
+        if (i >= 0) { candidates[static_cast<size_t> (i)].selected = true; ++result.count; }
+    while (result.count < static_cast<int> (result.targets.size()))
+    {
+        auto best = candidates.end();
+        for (auto it = candidates.begin(); it != candidates.end(); ++it)
+            if (! it->selected && (best == candidates.end() || it->magnitude > best->magnitude)) best = it;
+        if (best == candidates.end()) break;
+        best->selected = true; ++result.count;
+    }
+    int index = 0;
+    for (const auto& candidate : candidates)
+        if (candidate.selected) result.targets[static_cast<size_t> (index++)] = candidate.target;
     return result;
 }
 void PhaseEngine::Kernel::build (const std::vector<float>& ir, int count)
@@ -381,14 +425,8 @@ void PhaseEngine::run()
                 if (result.count > 0) displayedAnalysis = result;
                 for (int row = 0; row < meterBins; ++row)
                 {
-                    const auto f = meterFrequency (row, sampleRate); double timing = 0, weight = 0;
-                    for (int i = 0; i < displayedAnalysis.count; ++i)
-                    {
-                        const auto& band = displayedAnalysis.targets[static_cast<size_t> (i)];
-                        const auto w = std::exp (-.5*std::pow ((f-band.frequency)/band.width, 2));
-                        timing += w*band.delay*1000; weight += w;
-                    }
-                    spectrum[static_cast<size_t> (meterBins+row)] = static_cast<float> (timing/std::max (1.0, weight))*transientHold;
+                    const auto f = meterFrequency (row, sampleRate);
+                    spectrum[static_cast<size_t> (meterBins+row)] = static_cast<float> (1000*bandValue (f, displayedAnalysis, true))*transientHold;
                 }
                 lastMeter = now; spectrum[meterTransient] = transientHold; spectrumMeter.publish (spectrum);
             }

@@ -34,8 +34,11 @@ must be real; they cannot carry an arbitrary quadrature rotation. See the
 
 Auto analyzes overlapping input spectrogram frames on a separate worker.
 Positive spectral flux, an energy rise, and transient crest distinguish clear
-onsets from stationary noise. Local spectral peaks define up to 24 narrow
-Gaussian phase bands. Their complex phase and locally unwrapped phase slopes
+onsets from stationary noise. Local spectral peaks define up to 24 phase-band anchors. Neighboring local
+phase/delay curves join with smoothstep interpolation, with angles unwrapped
+across ±180°; only the outer edges taper to neutral. Peak selection reserves
+coverage across logarithmic regions up to 20 kHz (or 45% of sample rate), then
+fills spare slots with the strongest remaining peaks to avoid low-frequency bias. Their complex phase and locally unwrapped phase slopes
 estimate how wave packets can meet the strongest transient sample. Relative
 band-delay targets are limited to ±25 ms.
 
@@ -64,6 +67,8 @@ frequency axis. **New data enters at the left and moves right** toward older
 history. Brighter pixels mean more input energy; **green** marks frequency bands
 arriving before the detected transient anchor, and **red** marks those arriving
 after it. Colours describe observed input timing, so they also work with Auto Off.
+Timing colors interpolate between adjacent detected bands; spectral energy
+remains unchanged, so genuine gaps in the input still appear dark.
 A small display hold makes short onsets visible without changing the audio detector.
 
 The narrow **white curve** at the right shows applied rotation relative to the
@@ -79,6 +84,10 @@ No display FFT runs on the audio thread. Rendering and scrolling run at 30 Hz,
 with stale input cleared after 200 ms and blank columns for missed UI frames.
 Closing the editor clears its history; sample-rate changes clear incompatible
 frequency history. Audio processing and the fixed latency are unchanged.
+
+The [test report](Tests/Reports/REPORT.md#live-automatic-phase-shifting-case)
+includes a live three-hit Auto case, measured connected-band response, and
+matched-level listening examples.
 
 ## Build and test
 

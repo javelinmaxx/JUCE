@@ -67,6 +67,7 @@ public:
     bool readSpectrum (SpectrumFrame& f, uint32_t& v) const noexcept { return spectrumMeter.read (f, v); }
     bool readRotation (RotationFrame& f, uint32_t& v) const noexcept { return rotationMeter.read (f, v); }
     static double meterFrequency (int row, double rate) noexcept;
+    static double bandValue (double frequency, const Analysis&, bool timing);
     static float phaseAt (double frequency, const Settings&, const Analysis&);
     static Analysis analyse (const std::vector<float>&, double rate, std::vector<float>& previousMagnitude, double& previousEnergy, SpectrumFrame* = nullptr);
     static std::vector<float> impulse (double rate, const Settings&, const Analysis& = {});
