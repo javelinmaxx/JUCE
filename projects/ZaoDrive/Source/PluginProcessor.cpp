@@ -50,7 +50,13 @@ ZaoDriveProcessor::ZaoDriveProcessor()
       parameters (*this, nullptr, "ZaoDriveState", createParameterLayout())
 {
     for (size_t i = 0; i < raw.size(); ++i) raw[i] = parameters.getRawParameterValue (ids[i]);
+    for (const auto* id : ids) parameters.addParameterListener (id, this);
     reference.follow ([this] { return getSettings(); }, [this] { return getSmartAnalysis(); });
+}
+
+ZaoDriveProcessor::~ZaoDriveProcessor()
+{
+    for (const auto* id : ids) parameters.removeParameterListener (id, this);
 }
 
 zao::Settings ZaoDriveProcessor::getSettings() const noexcept

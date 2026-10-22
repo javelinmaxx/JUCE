@@ -38,8 +38,12 @@ at +6 dB it is 6 dB louder, and at −6 dB it is 6 dB quieter. It uses the
 same −12 dBFS, 1 kHz triangle reference waveform shown in Expected Output. There is no
 live RMS detector, averaging or automatic reaction to the music: the correction
 stays constant between reference updates, preserving the input's dynamics.
-The shared reference worker recalculates for control or Smart snapshot changes,
-even with the editor closed. Only changes to the correction fade over 20 ms;
+Every parameter change notifies the shared reference worker, even with the
+editor closed. Control-driven recalculation has no polling delay or fixed rate
+limit: if changes arrive during a render, the next render uses the latest
+settings immediately. Completed snapshots keep updating the gain during
+continuous adjustments; unchanged settings do not rerender. Smart-only updates
+retain their 200 ms limit to save CPU. Only changes to the correction fade over 20 ms;
 this avoids clicks without continuously modulating the gain. Auto defaults Off,
 is saved with presets and follows host automation. Existing presets load Off.
 The Output knob still controls gain entering the transformer; Auto compensates
@@ -63,8 +67,10 @@ settings. It is a reference waveform, not a live oscilloscope or a prediction of
 arbitrary input material. The labeled plot scale fits both input and output,
 starting at ±0.25 FS to keep passive diode behavior visible. Rendering runs on a
 dedicated background worker that reuses its prepared filters and oversampler,
-without sharing circuit state or locks with the audio callback. The processor and editor share this worker, which updates at most five times
-per second when settings or Smart results change. It also runs with the editor
+without sharing circuit state or locks with the audio callback. The processor and editor share this worker; every control change requests an
+update, with no fixed render-rate cap. New changes during rendering coalesce
+into the next latest snapshot, rather than building a queue. Smart-only updates
+remain limited to five times per second. It also runs with the editor
 closed while Auto is enabled, keeping audio and preview calibration identical. Waveforms and the display scale ease between results over
 160 ms at 30 animation frames per second; new targets continue from the current
 displayed shape rather than jumping.

@@ -16,6 +16,8 @@ struct ShapeResidual { double rate, control, bjt, shunt, series; };
 std::vector<ShapeResidual> shapeResiduals;
 struct AutoMeasurement { double rate; int mode; bool transformer; double outputDb, gain, errorDb; };
 std::vector<AutoMeasurement> autoMeasurements;
+struct AutoResponse { const char* control; double milliseconds; };
+std::vector<AutoResponse> autoResponses;
 void check (bool pass, const char* message)
 {
     ++checks;
@@ -583,6 +585,48 @@ void autoCompensatorTests()
     while (! (ready = processor.readPreview (hidden)) && juce::Time::getMillisecondCounterHiRes() < deadline) juce::Thread::sleep (2);
     check (ready && std::abs (hidden.matchingGain/before-std::pow (10.0, -12.0/20)) < 1e-5,
            "reference gain recalculates for Output changes while the editor remains closed");
+
+    // Change again immediately after each publication: the old 200 ms render
+    // limit lagged behind these consecutive adjustments even with no editor.
+    for (const auto& change : std::array<std::pair<const char*, float>, 5> {{
+        { "output", -3 }, { "output", 3 }, { "drive", 18 }, { "tone", 5000 }, { "mix", 50 } }})
+    {
+        const auto started = juce::Time::getMillisecondCounterHiRes();
+        const auto previousGain = hidden.matchingGain;
+        set (processor, change.first, change.second);
+        deadline = started+150; ready = false;
+        while (! (ready = processor.readPreview (hidden)) && juce::Time::getMillisecondCounterHiRes() < deadline)
+            juce::Thread::sleep (1);
+        const auto elapsed = juce::Time::getMillisecondCounterHiRes()-started;
+        autoResponses.push_back ({ change.first, elapsed });
+        check (ready && elapsed < 150 && std::abs (hidden.matchingGain-previousGain) > 1e-6,
+               "Auto follows consecutive Output, Drive, Tone and Mix adjustments within 150 ms without an editor");
+    }
+    int publishedWhileMoving = 0;
+    for (int i = 0; i < 100; ++i)
+    {
+        set (processor, "drive", 12.f+i*.1f);
+        juce::Thread::sleep (2);
+        if (processor.readPreview (hidden)) ++publishedWhileMoving;
+    }
+    check (publishedWhileMoving >= 2, "continuous control changes publish intermediate Auto corrections instead of starving the worker");
+    set (processor, "drive", 20);
+    renderer.request (processor.getSettings(), {});
+    zao::PreviewFrame latest;
+    deadline = juce::Time::getMillisecondCounterHiRes()+3000; ready = false;
+    while (! (ready = renderer.read (latest)) && juce::Time::getMillisecondCounterHiRes() < deadline)
+        juce::Thread::sleep (1);
+    check (ready, "latest automation target has an independent reference correction");
+    deadline = juce::Time::getMillisecondCounterHiRes()+150; ready = false;
+    while (juce::Time::getMillisecondCounterHiRes() < deadline)
+    {
+        processor.readPreview (hidden);
+        if (std::abs (hidden.matchingGain-latest.matchingGain) < 1e-6) { ready = true; break; }
+        juce::Thread::sleep (1);
+    }
+    check (ready, "Auto catches up to the exact final settings after continuous automation");
+    juce::Thread::sleep (80);
+    check (! processor.readPreview (hidden), "faster Auto scheduling does not rerender unchanged controls");
 }
 
 void clearTests()
@@ -1270,6 +1314,9 @@ int main (int argc, char** argv)
             std::ofstream csv (directory.getChildFile ("auto-rms.csv").getFullPathName().toStdString());
             csv.precision (12); csv << "rate,mode,transformer,output_db,gain,error_db\n";
             for (const auto& m : autoMeasurements) csv << m.rate << ',' << m.mode << ',' << m.transformer << ',' << m.outputDb << ',' << m.gain << ',' << m.errorDb << '\n';
+            std::ofstream response (directory.getChildFile ("auto-response.csv").getFullPathName().toStdString());
+            response << "control,response_ms\n";
+            for (const auto& m : autoResponses) response << m.control << ',' << m.milliseconds << '\n';
         }
         std::cout << checks << " Zao Drive checks passed\n";
         return 0;

@@ -26,6 +26,13 @@ public:
     // parameter atomics / the analyser's lock-free snapshot. Audio reads just
     // the published scalar gain, even with the editor closed.
     void follow (std::function<Settings()>, std::function<SmartAnalyser::Result()>);
+    // Parameter listeners request work without taking the preview/result lock.
+    // Multiple changes during a render coalesce into the next latest snapshot.
+    void controlsChanged() noexcept
+    {
+        controlRevision.fetch_add (1, std::memory_order_release);
+        notify();
+    }
     void setVisible (bool visible) noexcept
     {
         if (previewVisible.exchange (visible) != visible) notify();
@@ -45,6 +52,7 @@ private:
     SmartAnalyser::Result requestedAnalysis;
     PreviewFrame result;
     std::atomic<uint32_t> revision { 0 };
+    std::atomic<uint32_t> controlRevision { 0 };
     bool pending = false;
     std::function<Settings()> settingsProvider;
     std::function<SmartAnalyser::Result()> analysisProvider;

@@ -43,7 +43,8 @@ void PreviewRenderer::cancel()
 bool PreviewRenderer::read (PreviewFrame& frame) const
 {
     const juce::ScopedLock lock (mutex);
-    if (result.revision == 0 || result.revision != revision.load() || result.revision == frame.revision) return false;
+    if (result.revision == 0 || (! settingsProvider && result.revision != revision.load())
+        || result.revision == frame.revision) return false;
     frame = result;
     return true;
 }
@@ -56,7 +57,7 @@ void PreviewRenderer::run()
         source[static_cast<size_t> (i)] = referenceSample (i);
     juce::AudioBuffer<float> block (2, 128);
     std::array<float, 15> previousKey {};
-    uint32_t previousAnalysis = 0;
+    uint32_t previousAnalysis = 0, previousControlRevision = 0;
     double lastRender = -1000;
     bool haveKey = false;
     while (! threadShouldExit())
@@ -67,14 +68,22 @@ void PreviewRenderer::run()
         std::array<float, 15> requestedKey {};
         if (settingsProvider)
         {
+            const auto changed = controlRevision.load (std::memory_order_acquire);
             settings = settingsProvider();
-            if (! settings.autoCompensate && ! previewVisible.load()) { wait (50); continue; }
+            if (! settings.autoCompensate && ! previewVisible.load()) { wait (-1); continue; }
             analysis = settings.smart ? analysisProvider() : SmartAnalyser::Result {};
             requestedKey = keyFor (settings);
             const auto now = juce::Time::getMillisecondCounterHiRes();
-            if ((haveKey && requestedKey == previousKey && analysis.revision == previousAnalysis)
-                || now-lastRender < 200) { wait (50); continue; }
+            const auto controlsChanged = ! haveKey || requestedKey != previousKey || changed != previousControlRevision;
+            // Control notifications have no polling delay or render-rate cap.
+            // Only Smart-only updates need polling and the existing CPU limit.
+            if (! controlsChanged && (analysis.revision == previousAnalysis || now-lastRender < 200))
+            {
+                wait (settings.smart ? 10 : -1);
+                continue;
+            }
             previousKey = requestedKey; previousAnalysis = analysis.revision;
+            previousControlRevision = changed;
             haveKey = true; lastRender = now; requested = revision.fetch_add (1)+1;
         }
         else
@@ -134,13 +143,9 @@ void PreviewRenderer::run()
             }
         }
         frame.scale = std::max (.25f, std::ceil (frame.peak*8)*.125f);
-        if (settingsProvider && keyFor (settingsProvider()) != requestedKey)
-        {
-            // A discarded frame is not a completed calibration. Retry even
-            // if rapid automation returns to this same key before the poll.
-            haveKey = false;
-            continue;
-        }
+        // Publish each completed snapshot even during continuous automation.
+        // Discarding every changed snapshot starves Auto while a knob is moving;
+        // notifications instead start the next latest snapshot immediately.
         const juce::ScopedLock lock (mutex);
         if (! threadShouldExit() && requested == revision.load())
         {

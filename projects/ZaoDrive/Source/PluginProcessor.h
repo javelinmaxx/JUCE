@@ -3,10 +3,12 @@
 #include "PreviewRenderer.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 
-class ZaoDriveProcessor final : public juce::AudioProcessor
+class ZaoDriveProcessor final : public juce::AudioProcessor,
+                                private juce::AudioProcessorValueTreeState::Listener
 {
 public:
     ZaoDriveProcessor();
+    ~ZaoDriveProcessor() override;
     void prepareToPlay (double, int) override;
     void releaseResources() override { engine.release(); }
     bool isBusesLayoutSupported (const BusesLayout&) const override;
@@ -36,6 +38,7 @@ public:
     bool readPreview (zao::PreviewFrame& frame) const { return reference.read (frame); }
     juce::AudioProcessorValueTreeState parameters;
 private:
+    void parameterChanged (const juce::String&, float) override { reference.controlsChanged(); }
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     std::array<std::atomic<float>*, 16> raw {};
     zao::DriveEngine engine;

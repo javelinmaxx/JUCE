@@ -32,10 +32,16 @@ The trim fades on Auto switching and follows the existing 20 ms Output smoothing
 Reported latency does not change.
 
 The processor owns the reference worker, so calibration works with the editor
-closed. Control and Smart-snapshot changes trigger an updated reference, at most
-five times per second; unchanged reference settings do not rerender. The worker
-rejects snapshots if the controls change during rendering. Audio only reads an
-atomic gain and applies it: no FFT, rendering, locks or allocation occurs there.
+closed. Parameter listeners wake it on every control change, replacing the
+previous 50 ms polling and 200 ms render limit. Control-driven calculations can
+run back to back without a fixed rate cap. Changes during a render coalesce
+into the next latest snapshot; each completed snapshot updates the gain, so
+continuous automation no longer starves correction by discarding every result.
+Smart-only changes retain their 200 ms limit. Unchanged reference settings do
+not rerender, and a closed editor with Auto Off leaves the worker asleep.
+The listener only marks a revision and signals the worker; preview rendering,
+result locking and buffer allocation stay off the audio callback. Audio reads
+the published atomic gain and applies it.
 The worker prepares its separate engine lazily and reuses it.
 
 Only a new correction or an On/Off change fades over 20 ms to avoid clicks.
@@ -73,7 +79,16 @@ compare compensated and uncompensated instances of every circuit, including
 the optional transformer: only the published fixed output gain may differ.
 Host bypass remains an exact delayed impulse. Separate tests check hidden-editor
 calibration, recalculation after Output changes, no gain change from live
-content, saved-state recall and legacy Auto-Off migration. Native editor tests
+content, saved-state recall and legacy Auto-Off migration. Consecutive Output,
+Drive, Tone and Mix changes must publish updated corrections within 150 ms each
+with the editor closed. A continuous 2 ms control sweep must publish intermediate
+corrections, then converge to an independently rendered final correction;
+unchanged settings must not trigger extra renders.
+The 150 ms test budget includes worker scheduling and rendering, rather than
+promising that deadline on every host. See [auto-response.csv](auto-response.csv)
+for measured worker publication times. In this Linux Release run they ranged
+from 17.5 to 28.3 ms; the existing 20 ms audio gain fade then applies
+the correction smoothly. Native editor tests
 check placement, host automation, negative/zero/positive RMS offsets and preview updates.
 Linux Release VST3 and Standalone builds passed. macOS and Windows builds were
 not run.
