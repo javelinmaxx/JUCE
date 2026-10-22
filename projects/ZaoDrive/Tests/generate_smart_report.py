@@ -34,7 +34,7 @@ for chord in range(2):
     d = audio[(audio["model"] == 1) & (audio["chord"] == chord)]
     b = bands[(bands["model"] == 1) & (bands["chord"] == chord)]
     ax = axes[1, chord]
-    for field, label in [("residual", "Driver − aligned input"), ("smart_residual", "Smart wet residual")]:
+    for field, label in [("residual", "Driver − filtered reference"), ("smart_residual", "Smart wet residual")]:
         hz, db = spectrum(d[field]); ax.semilogx(hz, db, label=label, linewidth=1)
     for hz in notes[chord]:
         ax.axvline(hz, color="gray", alpha=.35, linestyle=":")
@@ -80,8 +80,9 @@ report = f"""# Zao Drive Smart harmonic report
 
 ![Dissonance graph, content-dependent targets and measured wet spectra](smart-report.png)
 
-The driver and clean input run in parallel. The circuit output minus the aligned
-input forms the wet residual; Tone and Smart process this residual, then Mix
+The driver and clean input run in parallel. A linear-phase grey-noise-style
+FIR shapes the driver feed. The circuit output minus its aligned filtered
+reference forms the wet residual; Tone and Smart process this residual, then Mix
 adds it to the clean branch. Circuit gain/phase changes can remain in that
 residual, so subtraction alone does not mathematically isolate only higher orders.
 Smart protects existing input peaks and targets measured added harmonic orders
@@ -92,7 +93,7 @@ Drive, Bias, Knee, and the circuit equations stay unchanged.
 
 All four real circuit engines render C major (C4/E4/G4) and A minor (A3/C4/E4)
 at 48 kHz, 0.1 FS peak per sine, Drive 24 dB, Tone 18 kHz, Mix 100%, Output
-0 dB, transformer Off. A Hann-windowed 4096-sample frame determines the targets.
+0 dB, transformer Off, with grey shaping enabled. A Hann-windowed 4096-sample frame determines the targets.
 The actual causal filter bank then processes the recorded residual with that
 steady-state analysis snapshot. The final 8192 samples are measured by Hann-windowed
 Fourier projection at each selected harmonic frequency; these are measured

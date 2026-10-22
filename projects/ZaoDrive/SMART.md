@@ -7,9 +7,11 @@ Tone, or the physical circuit equations. Existing presets load Smart Off.
 ```mermaid
 flowchart LR
     I[Input] --> D[Align clean input]
-    I --> G[Input gain / Drive / circuit / 4x oversampling]
-    G --> S[Subtract aligned input]
-    D --> S
+    I --> F[Linear-phase grey FIR]
+    F --> G[Input gain / Drive / circuit / 4x oversampling]
+    G --> S[Subtract aligned filtered reference]
+    F --> R[Align filtered reference]
+    R --> S
     S --> T[Tone on wet residual]
     T --> H[Smart harmonic filters]
     D --> A[Add clean plus Mix times wet]
@@ -20,14 +22,20 @@ flowchart LR
     W -. targets .-> H
 ```
 
-For aligned clean input `x` and circuit output `d`, the wet branch is
-`r = Tone(d − x)`. Smart applies harmonic shaping `H` to this branch, then
+For aligned clean input `x`, aligned filtered reference `g`, and circuit output
+`d` driven from that filtered signal, the wet branch is `r = Tone(d − g)`.
+Smart applies harmonic shaping `H` to this branch, then
 `y = x + Mix × H(r)` before Output and the optional transformer. At Mix 0%,
 only the clean branch reaches the output stages. Smart Off makes `H` the identity.
-The input and wet branches share the circuit oversampler's integer delay; the
-output stages retain the existing transformer compensation delay.
+The clean branch includes the grey FIR's delay plus the circuit oversampler's
+integer delay; the filtered reference needs only the latter delay. The output
+stages retain the existing transformer compensation delay. The grey curve is a
+bounded inverse A-weighting approximation with about 6 dB of midrange reduction.
+A symmetric FIR keeps its added phase strictly linear; filter length scales with
+sample rate to hold approximately 2.67 ms delay (128 samples at 48 kHz). See the
+[grey filter report](Tests/Reports/grey-report.md) for its measured response.
 
-The subtraction is a driver-minus-input residual, not a perfect harmonic
+The subtraction is a driver-minus-filtered-reference residual, not a perfect harmonic
 separator: circuit gain, frequency response, phase, inversion correction and
 compression can leave fundamental components in the residual. Oversampler
 integer alignment does not invert its complete frequency-dependent response.

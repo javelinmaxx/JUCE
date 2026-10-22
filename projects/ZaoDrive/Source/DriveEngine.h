@@ -1,6 +1,7 @@
 #pragma once
 #include "Circuits.h"
 #include "SmartHarmonics.h"
+#include "GreyNoiseFilter.h"
 #include "../../CharacterCompressor/Source/OversampledTransformer.h"
 #include <juce_dsp/juce_dsp.h>
 #include <memory>
@@ -14,22 +15,25 @@ public:
     {
         sampleRate = rate;
         smart.prepare (rate, smartWorker);
+        greyNoise.prepare (rate);
         blockSize = std::max (1, maximumBlock);
         oversampling = std::make_unique<juce::dsp::Oversampling<float>> (
             2, 2, juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR, true, true);
         oversampling->initProcessing (static_cast<size_t> (blockSize));
         circuitLatency = juce::roundToInt (oversampling->getLatencyInSamples());
         scratch.setSize (2, blockSize);
+        filteredInput.setSize (2, blockSize);
         for (size_t ch = 0; ch < 2; ++ch)
         {
             bjt[ch].prepare (rate * 4); opamp[ch].prepare (rate * 4);
             shunt[ch].prepare (rate * 4); crossover[ch].prepare (rate * 4);
             transformers[ch].prepare (rate);
-            dryDelay[ch].assign (static_cast<size_t> (std::max (1, circuitLatency)), 0.0f);
+            dryDelay[ch].assign (static_cast<size_t> (greyNoise.getLatencySamples()+circuitLatency), 0.0f);
+            filteredDelay[ch].assign (static_cast<size_t> (std::max (1, circuitLatency)), 0.0f);
             bypassDelay[ch].assign (static_cast<size_t> (getLatency()), 0.0f);
         }
         cleanDelay = {}; toneState = {};
-        circuitPosition = transformerPosition = bypassPosition = 0;
+        circuitPosition = dryPosition = transformerPosition = bypassPosition = 0;
         for (auto* smoother : { &inputGain, &driveGain, &toneCutoff, &outputGain, &wetMix,
                                  &coreGain, &bias, &transformerBlend, &bypassBlend })
             smoother->reset (rate, 0.02);
@@ -43,7 +47,7 @@ public:
     SmartHarmonics& getSmart() noexcept { return smart; }
     const SmartHarmonics& getSmart() const noexcept { return smart; }
 
-    int getLatency() const noexcept { return circuitLatency + character::OversampledTransformer::latencySamples; }
+    int getLatency() const noexcept { return greyNoise.getLatencySamples() + circuitLatency + character::OversampledTransformer::latencySamples; }
 
     void process (juce::AudioBuffer<float>& buffer, const Settings& settings)
     {
@@ -59,7 +63,9 @@ public:
                 for (int ch = 0; ch < 2; ++ch)
                 {
                     const auto input = ch < channels ? buffer.getSample (ch, offset + i) : 0.0f;
-                    scratch.setSample (ch, i, std::clamp (std::isfinite (input) ? input : 0.0f, -32.0f, 32.0f) * gain);
+                    const auto filtered = greyNoise.process (std::clamp (std::isfinite (input) ? input : 0.0f, -32.0f, 32.0f), static_cast<size_t> (ch));
+                    filteredInput.setSample (ch, i, filtered);
+                    scratch.setSample (ch, i, filtered * gain);
                 }
             }
             auto hostBlock = juce::dsp::AudioBlock<float> (scratch).getSubBlock (0, static_cast<size_t> (count));
@@ -100,12 +106,16 @@ public:
                     const auto c = static_cast<size_t> (ch);
                     const auto original = buffer.getSample (ch, offset + i);
                     const auto input = std::isfinite (original) ? std::clamp (original, -32.0f, 32.0f) : 0.0f;
-                    const auto delayedDry = circuitLatency > 0 ? dryDelay[c][circuitPosition] : input;
-                    if (circuitLatency > 0) dryDelay[c][circuitPosition] = input;
+                    const auto delayedDry = dryDelay[c][dryPosition];
+                    dryDelay[c][dryPosition] = input;
+                    const auto filtered = filteredInput.getSample (ch, i);
+                    const auto reference = circuitLatency > 0 ? filteredDelay[c][circuitPosition] : filtered;
+                    if (circuitLatency > 0) filteredDelay[c][circuitPosition] = filtered;
                     const auto sample = scratch.getSample (ch, i);
-                    // Subtract the aligned clean branch before Tone and Smart;
-                    // only this driver-minus-input residual enters the wet branch.
-                    const auto residual = sample - delayedDry;
+                    // Subtract the aligned filtered reference: the grey contour
+                    // changes circuit excitation, while the separate clean branch
+                    // remains flat when we add the generated wet residual back.
+                    const auto residual = sample - reference;
                     const auto stateDelta = coefficient * (residual - toneState[c]);
                     const auto toned = toneState[c] + stateDelta;
                     toneState[c] = toned + stateDelta;
@@ -129,6 +139,7 @@ public:
                     buffer.setSample (ch, offset + i, std::isfinite (output) ? output : 0.0f);
                 }
                 if (circuitLatency > 0) circuitPosition = (circuitPosition + 1) % static_cast<size_t> (circuitLatency);
+                dryPosition = (dryPosition + 1) % dryDelay[0].size();
                 transformerPosition = (transformerPosition + 1) % cleanDelay[0].size();
                 bypassPosition = (bypassPosition + 1) % static_cast<size_t> (getLatency());
             }
@@ -207,20 +218,21 @@ private:
     }
 
     SmartHarmonics smart;
+    GreyNoiseFilter greyNoise;
     double sampleRate = 48000;
     int blockSize = 256, circuitLatency = 0, warmSamples = 0;
     bool firstSettings = true, transformerRunning = false;
     std::unique_ptr<juce::dsp::Oversampling<float>> oversampling;
-    juce::AudioBuffer<float> scratch;
+    juce::AudioBuffer<float> scratch, filteredInput;
     std::array<BjtCommonEmitter, 2> bjt;
     std::array<OpAmpFeedbackClipper, 2> opamp;
     std::array<DiodeShuntClipper, 2> shunt;
     std::array<SeriesDiodeCrossover, 2> crossover;
     std::array<character::OversampledTransformer, 2> transformers;
-    std::array<std::vector<float>, 2> dryDelay, bypassDelay;
+    std::array<std::vector<float>, 2> dryDelay, filteredDelay, bypassDelay;
     std::array<std::array<float, character::OversampledTransformer::latencySamples>, 2> cleanDelay {};
     std::array<float, 2> toneState {};
-    size_t circuitPosition = 0, transformerPosition = 0, bypassPosition = 0;
+    size_t circuitPosition = 0, dryPosition = 0, transformerPosition = 0, bypassPosition = 0;
     juce::SmoothedValue<float> inputGain, driveGain, toneCutoff, outputGain, wetMix;
     juce::SmoothedValue<float> coreGain, bias, transformerBlend, bypassBlend;
     juce::SmoothedValue<float> bjtBias, driverResistance, driverCurrent, driverCoefficient;

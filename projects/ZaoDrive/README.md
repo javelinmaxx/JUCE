@@ -20,9 +20,10 @@ The first knob changes with the mode:
 | OPAMP FB | Input | Adjusts input level from −24 to +24 dB. |
 | DIODE SHUNT / CROSSOVER | Knee | Varies driver impedance, current limit and bandwidth from firm to soft. |
 
-Drive adds up to 36 dB of excitation. The circuit output minus the aligned
-input forms a separate wet residual, which Tone filters from 1.2–18 kHz. Mix
-adds that residual to the clean input;
+Drive adds up to 36 dB of excitation. A linear-phase grey-noise-style FIR reduces
+midrange excitation before the driver, with about 6 dB attenuation near 2–4 kHz.
+The circuit output minus the aligned filtered reference forms a separate wet
+residual, which Tone filters from 1.2–18 kHz. Mix adds that residual to the clean input;
 Output sets the level entering the optional transformer.
 
 **Smart**, beside the circuit header, compares the input and generated wet
@@ -47,8 +48,15 @@ class. Core Drive and DC Bias have the same behavior, including hysteresis,
 frequency response, and filtering of generated distortion. The transformer
 stops processing once its Off fade finishes; re-enabling warms its delay before
 fading in. Circuit processing uses a separate 4× oversampler. Host latency is the
-integer circuit oversampler delay plus the transformer's fixed 64 samples and
+grey FIR delay (128 samples at 48 kHz), integer circuit oversampler delay,
+plus the transformer's fixed 64 samples and
 stays constant with every model, Mix, bypass, or transformer switching.
+
+The clean branch stays flat and is delayed to match the FIR. The FIR's linear
+phase prevents additional frequency-dependent phase rotation when the branches
+merge; circuit and transformer coloration still have their own phase response.
+See the [grey filter report](Tests/Reports/grey-report.md) for measured magnitude,
+phase and latency across sample rates.
 
 All controls have one-sentence hover hints, listed in [TOOLTIPS.md](TOOLTIPS.md).
 

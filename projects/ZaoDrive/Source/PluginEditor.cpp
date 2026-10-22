@@ -172,11 +172,11 @@ ZaoDriveEditor::ZaoDriveEditor (ZaoDriveProcessor& p) : AudioProcessorEditor (&p
     constexpr std::array<const char*, 7> names { "INPUT", "DRIVE", "TONE", "OUTPUT", "MIX", "CORE DRIVE", "DC BIAS" };
     constexpr std::array<const char*, 7> units { " dB", " dB", " Hz", " dB", " %", " dB", " %" };
     constexpr std::array<const char*, 7> hints {
-        "Adjusts the level entering the selected overdrive circuit.",
-        "Increases the signal driving the selected transistor, op-amp, or diode circuit.",
-        "Sets the low-pass cutoff of the driver-minus-input wet signal.",
+        "Adjusts the level entering the selected circuit after grey-noise shaping.",
+        "Increases the grey-noise-shaped signal driving the selected overdrive circuit.",
+        "Sets the low-pass cutoff of the driver-minus-reference wet signal.",
         "Adjusts gain after the wet and dry mix and before the output transformer.",
-        "Adds the driver-minus-input wet signal to the latency-aligned clean input.",
+        "Adds the driver-minus-reference wet signal to the latency-aligned clean input.",
         "Increases saturation in the enabled output transformer.",
         "Adds transformer asymmetry to increase even harmonics."
     };
@@ -247,7 +247,7 @@ void ZaoDriveEditor::updateInputControl (int circuit)
     const auto* name = circuit == 0 ? "BIAS" : circuit == 1 ? "INPUT" : "KNEE";
     const auto* hint = circuit == 0
         ? "Shifts the BJT base-bias voltage away from its nominal operating point."
-        : circuit == 1 ? "Adjusts the level entering the selected overdrive circuit."
+        : circuit == 1 ? "Adjusts the level entering the selected circuit after grey-noise shaping."
         : "Increases amplifier output impedance and softens current delivery into the Schottky diodes.";
     auto& slider = sliders[0];
     slider.setName (name); slider.setTitle (name);

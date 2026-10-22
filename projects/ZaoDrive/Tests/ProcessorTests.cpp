@@ -365,6 +365,96 @@ void smartTests()
            "Smart never changes Drive, Bias, Knee or their host automation values");
 }
 
+void greyNoiseTests()
+{
+    using Filter = zao::GreyNoiseFilter;
+    for (double rate : { 8000., 32000., 44100., 48000., 96000., 192000. })
+    {
+        Filter filter; filter.prepare (rate); const auto h = filter.getImpulseResponse();
+        double sum = 0, symmetry = 0, impulseError = 0, phaseError = 0, minimumResponse = 1;
+        for (int i = 0; i < static_cast<int> (h.size()); ++i)
+        {
+            const auto j = static_cast<size_t> (i);
+            sum += h[j]; symmetry = std::max (symmetry, std::abs (static_cast<double> (h[j]-h[h.size()-1-j])));
+            impulseError = std::max (impulseError, std::abs (static_cast<double> (filter.process (i == 0 ? 1.0f : 0.0f, 0)-h[j])));
+        }
+        check (symmetry < 1e-12 && impulseError < 1e-7, "grey FIR has an exactly symmetric impulse and the advertised group delay");
+        check (std::abs (sum-1) < 2e-7 && std::abs (filter.process (0, 1)) < 1e-12f,
+               "grey FIR preserves DC and has independent stereo history");
+        const auto response = [&] (double hz)
+        {
+            std::complex<double> result {};
+            for (int i = 0; i < static_cast<int> (h.size()); ++i)
+                result += static_cast<double> (h[static_cast<size_t> (i)])*std::polar (1.0, -2*zao::pi*hz*i/rate);
+            return result;
+        };
+        for (int i = 1; i < 512; ++i)
+        {
+            const auto hz = .5*rate*i/512;
+            const auto compensated = response (hz)*std::polar (1.0, 2*zao::pi*hz*filter.getLatencySamples()/rate);
+            phaseError = std::max (phaseError, std::abs (compensated.imag()));
+            minimumResponse = std::min (minimumResponse, compensated.real());
+        }
+        check (phaseError < 1e-10 && minimumResponse > .4,
+               "delay compensation leaves a real positive response with no frequency-dependent phase rotation");
+        check (20*std::log10 (std::abs (response (2500))) < -5.1,
+               "grey pre-emphasis reduces midrange drive by approximately six dB across supported rates");
+        if (rate >= 32000)
+            check (std::abs (20*std::log10 (std::abs (response (50)))) < .3
+                   && 20*std::log10 (std::abs (response (15000))) > -1,
+                   "grey contour keeps bass and upper treble near unity without boosting drive");
+        filter.reset();
+        std::mt19937 random (61); std::uniform_real_distribution<float> noise (-1, 1);
+        std::vector<float> input; double error = 0;
+        for (int i = 0; i < static_cast<int> (h.size())*3; ++i)
+        {
+            input.push_back (noise (random)); double expected = 0;
+            for (int j = 0; j <= std::min (i, static_cast<int> (h.size())-1); ++j)
+                expected += h[static_cast<size_t> (j)]*static_cast<double> (input[static_cast<size_t> (i-j)]);
+            error = std::max (error, std::abs (filter.process (input.back(), 0)-expected));
+        }
+        check (error < 1e-7, "optimized symmetric FIR matches direct convolution through history wraps");
+    }
+    for (double rate : { 44100., 48000., 96000. })
+        for (bool hostBypass : { false, true })
+        {
+            ZaoDriveProcessor processor; processor.prepareToPlay (rate, 64);
+            if (! hostBypass) { set (processor, "mix", 0); set (processor, "output", 0); }
+            juce::AudioBuffer<float> impulse (2, 1024); impulse.clear(); impulse.setSample (0, 0, 1);
+            juce::MidiBuffer midi;
+            if (hostBypass) processor.processBlockBypassed (impulse, midi); else processor.processBlock (impulse, midi);
+            double error = impulse.getMagnitude (1, 0, 1024);
+            for (int i = 0; i < 1024; ++i)
+                error = std::max (error, std::abs (static_cast<double> (impulse.getSample (0, i))-(i == processor.getLatencySamples() ? 1.0 : 0.0)));
+            check (error < 1e-7 && processor.getLatencySamples() >= Filter::latencyForRate (rate)+64,
+                   "clean mix and host bypass remain exact impulses at the full FIR-compensated latency");
+        }
+    for (int mode : { 0, 1, 2, 3 })
+    {
+        const auto run = [mode] (int chunk)
+        {
+            zao::DriveEngine engine; engine.prepare (48000, 64, false);
+            zao::Settings settings; settings.model = mode;
+            std::vector<float> output; juce::AudioBuffer<float> block (2, chunk);
+            for (int i = 0; i < 4096; i += chunk)
+            {
+                const auto n = std::min (chunk, 4096-i); block.setSize (2, n, false, false, true);
+                for (int j = 0; j < n; ++j)
+                {
+                    const auto x = static_cast<float> (.2*std::sin ((i+j)*.13));
+                    block.setSample (0, j, x); block.setSample (1, j, x);
+                }
+                engine.process (block, settings);
+                for (int j = 0; j < n; ++j) output.push_back (block.getSample (0, j));
+            }
+            return output;
+        };
+        const auto shortBlocks = run (17), longBlocks = run (513); double error = 0;
+        for (size_t i = 0; i < shortBlocks.size(); ++i) error = std::max (error, std::abs (static_cast<double> (shortBlocks[i]-longBlocks[i])));
+        check (error < 2e-6, "all circuit paths retain wet-reference alignment across arbitrary host block boundaries");
+    }
+}
+
 void processorTests()
 {
     ZaoDriveProcessor processor;
@@ -372,7 +462,7 @@ void processorTests()
            "all circuits register compatible legacy parameters plus independent Bias and Knee");
     processor.prepareToPlay (48000, 64);
     const auto latency = processor.getLatencySamples();
-    check (latency >= 64 && latency < 100, "host latency includes circuit oversampling and the shared transformer delay");
+    check (latency >= 64+zao::GreyNoiseFilter::referenceLatencySamples && latency < 100+zao::GreyNoiseFilter::referenceLatencySamples, "host latency includes grey FIR, circuit oversampling and the shared transformer delay");
     ZaoDriveProcessor mono;
     auto layout = mono.getBusesLayout();
     layout.inputBuses.set (0, juce::AudioChannelSet::mono());
@@ -468,17 +558,21 @@ void processorTests()
     s.driveDb = 12; auto crossoverDriven = render (s);
     crossoverQuiet.erase (crossoverQuiet.begin(), crossoverQuiet.end() - 4800);
     crossoverDriven.erase (crossoverDriven.begin(), crossoverDriven.end() - 4800);
-    check (amplitude (crossoverDriven, 1000) > 4.0 * amplitude (crossoverQuiet, 1000)
-           && amplitude (crossoverDriven, 1000) > 0.05 && amplitude (crossoverDriven, 2000) < 1.0e-5,
-           "Drive opens series-diode conduction while preserving symmetric crossover distortion");
+    check (amplitude (crossoverDriven, 3000) > 2.0 * amplitude (crossoverQuiet, 3000)
+           && amplitude (crossoverDriven, 3000) > 0.001 && amplitude (crossoverDriven, 2000) < 1.0e-5,
+           "Drive increases added crossover harmonics while symmetric clipping keeps even orders negligible");
 
     s.model = 1; s.driveDb = 24;
     auto oversampled = render (s, 9600, 9000);
     zao::OpAmpFeedbackClipper singleRate; singleRate.prepare (48000);
     std::vector<float> direct;
+    zao::GreyNoiseFilter aliasInput; aliasInput.prepare (48000);
     for (int i = 0; i < 9600; ++i)
-        direct.push_back (static_cast<float> (singleRate.process (0.25 * 0.35
-            * juce::Decibels::decibelsToGain (24.0) * std::sin (2.0 * zao::pi * 9000 * i / 48000.0))));
+    {
+        const auto x = static_cast<float> (.25*std::sin (2*zao::pi*9000*i/48000.0));
+        direct.push_back (static_cast<float> (singleRate.process (aliasInput.process (x, 0)*.35
+            * juce::Decibels::decibelsToGain (24.0))));
+    }
     oversampled.erase (oversampled.begin(), oversampled.end() - 4800);
     direct.erase (direct.begin(), direct.end() - 4800);
     const auto directAlias = amplitude (direct, 21000);
@@ -598,6 +692,22 @@ void writeReport (const juce::File& directory)
     std::ofstream softness (directory.getChildFile ("softness.csv").getFullPathName().toStdString());
     softness << "silicon_flat_fraction,schottky_flat_fraction\n" << siliconFlatFraction << ',' << schottkyFlatFraction << '\n';
     std::cout << "Measurements written to " << directory.getFullPathName() << '\n';
+}
+
+void writeGreyReport (const juce::File& directory)
+{
+    directory.createDirectory();
+    std::ofstream impulse (directory.getChildFile ("grey-impulse.csv").getFullPathName().toStdString());
+    std::ofstream latency (directory.getChildFile ("grey-latency.csv").getFullPathName().toStdString());
+    impulse.precision (17); impulse << "rate,tap,coefficient\n";
+    latency << "rate,taps,fir_samples,plugin_samples\n";
+    for (double rate : { 8000., 32000., 44100., 48000., 96000., 192000. })
+    {
+        zao::GreyNoiseFilter filter; filter.prepare (rate); const auto h = filter.getImpulseResponse();
+        zao::DriveEngine engine; engine.prepare (rate, 128, false);
+        latency << rate << ',' << h.size() << ',' << filter.getLatencySamples() << ',' << engine.getLatency() << '\n';
+        for (size_t i = 0; i < h.size(); ++i) impulse << rate << ',' << i << ',' << h[i] << '\n';
+    }
 }
 
 void writeSmartReport (const juce::File& directory)
@@ -788,7 +898,7 @@ int main (int argc, char** argv)
     try
     {
         juce::ScopedJuceInitialiser_GUI gui;
-        circuitTests(); shapeTests(); processorTests(); smartTests();
+        circuitTests(); shapeTests(); processorTests(); smartTests(); greyNoiseTests();
         if (argc > 2 && juce::String (argv[1]) == "--editor")
         {
             const auto option = argc > 3 ? juce::String (argv[3]) : juce::String();
@@ -796,6 +906,7 @@ int main (int argc, char** argv)
                             : option == "--crossover-preview" ? 3 : -1;
             editorTests (juce::File (argv[2]), option == "--tooltip", mode, option == "--smart-preview");
         }
+        if (argc > 2 && juce::String (argv[1]) == "--grey-report") writeGreyReport (juce::File (argv[2]));
         if (argc > 2 && juce::String (argv[1]) == "--smart-report") writeSmartReport (juce::File (argv[2]));
         if (argc > 2 && juce::String (argv[1]) == "--report") writeReport (juce::File (argv[2]));
         std::cout << checks << " Zao Drive checks passed\n";
