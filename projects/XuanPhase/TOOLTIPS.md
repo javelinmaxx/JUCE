@@ -9,4 +9,4 @@
 | Auto Depth | Scales the transient-guided phase correction without changing the manual rotations. |
 | Output | Adjusts the output level after manual and automatic phase rotation. |
 | Bypass | Bypasses phase processing while preserving the fixed 25 ms latency. |
-| Phase Field | Shows input transients moving left to right, with early bands green, late bands red, and applied phase in white. |
+| Phase Field | Shows three seconds of input transients moving left to right, with early bands green, late bands red, and applied phase in white against degree guides. |

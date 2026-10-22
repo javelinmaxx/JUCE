@@ -62,7 +62,7 @@ changes are smoothed over 20 ms. Auto analysis is dormant when Off.
 
 ## Phase Field meter
 
-The side panel shows five seconds of input spectrogram history on a logarithmic
+The side panel shows three seconds of input spectrogram history on a logarithmic
 frequency axis. **New data enters at the left and moves right** toward older
 history. Brighter pixels mean more input energy; **green** marks frequency bands
 arriving before the detected transient anchor, and **red** marks those arriving
@@ -71,12 +71,14 @@ Timing colors interpolate between adjacent detected bands; spectral energy
 remains unchanged, so genuine gaps in the input still appear dark.
 A small display hold makes short onsets visible without changing the audio detector.
 
-The narrow **white curve** at the right shows applied rotation relative to the
-25 ms reference, from −180° to +180° across its track. It is measured from the
+The **white curve** in the 56 px track at the right shows applied rotation
+relative to the 25 ms reference, from −180° to +180° across its track. It is measured from the
 active FIR, including manual rotation, Auto Depth, response crossfades, and bypass;
-it does not jump ahead to an unapplied worker target. The readout reports the
-largest absolute rotation. The lower strip shows input peak activity in white
-and detected transient activity in amber.
+it does not jump ahead to an unapplied worker target. Guides mark 0°, ±45°,
+±90°, and ±135°, with matching line styles in the key below the track; positive rotation is right of center and negative is left.
+The history is 168 px wide, and the readout reports the largest absolute
+rotation. The lower strip shows input peak activity in white and detected
+transient activity in amber.
 
 The meter shares the background spectral analysis. Fixed-size atomic snapshots
 transfer input and applied-response data without GUI locks in the audio callback.

@@ -2,7 +2,7 @@
 #include "PluginProcessor.h"
 #include "../../StagePluginStyle.h"
 
-// A five-second input spectrogram: newest at left, older data moving right.
+// A three-second input spectrogram: newest at left, older data moving right.
 // Colour describes observed arrival error; the separate white curve is the
 // measured complex response of the kernels actually used by the audio path.
 class XuanPhaseMeter final : public juce::Component,
@@ -20,7 +20,7 @@ public:
     const xuan::RotationFrame& currentRotation() const noexcept { return rotation; }
     static juce::Colour timingColour (float milliseconds, float energy) noexcept;
 private:
-    static constexpr int columns = 150;
+    static constexpr int columns = 90;
     void timerCallback() override;
     void append (const xuan::SpectrumFrame&);
     XuanPhaseProcessor& processor;

@@ -145,7 +145,9 @@ sample rate).
 
 The native editor test streams repeated dispersed hits through the real processor
 and worker, observes transient events and both signed timing directions, and
-checks that non-empty image columns move from left to right. Green indicates an
+checks that non-empty image columns move from left to right across the
+three-second history. The history is 168 px wide beside a 56 px applied-phase
+track, with styled guides and a key for 0°, ±45°, ±90°, and ±135°. Green indicates an
 early input band and red a late input band. The white curve uses the measured
 complex FIR response: tests compare it with an independent DFT, ensure queued
 responses do not appear before audio applies them, verify updates after handoff,

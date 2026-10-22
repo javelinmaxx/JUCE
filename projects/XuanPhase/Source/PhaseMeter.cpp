@@ -6,7 +6,7 @@ const auto early = juce::Colour (0xff72ce9c), late = juce::Colour (0xfff07880);
 }
 XuanPhaseMeter::XuanPhaseMeter (XuanPhaseProcessor& p) : processor (p)
 {
-    setTooltip ("Shows input transients moving left to right, with early bands green, late bands red, and applied phase in white.");
+    setTooltip ("Shows three seconds of input transients moving left to right, with early bands green, late bands red, and applied phase in white against degree guides.");
     lastColumn = lastInput = juce::Time::getMillisecondCounterHiRes();
 }
 XuanPhaseMeter::~XuanPhaseMeter() { stopTimer(); processor.setMeterVisible (false); }
@@ -70,8 +70,8 @@ void XuanPhaseMeter::paint (juce::Graphics& g)
     g.setFont (juce::FontOptions (9));
     g.setColour (early); g.drawText ("EARLY", 14, 34, 50, 16, juce::Justification::centredLeft);
     g.setColour (late); g.drawText ("LATE", 68, 34, 50, 16, juce::Justification::centredLeft);
-    g.setColour (secondary); g.drawText ("INPUT / APPLIED PHASE", 124, 34, 145, 16, juce::Justification::centredRight);
-    const juce::Rectangle<float> plot {38, 64, 208, 204}, phase {250, 64, 16, 204};
+    g.setColour (secondary); g.drawText ("INPUT / APPLIED PHASE", 114, 34, 155, 16, juce::Justification::centredRight);
+    const juce::Rectangle<float> plot {38, 64, 168, 204}, phase {210, 64, 56, 204};
     g.setColour (inset); g.fillRect (plot); g.fillRect (phase);
     g.setImageResamplingQuality (juce::Graphics::lowResamplingQuality);
     g.drawImage (history, plot);
@@ -84,22 +84,50 @@ void XuanPhaseMeter::paint (juce::Graphics& g)
         g.setColour (grid.withAlpha (.65f)); g.drawHorizontalLine (juce::roundToInt (y), plot.getX(), phase.getRight());
         g.setColour (secondary); g.drawText (f >= 1000 ? juce::String (f/1000, 0)+"k" : juce::String (f, 0), 4, juce::roundToInt (y)-6, 30, 12, juce::Justification::centredRight);
     }
-    g.setColour (secondary); g.drawText ("ROT", 248, 48, 20, 14, juce::Justification::centred);
-    g.setColour (grid); g.drawVerticalLine (juce::roundToInt (phase.getCentreX()), phase.getY(), phase.getBottom());
+    g.setColour (secondary); g.drawText ("PHASE", 210, 48, 56, 14, juce::Justification::centred);
+    const auto phaseX = [&] (float degrees) { return phase.getCentreX()+degrees/180*(phase.getWidth()*.5f-1); };
+    // A four-row key keeps degree labels legible in the 56 px track; paired
+    // positive/negative guides share a dash pattern and the same +/- label.
+    const auto guide = [&] (juce::Line<float> line, int index)
+    {
+        if (index == 0) g.drawLine (line, .8f);
+        else
+        {
+            const float dashes[] {static_cast<float> (index == 1 ? 1 : index == 2 ? 4 : 8), 3};
+            g.drawDashedLine (line, dashes, 2, .7f);
+        }
+    };
+    g.setFont (juce::FontOptions (9));
+    for (int index = 0; index < 4; ++index)
+    {
+        const auto degrees = 45*index;
+        g.setColour (secondary.withAlpha (index == 0 ? .65f : .35f));
+        for (int sign : {-1, 1})
+        {
+            if (index == 0 && sign == -1) continue;
+            const auto x = phaseX (static_cast<float> (sign*degrees));
+            guide ({x, phase.getY(), x, phase.getBottom()}, index);
+        }
+        const auto y = 280.f+17*index;
+        g.setColour (secondary); guide ({212, y+6, 224, y+6}, index);
+        const auto text = (index == 0 ? juce::String ("0") : juce::String::fromUTF8 ("±")+juce::String (degrees))
+                        +juce::String::fromUTF8 ("°");
+        g.drawText (text, 227, juce::roundToInt (y), 39, 13, juce::Justification::centredLeft);
+    }
     juce::Path response; float maximum = 0;
     for (int row = 0; row < xuan::meterBins; ++row)
     {
         const auto angle = std::atan2 (rotation[static_cast<size_t> (xuan::meterBins+row)], rotation[static_cast<size_t> (row)]);
-        const auto x = phase.getCentreX()+angle/juce::MathConstants<float>::pi*7;
+        const auto x = phaseX (angle*180/juce::MathConstants<float>::pi);
         const auto y = phase.getBottom()-static_cast<float> (row)/(xuan::meterBins-1)*phase.getHeight();
         if (row == 0) response.startNewSubPath (x, y); else response.lineTo (x, y);
         maximum = std::max (maximum, std::abs (angle)*180/juce::MathConstants<float>::pi);
     }
     g.setColour (foreground); g.strokePath (response, juce::PathStrokeType (1.2f));
     g.setColour (secondary); g.drawText ("NOW", 38, 271, 60, 15, juce::Justification::centredLeft);
-    g.drawText ("5 s ago  >", 160, 271, 86, 15, juce::Justification::centredRight);
-    g.drawText ("INPUT TRANSIENT", 14, 292, 250, 16, juce::Justification::centredLeft);
-    const juce::Rectangle<float> envelope {38, 312, 208, 30};
+    g.drawText ("3 s ago  >", 124, 271, 82, 15, juce::Justification::centredRight);
+    g.drawText ("INPUT TRANSIENT", 14, 292, 192, 16, juce::Justification::centredLeft);
+    const juce::Rectangle<float> envelope {38, 312, 168, 30};
     g.setColour (inset); g.fillRect (envelope);
     juce::Path trace;
     for (int col = 0; col < columns; ++col)
