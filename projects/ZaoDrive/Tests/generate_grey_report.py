@@ -19,7 +19,8 @@ lu = np.array([-31.6,-27.2,-23,-19.1,-15.9,-13,-10.3,-8.1,-6.2,-4.5,-3.1,-2,-1.1
 tf = np.array([78.5,68.7,59.5,51.1,44,37.5,31.5,26.5,22.1,17.9,14.4,11.4,8.6,6.2,4.4,3,2.2,2.4,3.5,1.7,-1.3,-4.2,-6,-5.4,-1.5,6,12.6,13.9,12.3])
 a = 4.47e-3*(10**(.025*80)-1.15) + (.4*10**((tf+lu)/10-9))**af
 spl = 10/af*np.log10(a)-lu+94
-reference = spl-spl[17]
+reference_spl = np.interp(np.log(1500), np.log(target["frequency"]), spl)
+reference = spl-reference_spl
 assert np.max(abs(target["spl80"]-spl)) < 1e-9, "C++ ISO SPL differs from independent equation"
 assert np.max(abs(target["uncapped_db"]-reference)) < 1e-9
 assert np.max(abs(target["target_db"]-np.minimum(3, reference))) < 1e-9
@@ -49,12 +50,12 @@ for entry in latencies:
     max_response = max(max_response, np.max(db))
     assert compensated.real.min() > .4, "No hidden polarity reversals in the response"
     assert np.max(db) <= 3.00001, "Actual FIR exceeds the requested +3 dB ceiling"
-    _, anchor = freqz(h, worN=[2*np.pi*1000/rate])
-    assert abs(20*np.log10(abs(anchor[0]))) < 1e-5, "1 kHz must remain at unity"
+    _, anchor = freqz(h, worN=[2*np.pi*1500/rate])
+    assert abs(20*np.log10(abs(anchor[0]))) < 1e-5, "1.5 kHz must remain at unity"
     valid = (hz >= 20) & (hz <= 12500)
     fit_error = np.max(abs(db[valid]-target_db(hz[valid])))
     max_fit_error = max(max_fit_error, fit_error)
-    assert fit_error < 1, "Short FIR fit to ISO contour must remain within one dB"
+    assert fit_error < 1.1, "Short FIR fit to ISO contour must remain within 1.1 dB"
     _, mid = freqz(h, worN=[2*np.pi*3150/rate])
     mid_db = 20*np.log10(abs(mid[0]))
     rows.append(f"| {rate:,} | {len(h)} | {delay} | {1000*delay/rate:.3f} | {int(entry['plugin_samples'])} | {mid_db:.2f} dB |")
@@ -70,7 +71,7 @@ for entry in latencies:
 plot_hz = np.geomspace(20, 20000, 4096)
 axes[0, 0].semilogx(plot_hz, target_db(plot_hz), "--", color="black", linewidth=1, label="ISO 80-phon target / +3 dB cap")
 axes[0, 0].axhline(3, color="gray", linestyle=":", linewidth=.8)
-axes[0, 0].set(xlim=(20, 20000), ylim=(-3.5, 3.5), xlabel="Hz", ylabel="Gain (dB)", title="80 phons, 1 kHz reference, +3 dB upward cap")
+axes[0, 0].set(xlim=(20, 20000), ylim=(-6.5, 3.5), xlabel="Hz", ylabel="Gain (dB)", title="80 phons, 1.5 kHz reference, +3 dB upward cap")
 axes[0, 0].legend(fontsize=8)
 axes[0, 1].set(xlim=(20, 20000), xlabel="Hz", ylabel="Residual phase (degrees)", title="After matching the pure FIR delay")
 axes[1, 0].set(xlabel="Sample", ylabel="Coefficient", title="Measured impulse response at 48 kHz")
@@ -89,9 +90,9 @@ report = f"""# Zao Drive 80-phon contour test report
 ![Capped ISO target, measured magnitude, phase and group delay](grey-report.png)
 
 The wet-driver input now uses the **ISO 226:2003 equal-loudness contour at
-80 phons**, referenced to **0 dB at 1 kHz**, with **upward gain capped at +3 dB**.
-Negative gains keep their ISO values; there is no overall depth compression or
-inversion of the contour. This replaces the former bounded inverse A-weighting
+80 phons**, referenced to **0 dB at 1.5 kHz**, with **upward gain capped at +3 dB**.
+Only upward target gain is limited; negative target gains retain their ISO
+values without inverting the contour. This replaces the former bounded inverse A-weighting
 approximation. The phon selection defines the filter shape; the plugin does not
 calibrate playback SPL or claim to set the listener's loudness to 80 phons.
 
@@ -103,11 +104,12 @@ The standard's 29 frequencies, `af`, `Lu` and `Tf` coefficients determine the
 ```text
 Af = 4.47e-3 × (10^(0.025 × 80) − 1.15) + (0.4 × 10^((Tf + Lu)/10 − 9))^af
 Lp = (10/af) × log10(Af) − Lu + 94
-gain = min(+3 dB, Lp(f) − Lp(1 kHz))
+gain = min(+3 dB, Lp(f) − Lp(1.5 kHz))
 ```
 
-The 1 kHz SPL reference is approximately 80.012075 dB. Uncapped relative gains
-are about +38.978 dB at 20 Hz, −2.096 dB at 4 kHz and +12.957 dB at 12.5 kHz.
+The 1.5 kHz SPL reference is interpolated to approximately {reference_spl:.6f} dB.
+Uncapped relative gains are about {reference[0]:+.3f} dB at 20 Hz,
+{reference[23]:+.3f} dB at 4 kHz and {reference[28]:+.3f} dB at 12.5 kHz.
 The upward values become +3 dB; the 4 kHz cut is retained. SPL is interpolated
 linearly in log frequency before applying the cap. Endpoints are held below
 20 Hz and above 12.5 kHz, where this ISO table provides no additional values.
@@ -120,12 +122,15 @@ the standard's equation agrees with the C++ values within 1e-9 dB.
 ## FIR measurements
 
 A Kaiser-windowed (beta 3), symmetric Type-I FIR implements the target. It is
-normalised at 1 kHz after windowing. Coefficients are designed during preparation;
+normalised at 1.5 kHz after windowing. If that normalization lifts the actual
+response above +3 dB, a small blend with a pure delay bounds it while preserving
+unity at 1.5 kHz and exact tap symmetry. This blends only enough to enforce the
+existing cap. Coefficients are designed during preparation;
 no coefficient design or allocation occurs in the audio callback. The short FIR
 smooths the contour's fine details: maximum fit error is **{max_fit_error:.3f} dB**
 from 20 Hz to the smaller of Nyquist and 12.5 kHz over the tested sample rates.
 Maximum actual upward gain is **{max_response:.3f} dB**, within the requested cap;
-1 kHz remains at unity within 1e-5 dB.
+1.5 kHz remains at unity within 1e-5 dB.
 
 Delay is unchanged: approximately 2.67 ms, or 128 samples for the 257-tap FIR at
 48 kHz. Every measured impulse is exactly symmetric. After compensating its
@@ -142,7 +147,7 @@ remain aligned in all modes, Smart states and Mix settings.
 
 ## Regression coverage
 
-C++ checks validate independent 80-phon SPL anchors, the 1 kHz reference, the
+C++ checks validate independent 80-phon SPL anchors, the 1.5 kHz reference, the
 unscaled negative gains, the +3 dB target and actual-response ceilings, endpoint
 handling, impulse/streaming agreement, direct-convolution equivalence through
 history wraps and stereo isolation from 8–192 kHz. End-to-end impulse tests

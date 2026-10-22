@@ -22,7 +22,7 @@ The first knob changes with the mode:
 
 Drive adds up to 36 dB of excitation. A linear-phase FIR shapes the driver input
 with the ISO 226:2003 equal-loudness contour at 80 phons, referenced to 0 dB at
-1 kHz and capped at +3 dB upward gain.
+1.5 kHz and capped at +3 dB upward gain.
 The circuit output minus the aligned filtered reference forms a separate wet
 residual, which Tone filters from 1.2–18 kHz. Mix adds that residual to the clean input;
 Output sets the level entering the optional transformer.

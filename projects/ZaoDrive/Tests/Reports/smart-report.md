@@ -24,14 +24,14 @@ and nearby harmonics can affect the measurements.
 
 | Circuit | Chord | Target bands | Weighted harmonic energy reduction | Target harmonic energy retained |
 | --- | --- | ---: | ---: | ---: |
-| BJT CE | C major | 14 | 28.7% | 75.3% |
-| BJT CE | A minor | 16 | 33.3% | 76.1% |
-| Op-Amp feedback | C major | 16 | 31.8% | 73.5% |
-| Op-Amp feedback | A minor | 16 | 36.4% | 69.9% |
-| Diode shunt | C major | 16 | 31.8% | 73.4% |
-| Diode shunt | A minor | 16 | 36.1% | 70.3% |
-| Series crossover | C major | 3 | 30.5% | 73.0% |
-| Series crossover | A minor | 4 | 19.1% | 81.9% |
+| BJT CE | C major | 12 | 27.3% | 76.2% |
+| BJT CE | A minor | 15 | 29.4% | 78.2% |
+| Op-Amp feedback | C major | 16 | 30.4% | 74.8% |
+| Op-Amp feedback | A minor | 16 | 35.1% | 70.8% |
+| Diode shunt | C major | 16 | 30.4% | 74.7% |
+| Diode shunt | A minor | 16 | 34.8% | 71.1% |
+| Series crossover | C major | 1 | 49.7% | 50.3% |
+| Series crossover | A minor | 4 | 21.0% | 80.2% |
 
 The cost is the sum of target harmonic power times its interval dissonance;
 retention is the power remaining at those targets, not total output loudness.

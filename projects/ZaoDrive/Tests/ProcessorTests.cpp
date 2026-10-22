@@ -373,9 +373,9 @@ void greyNoiseTests()
         { 0, 118.990011 }, { 7, 92.479723 }, { 17, 80.012075 }, { 23, 77.916229 }, { 28, 92.969435 } } })
         check (std::abs (zao::EqualLoudness80::splAtIndex (point.first)-point.second) < 1e-6,
                "80-phon ISO 226 SPL anchors match independent reference values");
-    check (std::abs (Filter::targetDb (1000)) < 1e-12
-           && std::abs (Filter::targetDb (4000)+2.095846) < 1e-6,
-           "80-phon contour is referenced to 1 kHz and retains its unscaled midrange valley");
+    check (std::abs (Filter::targetDb (1500)) < 1e-12
+           && std::abs (Filter::targetDb (4000)+5.495842) < 1e-6,
+           "80-phon contour is referenced to 1.5 kHz and retains its unscaled midrange valley");
     check (std::abs (Filter::targetDb (20)-3) < 1e-12 && std::abs (Filter::targetDb (12500)-3) < 1e-12
            && std::abs (Filter::targetDb (0)-3) < 1e-12 && std::abs (Filter::targetDb (20000)-3) < 1e-12,
            "only upward contour gain is capped at three dB and ISO endpoints are held outside the table");
@@ -409,9 +409,9 @@ void greyNoiseTests()
         }
         check (phaseError < 1e-10 && minimumResponse > .4,
                "delay compensation leaves a real positive response with no frequency-dependent phase rotation");
-        check (std::abs (20*std::log10 (std::abs (response (1000)))) < 1e-5
+        check (std::abs (20*std::log10 (std::abs (response (1500)))) < 1e-5
                && 20*std::log10 (std::abs (response (3150))) < -1,
-               "implemented 80-phon FIR keeps 1 kHz at unity and attenuates the sensitive midrange");
+               "implemented 80-phon FIR keeps 1.5 kHz at unity and attenuates the sensitive midrange");
         check (20*std::log10 (maximumResponse) <= 3.00001,
                "the actual FIR response respects the three dB upward gain cap");
         if (rate >= 32000)

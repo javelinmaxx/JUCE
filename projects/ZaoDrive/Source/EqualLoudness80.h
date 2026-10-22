@@ -7,10 +7,12 @@ namespace zao
 {
 // ISO 226:2003 normal equal-loudness contours, fixed at 80 phons. The standard
 // supplies these 29 frequencies and af/Lu/Tf coefficients for its SPL equation.
-// Filter gains use SPL(f)-SPL(1 kHz), with the requested +3 dB ceiling.
+// Filter gains use SPL(f)-SPL(1.5 kHz), with the requested +3 dB ceiling.
 class EqualLoudness80
 {
 public:
+    static constexpr double referenceFrequencyHz = 1500;
+    static constexpr double maximumBoostDb = 3;
     static constexpr std::array<double, 29> frequencies {
         20, 25, 31.5, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500,
         630, 800, 1000, 1250, 1600, 2000, 2500, 3150, 4000, 5000, 6300, 8000, 10000, 12500 };
@@ -31,7 +33,7 @@ public:
         return 10/af[index]*std::log10 (a)-lu[index]+94;
     }
 
-    static double contourDb (double frequency) noexcept
+    static double splDb (double frequency) noexcept
     {
         // The ISO table ends at 20 Hz and 12.5 kHz. Hold those endpoints outside
         // its range rather than inventing an extension of the standard.
@@ -43,14 +45,23 @@ public:
             return result;
         }();
         const auto upper = std::upper_bound (frequencies.begin(), frequencies.end(), hz);
-        if (upper == frequencies.end()) return spl.back()-spl[17];
+        if (upper == frequencies.end()) return spl.back();
         const auto high = static_cast<size_t> (upper-frequencies.begin()), low = high-1;
         const auto t = std::log (hz/frequencies[low])/std::log (frequencies[high]/frequencies[low]);
-        return spl[low]+t*(spl[high]-spl[low])-spl[17];
+        return spl[low]+t*(spl[high]-spl[low]);
+    }
+    static double referenceSpl() noexcept
+    {
+        static const auto reference = splDb (referenceFrequencyHz);
+        return reference;
+    }
+    static double contourDb (double frequency) noexcept
+    {
+        return splDb (frequency)-referenceSpl();
     }
     static double gainDb (double frequency) noexcept
     {
-        return std::min (3.0, contourDb (frequency));
+        return std::min (maximumBoostDb, contourDb (frequency));
     }
 };
 }

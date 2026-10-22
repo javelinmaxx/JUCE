@@ -3,9 +3,9 @@
 ![Capped ISO target, measured magnitude, phase and group delay](grey-report.png)
 
 The wet-driver input now uses the **ISO 226:2003 equal-loudness contour at
-80 phons**, referenced to **0 dB at 1 kHz**, with **upward gain capped at +3 dB**.
-Negative gains keep their ISO values; there is no overall depth compression or
-inversion of the contour. This replaces the former bounded inverse A-weighting
+80 phons**, referenced to **0 dB at 1.5 kHz**, with **upward gain capped at +3 dB**.
+Only upward target gain is limited; negative target gains retain their ISO
+values without inverting the contour. This replaces the former bounded inverse A-weighting
 approximation. The phon selection defines the filter shape; the plugin does not
 calibrate playback SPL or claim to set the listener's loudness to 80 phons.
 
@@ -17,11 +17,12 @@ The standard's 29 frequencies, `af`, `Lu` and `Tf` coefficients determine the
 ```text
 Af = 4.47e-3 × (10^(0.025 × 80) − 1.15) + (0.4 × 10^((Tf + Lu)/10 − 9))^af
 Lp = (10/af) × log10(Af) − Lu + 94
-gain = min(+3 dB, Lp(f) − Lp(1 kHz))
+gain = min(+3 dB, Lp(f) − Lp(1.5 kHz))
 ```
 
-The 1 kHz SPL reference is approximately 80.012075 dB. Uncapped relative gains
-are about +38.978 dB at 20 Hz, −2.096 dB at 4 kHz and +12.957 dB at 12.5 kHz.
+The 1.5 kHz SPL reference is interpolated to approximately 83.412071 dB.
+Uncapped relative gains are about +35.578 dB at 20 Hz,
+-5.496 dB at 4 kHz and +9.557 dB at 12.5 kHz.
 The upward values become +3 dB; the 4 kHz cut is retained. SPL is interpolated
 linearly in log frequency before applying the cap. Endpoints are held below
 20 Hz and above 12.5 kHz, where this ISO table provides no additional values.
@@ -34,12 +35,15 @@ the standard's equation agrees with the C++ values within 1e-9 dB.
 ## FIR measurements
 
 A Kaiser-windowed (beta 3), symmetric Type-I FIR implements the target. It is
-normalised at 1 kHz after windowing. Coefficients are designed during preparation;
+normalised at 1.5 kHz after windowing. If that normalization lifts the actual
+response above +3 dB, a small blend with a pure delay bounds it while preserving
+unity at 1.5 kHz and exact tap symmetry. This blends only enough to enforce the
+existing cap. Coefficients are designed during preparation;
 no coefficient design or allocation occurs in the audio callback. The short FIR
-smooths the contour's fine details: maximum fit error is **0.879 dB**
+smooths the contour's fine details: maximum fit error is **1.059 dB**
 from 20 Hz to the smaller of Nyquist and 12.5 kHz over the tested sample rates.
-Maximum actual upward gain is **2.647 dB**, within the requested cap;
-1 kHz remains at unity within 1e-5 dB.
+Maximum actual upward gain is **3.000 dB**, within the requested cap;
+1.5 kHz remains at unity within 1e-5 dB.
 
 Delay is unchanged: approximately 2.67 ms, or 128 samples for the 257-tap FIR at
 48 kHz. Every measured impulse is exactly symmetric. After compensating its
@@ -48,12 +52,12 @@ across 8192 frequency points per rate.
 
 | Sample rate | FIR taps | Added FIR samples | Added FIR ms | Total plugin samples | Gain at 3.15 kHz |
 | ---: | ---: | ---: | ---: | ---: | ---: |
-| 8,000 | 43 | 21 | 2.625 | 91 | -1.98 dB |
-| 32,000 | 171 | 85 | 2.656 | 155 | -1.98 dB |
-| 44,100 | 237 | 118 | 2.676 | 188 | -1.97 dB |
-| 48,000 | 257 | 128 | 2.667 | 198 | -1.97 dB |
-| 96,000 | 513 | 256 | 2.667 | 326 | -1.97 dB |
-| 192,000 | 1025 | 512 | 2.667 | 582 | -1.98 dB |
+| 8,000 | 43 | 21 | 2.625 | 91 | -4.65 dB |
+| 32,000 | 171 | 85 | 2.656 | 155 | -4.65 dB |
+| 44,100 | 237 | 118 | 2.676 | 188 | -4.65 dB |
+| 48,000 | 257 | 128 | 2.667 | 198 | -4.65 dB |
+| 96,000 | 513 | 256 | 2.667 | 326 | -4.65 dB |
+| 192,000 | 1025 | 512 | 2.667 | 582 | -4.63 dB |
 
 Total plugin latency includes the FIR, circuit oversampler delay and existing
 64-sample transformer compensation. Clean, filtered-reference and bypass delays
@@ -61,7 +65,7 @@ remain aligned in all modes, Smart states and Mix settings.
 
 ## Regression coverage
 
-C++ checks validate independent 80-phon SPL anchors, the 1 kHz reference, the
+C++ checks validate independent 80-phon SPL anchors, the 1.5 kHz reference, the
 unscaled negative gains, the +3 dB target and actual-response ceilings, endpoint
 handling, impulse/streaming agreement, direct-convolution equivalence through
 history wraps and stereo isolation from 8–192 kHz. End-to-end impulse tests
