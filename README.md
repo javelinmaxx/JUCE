@@ -126,15 +126,17 @@ attacks; this compact version omits Haas search, meters, and band controls.
 
 ### Xuan Phase
 
-![Xuan Phase with independent Low Phase and High Phase knobs, Crossover, Auto Depth, and Output](projects/XuanPhase/Previews/xuan-phase.png)
+![Xuan Phase with independent Low Phase and High Phase knobs, Crossover, Auto Depth, Transient, and Stereo Link](projects/XuanPhase/Previews/xuan-phase.png)
 
 Rotate the low and high frequencies independently through ±180°, with a smooth
 adjustable crossover and a fixed **25 ms** reference delay. **Auto** detects
 clear transients and uses their spectrogram phase and phase slopes to align
 narrow frequency bands; signed **Auto Depth** scales or reverses that correction
-independently of the manual settings, and **Transient** sets its release time. Shared stereo processing preserves channel relationships.
+independently of the manual settings, and **Transient** sets its release time.
+**Stereo Link** blends from shared correction through independent channel
+processing to opposing transient shifts.
 The side spectrogram moves left to right, colouring early bands green and late
-bands red, with a separate white trace for the phase rotation actually applied.
+bands red, with white left-channel and gold right-channel traces for applied phase.
 
 [Controls and signal path](projects/XuanPhase/README.md) ·
 [Phase and transient measurements](projects/XuanPhase/Tests/Reports/REPORT.md) ·

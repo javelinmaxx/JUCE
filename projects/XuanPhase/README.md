@@ -2,7 +2,7 @@
 
 Xuan Phase is J-SONIC's manual and transient-guided phase rotator. It offers
 independent low/high rotation, a smooth adjustable crossover, signed Auto Depth,
-Transient release, Output, and a fixed **25 ms reference latency** in a 50%–120% scalable editor.
+Transient release, Stereo Link, and a fixed **25 ms reference latency** in a 50%–120% scalable editor.
 The 840 × 490 default panel includes a vertical phase-field meter beside the controls.
 
 ![Xuan Phase native editor](Previews/xuan-phase.png)
@@ -12,7 +12,8 @@ The 840 × 490 default panel includes a vertical phase-field meter beside the co
 Low Phase and High Phase range from −180° to +180°. Crossover, from 80 Hz to
 4 kHz, smoothly blends the two phase settings; at the crossover the requested
 angle is their average. Positive angles advance phase relative to the delayed
-reference, and negative angles retard it. Both stereo channels use one response.
+reference, and negative angles retard it. Both channels share the manual
+response; Stereo Link controls their automatic corrections.
 
 A 20 Hz cycle lasts 50 ms, so 180° at 20 Hz corresponds to 25 ms. The plugin
 reports `round(sampleRate × 0.025)` samples to the host: 1,200 samples at 48 kHz.
@@ -45,8 +46,24 @@ band-delay targets are limited to ±25 ms.
 **Auto Depth** ranges from −100% to +100% and scales only these additional
 corrections: 0% leaves the manual response unchanged, +100% applies the full
 detected target, and negative values reverse the correction away from alignment.
-A shared stereo reference preserves the relationship between channels; nearly cancelling
-anti-phase input uses the left channel as the analysis reference.
+**Stereo Link** replaces Output and ranges from −100% to +100%:
+
+- **+100%** (default) applies one shared correction to both channels, preserving
+  their phase relationship; nearly cancelling mid input uses the left channel
+  as the shared analysis reference.
+- **0%** detects, corrects, and releases each channel independently, with no
+  contribution from the shared target.
+- **−100%** keeps independent correction and adds opposing shifts of up to
+  2.5 ms per channel at full Depth, aiming to move their transients farther
+  apart; the channel whose detected anchor is earlier moves earlier, and the
+  later one moves later (equal anchors use left-earlier/right-later).
+
+Positive intermediate values blend toward the shared correction; negative
+values scale separation continuously. Separation follows Transient release
+and absolute Auto Depth; at zero Depth or Auto Off it stops. Mono layouts use
+independent correction without an opposing shift. The fixed host latency stays
+25 ms, and the plugin now has unity output gain. Old Output state is ignored
+when loading older sessions, which default to +100% Link.
 
 **Transient** sets the exponential correction release from 20 to 1,000 ms
 (default 200 ms): 36.8% remains after one time constant, counted in audio samples
@@ -63,8 +80,9 @@ The audio thread performs a short SIMD FIR head and a partitioned FFT tail.
 The tail starts after the head, adding **no extra block latency**. A three-slot
 handoff transfers immutable responses from the worker, and a 5 ms sigmoid
 crossfade warms both responses on the same signal history. No kernel design,
-heap allocation, or waiting for a worker occurs in the audio callback. Output
-changes are smoothed over 20 ms. Auto analysis is dormant when Off.
+heap allocation, or waiting for a worker occurs in the audio callback.
+Independent channel FFTs run only below +100% Link or for mono layouts;
++100% reuses the shared filter design. Auto analysis is dormant when Off.
 
 ## Phase Field meter
 
@@ -77,10 +95,11 @@ Timing colors interpolate between adjacent detected bands; spectral energy
 remains unchanged, so genuine gaps in the input still appear dark.
 A small display hold makes short onsets visible without changing the audio detector.
 
-The **white curve** in the 56 px track at the right shows applied rotation
+The **white left-channel** and **gold right-channel** curves in the 56 px track
+show applied rotation
 relative to the 25 ms reference, from −180° to +180° across its track. It is measured from the
-active FIR, including manual rotation, Auto Depth, response crossfades, and bypass;
-it does not jump ahead to an unapplied worker target. Guides mark 0°, ±45°,
+corresponding active FIR, including manual rotation, Auto Depth, response crossfades, and bypass;
+they do not jump ahead to an unapplied worker target. Guides mark 0°, ±45°,
 ±90°, and ±135°, with matching line styles in the key below the track; positive rotation is right of center and negative is left.
 The history is 168 px wide, and the readout reports the largest absolute
 rotation. The lower strip shows input peak activity in white and detected
@@ -95,9 +114,10 @@ frequency history. Audio processing and the fixed latency are unchanged.
 
 The [Auto alignment performance report](Tests/Reports/AUTO_ALIGNMENT.md)
 includes a live three-hit Auto case, measured phase errors, positive/negative
-Depth, short/long release curves, and matched-level listening examples.
+Depth, short/long release curves, Stereo Link comparisons, and matched-level
+listening examples.
 The phase display rounds the curve with shape-preserving cubic interpolation
-and splits at ±180° wraps; Output sits at the far right beside Transient.
+and splits at ±180° wraps; Stereo Link sits at the far right beside Transient.
 
 ## Build and test
 

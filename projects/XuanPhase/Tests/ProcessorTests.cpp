@@ -31,15 +31,164 @@ Complex response (const std::vector<float>& ir, double hz, double rate)
     for (size_t i = 0; i < ir.size(); ++i) h += static_cast<double> (ir[i])*std::polar (1., -2*juce::MathConstants<double>::pi*hz*i/rate);
     return h*std::polar (1., 2*juce::MathConstants<double>::pi*hz*juce::roundToInt (rate*.025)/rate);
 }
+void stereoTests (const juce::File& directory, const std::vector<float>& hit, const xuan::Analysis& detected)
+{
+    xuan::StereoAnalysis identical; identical.shared = detected; identical.channel = {detected, detected};
+    const auto render = [] (xuan::Settings s, const xuan::StereoAnalysis& analysis,
+                            const std::vector<float>& left, const std::vector<float>& right, int blockSize)
+    {
+        xuan::PhaseEngine engine; engine.prepare (48000, [s] { return s; }, false); engine.setStereoOffline (s, analysis);
+        std::array<std::vector<float>, 2> out;
+        for (size_t at = 0; at < left.size(); at += static_cast<size_t> (blockSize))
+        {
+            const auto n = std::min (blockSize, static_cast<int> (left.size()-at));
+            juce::AudioBuffer<float> block (2, n);
+            for (int i = 0; i < n; ++i) { block.setSample (0, i, left[at+static_cast<size_t> (i)]); block.setSample (1, i, right[at+static_cast<size_t> (i)]); }
+            engine.process (block, s);
+            for (int ch = 0; ch < 2; ++ch)
+                for (int i = 0; i < n; ++i) out[static_cast<size_t> (ch)].push_back (block.getSample (ch, i));
+        }
+        return out;
+    };
+    auto padded = hit; padded.resize (7000);
+    std::ofstream audio (directory.getChildFile ("stereo-link.csv").getFullPathName().toStdString());
+    audio << "link,sample,left,right\n";
+    const auto peakAt = [] (const std::vector<float>& x)
+    { return std::max_element (x.begin(), x.end(), [] (float a, float b) { return std::abs (a) < std::abs (b); })-x.begin(); };
+    for (float link : {-100.f, -50.f, 0.f, 50.f, 100.f})
+    {
+        xuan::Settings s; s.automatic = true; s.depth = 100; s.link = link;
+        const auto out = render (s, identical, padded, padded, 127);
+        const auto separation = std::abs (peakAt (out[1])-peakAt (out[0]));
+        std::cout << "Stereo Link=" << link << " peak spacing=" << separation << " samples\n";
+        if (link < 0) check (std::abs (separation-std::lround (-link*.01*240)) <= 2,
+                            "negative Stereo Link separates identical channel transients proportionally up to 5 ms");
+        else check (out[0] == out[1], "identical inputs remain identical at zero and positive Stereo Link");
+        for (size_t i = 0; i < padded.size(); ++i) audio << link << ',' << i << ',' << out[0][i] << ',' << out[1][i] << '\n';
+        if (link < -99)
+        {
+            const auto otherBlock = render (s, identical, padded, padded, 1);
+            check (out == otherBlock, "independent stereo filters remain block-size invariant");
+            xuan::PhaseEngine measured; measured.prepare (48000, [s] { return s; }, false); measured.setStereoOffline (s, identical);
+            xuan::RotationFrame frame {}; uint32_t version = 0; measured.readRotation (frame, version);
+            double error = 0;
+            for (int ch = 0; ch < 2; ++ch)
+            {
+                const auto ir = xuan::PhaseEngine::stereoImpulse (48000, s, identical, ch);
+                const auto offset = ch == 0 ? size_t (0) : size_t (2*xuan::meterBins+1);
+                for (size_t row = 0; row < xuan::meterBins; ++row)
+                    error = std::max (error, std::abs (Complex (frame[offset+row], frame[offset+xuan::meterBins+row])
+                        -response (ir, xuan::PhaseEngine::meterFrequency (static_cast<int> (row), 48000), 48000)));
+            }
+            check (error < 1e-5, "both stereo phase traces reflect the corresponding applied FIR response");
+        }
+    }
+    // Distinct channel packets must each derive their correction independently.
+    auto right = hit;
+    for (size_t i = 0; i < hit.size(); ++i) right[i] = i >= 80 ? hit[i-80] : 0;
+    std::vector<float> previous; double energy = 0;
+    const auto rightTargets = xuan::PhaseEngine::analyse (right, 48000, previous, energy);
+    xuan::StereoAnalysis distinct = identical; distinct.channel[1] = rightTargets;
+    xuan::Settings independent; independent.automatic = true; independent.depth = 100; independent.link = 0;
+    right.resize (7000);
+    const auto separate = render (independent, distinct, padded, right, 127);
+    check (separate[0] == run (independent, padded, 127, 48000, detected)
+           && separate[1] == run (independent, right, 127, 48000, rightTargets),
+           "zero Stereo Link is identical to processing each channel's own phase targets separately");
+    distinct.shared = rightTargets;
+    check (render (independent, distinct, padded, right, 127) == separate,
+           "a shared target cannot influence either channel at zero Stereo Link");
+    independent.link = 100;
+    check (xuan::PhaseEngine::stereoImpulse (48000, independent, distinct, 0)
+           == xuan::PhaseEngine::stereoImpulse (48000, independent, distinct, 1),
+           "full positive Stereo Link applies exactly the same response to both channels");
+    independent.link = -100; distinct.stereo = false;
+    check (xuan::PhaseEngine::stereoImpulse (48000, independent, distinct, 0)
+           == xuan::PhaseEngine::impulse (48000, independent, detected),
+           "mono layouts use the channel correction without artificial stereo separation");
+    distinct.stereo = true;
+    distinct.channel[0].anchor = .04; distinct.channel[1].anchor = .01;
+    check (xuan::PhaseEngine::stereoPhaseAt (1000, independent, distinct, 0) < xuan::PhaseEngine::phaseAt (1000, independent, distinct.channel[0])-10
+           && xuan::PhaseEngine::stereoPhaseAt (1000, independent, distinct, 1) > xuan::PhaseEngine::phaseAt (1000, independent, distinct.channel[1])+10,
+           "negative Link pushes the later left anchor later and the earlier right anchor earlier");
+    independent.depth = 0;
+    check (xuan::PhaseEngine::stereoImpulse (48000, independent, distinct, 0)
+           == xuan::PhaseEngine::impulse (48000, independent),
+           "zero Auto Depth disables stereo separation as well as alignment");
+    for (float link : {0.f, 100.f})
+    {
+        XuanPhaseProcessor isolated; set (isolated, "automatic", 1); set (isolated, "depth", 100);
+        set (isolated, "transient", 40); set (isolated, "link", link); isolated.prepareToPlay (48000, 128); isolated.setMeterVisible (true);
+        juce::AudioBuffer<float> block (2, 128); juce::MidiBuffer midi;
+        float leftPhase = 0, rightPhase = 0; uint32_t version = 0; xuan::RotationFrame frame {};
+        for (int at = 0; at < 36096; at += 128)
+        {
+            for (int i = 0; i < 128; ++i)
+            {
+                const auto index = at+i-22000;
+                block.setSample (0, i, index >= 0 && index < static_cast<int> (hit.size()) ? hit[static_cast<size_t> (index)] : 0);
+                block.setSample (1, i, static_cast<float> (.03*std::sin (2*juce::MathConstants<double>::pi*2000*(at+i)/48000)));
+            }
+            isolated.processBlock (block, midi); juce::Thread::sleep (3);
+            if (isolated.readRotation (frame, version) && at > 25000)
+            {
+                for (size_t row = 0; row < xuan::meterBins; ++row)
+                {
+                    leftPhase = std::max (leftPhase, std::abs (std::atan2 (frame[xuan::meterBins+row], frame[row]))*180/juce::MathConstants<float>::pi);
+                    const auto offset = 2*xuan::meterBins+1;
+                    rightPhase = std::max (rightPhase, std::abs (std::atan2 (frame[offset+xuan::meterBins+row], frame[offset+row]))*180/juce::MathConstants<float>::pi);
+                }
+            }
+        }
+        std::cout << "Live Link=" << link << " transient L phase=" << leftPhase << " stationary R phase=" << rightPhase << '\n';
+        if (link < 1) check (leftPhase > 5 && rightPhase < 1, "independent live analysis leaves a stationary right channel unrotated while correcting left transients");
+        else check (leftPhase > 5 && std::abs (leftPhase-rightPhase) < .01f, "shared live correction rotates both channels equally even when only left has transients");
+    }
+    // Exercise the actual background worker on repeated mono hits.
+    XuanPhaseProcessor live; set (live, "automatic", 1); set (live, "depth", 100); set (live, "link", -100); live.prepareToPlay (48000, 128);
+    juce::AudioBuffer<float> block (2, 128); juce::MidiBuffer midi;
+    std::array<std::vector<float>, 2> liveAudio;
+    std::ofstream liveData (directory.getChildFile ("stereo-link-live.csv").getFullPathName().toStdString());
+    liveData << "sample,left,right\n";
+    for (int at = 0; at < 49152; at += 128)
+    {
+        for (int i = 0; i < 128; ++i)
+        {
+            const auto index = (at+i)%16384-4096;
+            const auto x = index >= 0 && index < static_cast<int> (hit.size()) ? hit[static_cast<size_t> (index)] : 0;
+            block.setSample (0, i, x); block.setSample (1, i, x);
+        }
+        live.processBlock (block, midi); juce::Thread::sleep (3);
+        for (int i = 0; i < 128; ++i)
+        {
+            for (int ch = 0; ch < 2; ++ch) liveAudio[static_cast<size_t> (ch)].push_back (block.getSample (ch, i));
+            liveData << at+i << ',' << block.getSample (0, i) << ',' << block.getSample (1, i) << '\n';
+        }
+    }
+    std::array<std::vector<float>, 2> last;
+    for (int ch = 0; ch < 2; ++ch) last[static_cast<size_t> (ch)] = {liveAudio[static_cast<size_t> (ch)].begin()+38000, liveAudio[static_cast<size_t> (ch)].begin()+44000};
+    check (live.targetCount() > 0 && std::abs (peakAt (last[0])-peakAt (last[1])) > 100,
+           "live channel analysis and FIR handoff separate repeated channel transients at negative Link");
+}
+
 void dspTests (const juce::File& directory)
 {
     directory.createDirectory();
     XuanPhaseProcessor saved, restored;
+    set (saved, "link", -70);
     set (saved, "depth", -75); set (saved, "transient", 700);
     juce::MemoryBlock state; saved.getStateInformation (state); restored.setStateInformation (state.getData(), static_cast<int> (state.getSize()));
-    check (std::abs (restored.settings().depth+75) < .001f && std::abs (restored.settings().transient-700) < .001f,
+    check (std::abs (restored.settings().depth+75) < .001f && std::abs (restored.settings().transient-700) < .001f && std::abs (restored.settings().link+70) < .001f,
            "negative Depth and Transient release survive session recall");
     set (saved, "depth", 50);
+    auto oldOutput = saved.parameters.copyState();
+    for (int i = oldOutput.getNumChildren()-1; i >= 0; --i)
+        if (oldOutput.getChild (i).getProperty ("id").toString() == "link") oldOutput.removeChild (i, nullptr);
+    juce::ValueTree gain ("PARAM"); gain.setProperty ("id", "output", nullptr); gain.setProperty ("value", 12.f, nullptr); oldOutput.addChild (gain, -1, nullptr);
+    juce::MemoryBlock oldData; juce::AudioProcessor::copyXmlToBinary (*oldOutput.createXml(), oldData);
+    restored.setStateInformation (oldData.getData(), static_cast<int> (oldData.getSize()));
+    check (std::abs (restored.settings().link-100) < .001f && restored.parameters.getParameter ("output") == nullptr,
+           "older Output states migrate to shared Stereo Link without treating gain as a link value");
     auto oldState = saved.parameters.copyState();
     for (int i = oldState.getNumChildren()-1; i >= 0; --i)
         if (oldState.getChild (i).getProperty ("id").toString() == "transient") oldState.removeChild (i, nullptr);
@@ -159,6 +308,7 @@ void dspTests (const juce::File& directory)
         check (std::abs (targets.targets[static_cast<size_t> (i)].delay) <= .025, "automatic group-delay targets stay inside the lookahead budget");
     xuan::Settings full; full.automatic = true; full.depth = 100;
     const auto autoIr = xuan::PhaseEngine::impulse (48000, full, targets);
+    stereoTests (directory, hit, targets);
     std::ofstream curve (directory.getChildFile ("auto-phase.csv").getFullPathName().toStdString());
     curve << "frequency,target_deg,measured_deg,gain_db\n";
     for (double f = 60; f <= 12000; f += 5)
@@ -294,7 +444,7 @@ void dspTests (const juce::File& directory)
     }
     check (remaining[0] < 1 && remaining[2] > remaining[1]+1,
            "the live worker releases short Transient settings faster than long settings");
-    XuanPhaseProcessor bypassed; set (bypassed, "low", 90); set (bypassed, "output", 6); bypassed.prepareToPlay (48000, 128);
+    XuanPhaseProcessor bypassed; set (bypassed, "low", 90); set (bypassed, "link", -100); bypassed.prepareToPlay (48000, 128);
     double bypassError = 0;
     for (int at = 0; at < 4096; at += 128)
     {
@@ -303,7 +453,7 @@ void dspTests (const juce::File& directory)
         for (int i = 0; i < 128; ++i)
             bypassError = std::max (bypassError, std::abs (static_cast<double> (block.getSample (0, i))-(at+i == 1200 ? 1 : 0)));
     }
-    check (bypassError < 1e-6, "host bypass ignores nonzero rotation and output gain while retaining exactly 25 ms latency");
+    check (bypassError < 1e-6, "host bypass ignores nonzero rotation and negative Stereo Link while retaining exactly 25 ms latency");
 }
 void editor (const juce::File& path)
 {
@@ -333,8 +483,13 @@ void editor (const juce::File& path)
             check (client && client->getTooltip().isNotEmpty(), "every phase knob has a hover hint");
             if (slider->getName() == "TRANSIENT")
             { slider->setValue (400, juce::sendNotificationSync); check (std::abs (p.settings().transient-400) < .01f, "Transient knob changes its host parameter"); }
-            if (slider->getName() == "OUTPUT")
-                check (slider->getX() == 375, "Output occupies the far-right control position");
+            if (slider->getName() == "STEREO LINK")
+            {
+                check (slider->getX() == 375, "Stereo Link occupies the far-right control position");
+                slider->setValue (-50, juce::sendNotificationSync);
+                check (std::abs (p.settings().link+50) < .01f, "Stereo Link knob controls its signed host parameter");
+                slider->setValue (100, juce::sendNotificationSync);
+            }
             if (slider->getName() == "LOW PHASE")
             { slider->setValue (90, juce::sendNotificationSync); check (std::abs (p.settings().low-90) < .01f, "manual knob changes its host parameter"); }
         }
@@ -345,7 +500,7 @@ void editor (const juce::File& path)
     const auto green = XuanPhaseMeter::timingColour (-1, 1), red = XuanPhaseMeter::timingColour (1, 1);
     check (green.getGreen() > green.getRed() && red.getRed() > red.getGreen(), "early bands use green and late bands use red");
     p.prepareToPlay (48000, 128); p.setMeterVisible (true);
-    set (p, "automatic", 1); set (p, "depth", 80); set (p, "low", 25); set (p, "high", -20);
+    set (p, "automatic", 1); set (p, "depth", 80); set (p, "link", -60); set (p, "low", 25); set (p, "high", -20);
     juce::AudioBuffer<float> audio (2, 128); juce::MidiBuffer midi;
     bool earlySeen = false, lateSeen = false, onsetSeen = false, movedRight = false;
     xuan::SpectrumFrame source {}; uint32_t sourceVersion = 0;

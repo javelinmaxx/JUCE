@@ -6,7 +6,7 @@ const auto early = juce::Colour (0xff72ce9c), late = juce::Colour (0xfff07880);
 }
 XuanPhaseMeter::XuanPhaseMeter (XuanPhaseProcessor& p) : processor (p)
 {
-    setTooltip ("Shows three seconds of input transients moving left to right, with early bands green, late bands red, and applied phase in white against degree guides.");
+    setTooltip ("Shows three seconds of input transients moving left to right, with early bands green, late bands red, and applied left phase in white and right phase in gold against degree guides.");
     lastColumn = lastInput = juce::Time::getMillisecondCounterHiRes();
 }
 XuanPhaseMeter::~XuanPhaseMeter() { stopTimer(); processor.setMeterVisible (false); }
@@ -114,38 +114,43 @@ void XuanPhaseMeter::paint (juce::Graphics& g)
                         +juce::String::fromUTF8 ("°");
         g.drawText (text, 227, juce::roundToInt (y), 39, 13, juce::Justification::centredLeft);
     }
-    juce::Path response; float maximum = 0;
-    std::array<float, xuan::meterBins> xs {}, angles {};
-    for (int row = 0; row < xuan::meterBins; ++row)
+    float maximum = 0;
+    for (int channel : {1, 0})
     {
-        const auto index = static_cast<size_t> (row);
-        angles[index] = std::atan2 (rotation[xuan::meterBins+index], rotation[index]);
-        xs[index] = phaseX (angles[index]*180/juce::MathConstants<float>::pi);
-        maximum = std::max (maximum, std::abs (angles[index])*180/juce::MathConstants<float>::pi);
+        juce::Path response;
+        const auto offset = channel == 0 ? size_t (0) : size_t (2*xuan::meterBins+1);
+        std::array<float, xuan::meterBins> xs {}, angles {};
+        for (int row = 0; row < xuan::meterBins; ++row)
+        {
+            const auto index = static_cast<size_t> (row);
+            angles[index] = std::atan2 (rotation[offset+xuan::meterBins+index], rotation[offset+index]);
+            xs[index] = phaseX (angles[index]*180/juce::MathConstants<float>::pi);
+            maximum = std::max (maximum, std::abs (angles[index])*180/juce::MathConstants<float>::pi);
+        }
+        const auto wrapped = [&] (int i) { return std::abs (angles[static_cast<size_t> (i+1)]-angles[static_cast<size_t> (i)]) > juce::MathConstants<float>::pi; };
+        const auto tangent = [&] (int i)
+        {
+            if (i == 0) return wrapped (0) ? 0.f : xs[1]-xs[0];
+            if (i == xuan::meterBins-1) return wrapped (i-1) ? 0.f : xs[static_cast<size_t> (i)]-xs[static_cast<size_t> (i-1)];
+            if (wrapped (i-1) || wrapped (i)) return 0.f;
+            const auto before = xs[static_cast<size_t> (i)]-xs[static_cast<size_t> (i-1)];
+            const auto after = xs[static_cast<size_t> (i+1)]-xs[static_cast<size_t> (i)];
+            return before*after > 0 ? 2*before*after/(before+after) : 0.f;
+        };
+        // Shape-preserving cubic interpolation rounds visual corners without
+        // overshooting measured extrema or drawing across the +/-180 degree seam.
+        const auto dy = phase.getHeight()/(xuan::meterBins-1);
+        response.startNewSubPath (xs[0], phase.getBottom());
+        for (int i = 0; i < xuan::meterBins-1; ++i)
+        {
+            const auto y = phase.getBottom()-i*dy, nextY = y-dy;
+            if (wrapped (i)) response.startNewSubPath (xs[static_cast<size_t> (i+1)], nextY);
+            else response.cubicTo (xs[static_cast<size_t> (i)]+tangent (i)/3, y-dy/3,
+                                   xs[static_cast<size_t> (i+1)]-tangent (i+1)/3, nextY+dy/3,
+                                   xs[static_cast<size_t> (i+1)], nextY);
+        }
+        g.setColour (channel == 0 ? foreground : amber); g.strokePath (response, juce::PathStrokeType (1.2f));
     }
-    const auto wrapped = [&] (int i) { return std::abs (angles[static_cast<size_t> (i+1)]-angles[static_cast<size_t> (i)]) > juce::MathConstants<float>::pi; };
-    const auto tangent = [&] (int i)
-    {
-        if (i == 0) return wrapped (0) ? 0.f : xs[1]-xs[0];
-        if (i == xuan::meterBins-1) return wrapped (i-1) ? 0.f : xs[static_cast<size_t> (i)]-xs[static_cast<size_t> (i-1)];
-        if (wrapped (i-1) || wrapped (i)) return 0.f;
-        const auto before = xs[static_cast<size_t> (i)]-xs[static_cast<size_t> (i-1)];
-        const auto after = xs[static_cast<size_t> (i+1)]-xs[static_cast<size_t> (i)];
-        return before*after > 0 ? 2*before*after/(before+after) : 0.f;
-    };
-    // Shape-preserving cubic interpolation rounds visual corners without
-    // overshooting measured extrema or drawing across the +/-180 degree seam.
-    const auto dy = phase.getHeight()/(xuan::meterBins-1);
-    response.startNewSubPath (xs[0], phase.getBottom());
-    for (int i = 0; i < xuan::meterBins-1; ++i)
-    {
-        const auto y = phase.getBottom()-i*dy, nextY = y-dy;
-        if (wrapped (i)) response.startNewSubPath (xs[static_cast<size_t> (i+1)], nextY);
-        else response.cubicTo (xs[static_cast<size_t> (i)]+tangent (i)/3, y-dy/3,
-                               xs[static_cast<size_t> (i+1)]-tangent (i+1)/3, nextY+dy/3,
-                               xs[static_cast<size_t> (i+1)], nextY);
-    }
-    g.setColour (foreground); g.strokePath (response, juce::PathStrokeType (1.2f));
     g.setColour (secondary); g.drawText ("NOW", 38, 271, 60, 15, juce::Justification::centredLeft);
     g.drawText ("3 s ago  >", 124, 271, 82, 15, juce::Justification::centredRight);
     g.drawText ("INPUT TRANSIENT", 14, 292, 192, 16, juce::Justification::centredLeft);
@@ -162,7 +167,7 @@ void XuanPhaseMeter::paint (juce::Graphics& g)
     }
     g.setColour (foreground.withAlpha (.65f)); g.strokePath (trace, juce::PathStrokeType (1));
     g.setColour (secondary); g.setFont (juce::FontOptions (9));
-    g.drawText ("WHITE: APPLIED PHASE", 14, 351, 165, 16, juce::Justification::centredLeft);
+    g.drawText ("PHASE L:WHITE R:GOLD", 14, 351, 165, 16, juce::Justification::centredLeft);
     g.setColour (rotation[2*xuan::meterBins] >= .999f ? secondary : amber);
     g.drawText (rotation[2*xuan::meterBins] >= .999f ? "BYPASSED" : juce::String (maximum, 1)+" deg max", 177, 351, 89, 16, juce::Justification::centredRight);
 }

@@ -8,6 +8,6 @@
 | Auto | Saves CPU when Off; uses transient spectrogram phases to align narrow frequency bands. |
 | Auto Depth | Sets automatic phase correction from reverse alignment at negative values to full alignment at positive values. |
 | Transient | Sets how quickly automatic phase correction releases after a transient, with longer times retaining it longer. |
-| Output | Adjusts the output level after manual and automatic phase rotation. |
+| Stereo Link | Links automatic correction at +100%, processes channels independently at 0%, and separates their transients toward -100%. |
 | Bypass | Bypasses phase processing while preserving the fixed 25 ms latency. |
-| Phase Field | Shows three seconds of input transients moving left to right, with early bands green, late bands red, and applied phase in white against degree guides. |
+| Phase Field | Shows three seconds of input transients moving left to right, with early bands green, late bands red, and applied left phase in white and right phase in gold against degree guides. |

@@ -3,8 +3,8 @@
 #include "../../StagePluginStyle.h"
 
 // A three-second input spectrogram: newest at left, older data moving right.
-// Colour describes observed arrival error; the separate white curve is the
-// measured complex response of the kernels actually used by the audio path.
+// Colour describes observed arrival error; white (L) and gold (R) curves show
+// measured complex responses of the kernels actually used by the audio path.
 class XuanPhaseMeter final : public juce::Component,
                              public juce::SettableTooltipClient,
                              private juce::Timer

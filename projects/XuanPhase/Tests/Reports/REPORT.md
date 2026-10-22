@@ -39,7 +39,7 @@ the dispersed hit's peak by at least 5% in this test. Detected group-delay
 corrections are bounded to ±25 ms; stationary noise must not repeatedly trigger
 new targets. A separate streamed three-hit test exercises the real worker,
 response handoff and stereo linking; host bypass is checked with nonzero
-rotation and output gain. Peak improvement on this constructed signal is not a guarantee
+rotation and negative Stereo Link. Peak improvement on this constructed signal is not a guarantee
 for arbitrary recordings. Native editor checks cover parameter binding, hover
 hints and the 50%–120% resize limits.
 
@@ -50,7 +50,7 @@ hints and the 50%–120% resize limits.
 This additional case feeds three repeated dispersed hits into the **real processor
 and analysis worker** at 48 kHz in 128-sample blocks, starting with no detected
 targets. Auto is On at 100% Depth with the default 200 ms Transient release;
-Low Phase, High Phase, and Output are all zero.
+Low Phase and High Phase are zero, gain is unity, and Stereo Link is +100%.
 The block loop gives the background worker 3 ms per block; scheduling can affect
 the first hit. Auto Off is the identical input delayed by the fixed 25 ms.
 No target is preloaded, and no gain compensation or normalization is applied.
@@ -58,8 +58,8 @@ No target is preloaded, and no gain compensation or normalization is applied.
 | Hit | Auto Off peak | Live Auto peak | Peak increase | RMS change |
 | --- | ---: | ---: | ---: | ---: |
 | 1 | 0.382388 | 0.490522 | 28.3% | +0.0003 dB |
-| 2 | 0.382388 | 0.490522 | 28.3% | +0.0003 dB |
-| 3 | 0.382388 | 0.490522 | 28.3% | +0.0006 dB |
+| 2 | 0.382388 | 0.490522 | 28.3% | +0.0000 dB |
+| 3 | 0.382388 | 0.490522 | 28.3% | +0.0003 dB |
 
 Each RMS window spans 4,096 samples including the complete hit and response tail.
 Tests require the last hit's peak to improve by at least 5% while RMS stays within
@@ -118,9 +118,9 @@ existing 5 ms response crossfade; the plotted envelope includes that stepping.
 
 | Transient | Largest applied rotation during test | Rotation at end of 1.25 s stream |
 | --- | ---: | ---: |
-| 40 ms | 179.183° | 0.000000° |
-| 200 ms | 149.858° | 0.551981° |
-| 800 ms | 149.858° | 36.785600° |
+| 40 ms | 149.858° | 0.000000° |
+| 200 ms | 149.858° | 0.525365° |
+| 800 ms | 149.858° | 36.464900° |
 
 The short release must return below 1°; the long release must retain more
 correction than the medium release. Other checks cover zero Depth, host bypass,
@@ -133,6 +133,46 @@ polyphonic material, low-frequency resolution, finite-FIR magnitude ripple,
 and worker scheduling can limit improvement. Higher peak at unchanged RMS is a
 punch indicator, not proof of perceived quality or reconstruction of an original
 undispersed source.
+## Stereo Link: shared, independent, and separating correction
+
+![Measured Stereo Link comparisons](stereo-link.png)
+
+Stereo Link replaces Output; processing gain is unity. The first three plots
+feed identical dispersed hits to both channels through the actual convolution
+engine at 100% Auto Depth, using a frozen detected target. At +100%, both
+channels receive exactly the same correction; at 0%, each uses its own target
+(which happens to be identical in this example). At negative values, opposing
+transient-guided timing shifts increase separation by up to 5 ms at −100%.
+
+| Stereo Link | Absolute channel peak spacing | L/R correlation over complete buffer |
+| --- | ---: | ---: |
+| -100% | 5.000 ms | -0.0033 |
+| -50% | 2.500 ms | 0.2426 |
+| +0% | 0.000 ms | 1.0000 |
+| +50% | 0.000 ms | 1.0000 |
+| +100% | 0.000 ms | 1.0000 |
+
+A separate regression uses a right-channel hit shifted by 80 samples. At 0%,
+its output must equal its own independently analyzed and convolved reference,
+and changing the shared target must not affect either output. At +100%, the
+measured channel filters must be identical even when their individual targets
+differ. A live test also pairs a left transient with a steady right sine: at
+0% the right correction stays neutral, while at +100% both channels receive
+the same correction. Intermediate positive values blend toward the shared
+phase response.
+
+The final subplot runs the real background worker at −100% Link on repeated
+identical hits with the default 200 ms release, starting with no preloaded
+target. It verifies that independent analysis and response handoff actually
+separate the channel peaks; release and scheduling can reduce spacing from
+the 5 ms frozen-target maximum. Listen: [live stereo separation](stereo-link-live.wav).
+
+Mono input layouts disable the opposing shift. Auto Off and zero Auto Depth
+also disable separation. Channel kernels crossfade together, retain block-size
+invariance, and the white/gold traces are checked against independent DFTs of
+the corresponding FIR. Negative Link deliberately changes the stereo phase
+relationship and may change the mono sum; it is a widening effect rather than
+a promise of maximum separation for every transient source.
 
 
 ## Phase-field display
@@ -142,15 +182,15 @@ and worker, observes transient events and both signed timing directions, and
 checks that non-empty image columns move from left to right across the
 three-second history. The history is 168 px wide beside a 56 px applied-phase
 track, with styled guides and a key for 0°, ±45°, ±90°, and ±135°. Green indicates an
-early input band and red a late input band. The white curve uses the measured
-complex FIR response: tests compare it with an independent DFT, ensure queued
+early input band and red a late input band. The white left-channel and gold right-channel curves use the measured
+complex FIR responses: tests compare it with an independent DFT, ensure queued
 responses do not appear before audio applies them, verify updates after handoff,
 and check zero displayed phase under host bypass. Input analysis remains live
 with Auto Off while the meter is visible, and stops when the editor is hidden.
 The meter stays inside the editor at both scaling limits. Its phase trace uses
 shape-preserving cubic interpolation between measured points, without overshoot,
 and splits at the ±180° wrap instead of drawing a line across the entire track.
-Output sits at the far right of the three-knob Auto row beside Transient.
+Stereo Link sits at the far right of the three-knob Auto row beside Transient.
 
 ![Native editor with live transient history](../../Previews/xuan-phase.png)
 

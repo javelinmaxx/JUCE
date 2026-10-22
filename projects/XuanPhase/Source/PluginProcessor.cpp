@@ -1,6 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
-namespace { constexpr std::array<const char*, 8> ids { "low", "high", "split", "depth", "output", "automatic", "bypass", "transient" }; }
+namespace { constexpr std::array<const char*, 8> ids { "low", "high", "split", "depth", "link", "automatic", "bypass", "transient" }; }
 juce::AudioProcessorValueTreeState::ParameterLayout XuanPhaseProcessor::createParameterLayout()
 {
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
@@ -16,7 +16,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout XuanPhaseProcessor::createPa
     add ("high", "High phase", -180, 180, .1f, 0, "deg");
     add ("split", "Crossover", 80, 4000, 1, 1000, "Hz");
     add ("depth", "Auto depth", -100, 100, .1f, 50, "%");
-    add ("output", "Output", -24, 12, .1f, 0, "dB");
+    add ("link", "Stereo link", -100, 100, .1f, 100, "%");
     layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "automatic", 1 }, "Auto phase", false));
     layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "bypass", 1 }, "Bypass", false));
     add ("transient", "Transient release", 20, 1000, 1, 200, "ms");
@@ -58,6 +58,17 @@ void XuanPhaseProcessor::getStateInformation (juce::MemoryBlock& b) { if (auto x
 void XuanPhaseProcessor::setStateInformation (const void* b, int n)
 {
     if (auto xml = getXmlFromBinary (b, n))
-        if (xml->hasTagName (parameters.state.getType())) parameters.replaceState (juce::ValueTree::fromXml (*xml));
+        if (xml->hasTagName (parameters.state.getType()))
+        {
+            auto state = juce::ValueTree::fromXml (*xml);
+            for (int i = state.getNumChildren()-1; i >= 0; --i)
+                if (state.getChild (i).getProperty ("id").toString() == "output") state.removeChild (i, nullptr);
+            if (! state.getChildWithProperty ("id", "link").isValid())
+            {
+                juce::ValueTree link ("PARAM"); link.setProperty ("id", "link", nullptr); link.setProperty ("value", 100.f, nullptr);
+                state.addChild (link, -1, nullptr);
+            }
+            parameters.replaceState (state);
+        }
 }
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new XuanPhaseProcessor(); }

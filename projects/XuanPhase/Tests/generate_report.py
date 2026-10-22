@@ -26,7 +26,7 @@ for key in ['depthminus100', 'depth0', 'depth50', 'depth100']:
 ax.set(xlabel='Time (ms), including reference latency', ylabel='Amplitude', title='Phase-guided alignment of a dispersed transient', xlim=(40,65))
 ax.legend(); ax.grid(alpha=.25); fig.savefig(root/'transient-alignment.png', dpi=160); plt.close(fig)
 # A separate case runs the actual background detector, handoff and crossfade;
-# no target is injected and both manual rotations and output gain remain zero.
+# no target is injected and both manual rotations remain zero with unity gain.
 live = np.genfromtxt(root/'auto-live.csv', delimiter=',', names=True)
 curve = np.genfromtxt(root/'auto-phase.csv', delimiter=',', names=True)
 fig, axes = plt.subplots(3, 1, figsize=(11, 9), constrained_layout=True)
@@ -134,6 +134,66 @@ and worker scheduling can limit improvement. Higher peak at unchanged RMS is a
 punch indicator, not proof of perceived quality or reconstruction of an original
 undispersed source.
 """
+stereo = np.genfromtxt(root/'stereo-link.csv', delimiter=',', names=True)
+stereo_live = np.genfromtxt(root/'stereo-link-live.csv', delimiter=',', names=True)
+fig, axes = plt.subplots(2, 2, figsize=(12, 7), constrained_layout=True)
+stereo_rows=[]
+for link in [-100,-50,0,50,100]:
+    a=stereo[stereo['link']==link]
+    left,right=a['left'],a['right']
+    spacing=abs(np.argmax(abs(left))-np.argmax(abs(right)))/48
+    correlation=np.dot(left,right)/np.sqrt(np.dot(left,left)*np.dot(right,right))
+    stereo_rows.append(f'| {link:+}% | {spacing:.3f} ms | {correlation:.4f} |')
+for ax,link in zip(axes.flat,[-100,0,100]):
+    a=stereo[stereo['link']==link]
+    ax.plot(a['sample']/48,a['left'],label='Left',alpha=.8)
+    ax.plot(a['sample']/48,a['right'],label='Right',alpha=.8)
+    ax.set(xlim=(39,58),xlabel='Time (ms, including reference latency)',ylabel='Amplitude',title=f'Stereo Link {link:+}%: identical input hits')
+a=stereo_live[(stereo_live['sample']>=38000)&(stereo_live['sample']<44000)]
+for key in ['left','right']: axes[1,1].plot((a['sample']-36864)/48,a[key],label=key.title(),alpha=.8)
+axes[1,1].set(xlim=(39,60),xlabel='Time from last hit start (ms, including reference latency)',ylabel='Amplitude',title='Live worker at −100% Link: last repeated hit')
+for ax in axes.flat: ax.grid(alpha=.25); ax.legend(fontsize=8)
+fig.savefig(root/'stereo-link.png',dpi=160); plt.close(fig)
+with wave.open(str(root/'stereo-link-live.wav'),'wb') as wav:
+    wav.setnchannels(2); wav.setsampwidth(2); wav.setframerate(48000)
+    wav.writeframes((np.clip(np.column_stack([stereo_live['left'],stereo_live['right']]),-1,1)*32767).astype('<i2').tobytes())
+stereo_report="""## Stereo Link: shared, independent, and separating correction
+
+![Measured Stereo Link comparisons](stereo-link.png)
+
+Stereo Link replaces Output; processing gain is unity. The first three plots
+feed identical dispersed hits to both channels through the actual convolution
+engine at 100% Auto Depth, using a frozen detected target. At +100%, both
+channels receive exactly the same correction; at 0%, each uses its own target
+(which happens to be identical in this example). At negative values, opposing
+transient-guided timing shifts increase separation by up to 5 ms at −100%.
+
+| Stereo Link | Absolute channel peak spacing | L/R correlation over complete buffer |
+| --- | ---: | ---: |
+"""+'\n'.join(stereo_rows)+"""
+
+A separate regression uses a right-channel hit shifted by 80 samples. At 0%,
+its output must equal its own independently analyzed and convolved reference,
+and changing the shared target must not affect either output. At +100%, the
+measured channel filters must be identical even when their individual targets
+differ. A live test also pairs a left transient with a steady right sine: at
+0% the right correction stays neutral, while at +100% both channels receive
+the same correction. Intermediate positive values blend toward the shared
+phase response.
+
+The final subplot runs the real background worker at −100% Link on repeated
+identical hits with the default 200 ms release, starting with no preloaded
+target. It verifies that independent analysis and response handoff actually
+separate the channel peaks; release and scheduling can reduce spacing from
+the 5 ms frozen-target maximum. Listen: [live stereo separation](stereo-link-live.wav).
+
+Mono input layouts disable the opposing shift. Auto Off and zero Auto Depth
+also disable separation. Channel kernels crossfade together, retain block-size
+invariance, and the white/gold traces are checked against independent DFTs of
+the corresponding FIR. Negative Link deliberately changes the stereo phase
+relationship and may change the mono sum; it is a widening effect rather than
+a promise of maximum separation for every transient source.
+"""
 (root/'REPORT.md').write_text('''# Xuan Phase test report
 
 ## Manual controls and latency
@@ -172,7 +232,7 @@ the dispersed hit's peak by at least 5% in this test. Detected group-delay
 corrections are bounded to ±25 ms; stationary noise must not repeatedly trigger
 new targets. A separate streamed three-hit test exercises the real worker,
 response handoff and stereo linking; host bypass is checked with nonzero
-rotation and output gain. Peak improvement on this constructed signal is not a guarantee
+rotation and negative Stereo Link. Peak improvement on this constructed signal is not a guarantee
 for arbitrary recordings. Native editor checks cover parameter binding, hover
 hints and the 50%–120% resize limits.
 
@@ -183,7 +243,7 @@ hints and the 50%–120% resize limits.
 This additional case feeds three repeated dispersed hits into the **real processor
 and analysis worker** at 48 kHz in 128-sample blocks, starting with no detected
 targets. Auto is On at 100% Depth with the default 200 ms Transient release;
-Low Phase, High Phase, and Output are all zero.
+Low Phase and High Phase are zero, gain is unity, and Stereo Link is +100%.
 The block loop gives the background worker 3 ms per block; scheduling can affect
 the first hit. Auto Off is the identical input delayed by the fixed 25 ms.
 No target is preloaded, and no gain compensation or normalization is applied.
@@ -214,7 +274,7 @@ then fills remaining slots by strength, rather than taking the first 24
 low-frequency peaks. Coverage now extends to 20 kHz (limited to 45% of the
 sample rate).
 
-'''+performance+'''
+'''+performance+stereo_report+'''
 
 ## Phase-field display
 
@@ -223,15 +283,15 @@ and worker, observes transient events and both signed timing directions, and
 checks that non-empty image columns move from left to right across the
 three-second history. The history is 168 px wide beside a 56 px applied-phase
 track, with styled guides and a key for 0°, ±45°, ±90°, and ±135°. Green indicates an
-early input band and red a late input band. The white curve uses the measured
-complex FIR response: tests compare it with an independent DFT, ensure queued
+early input band and red a late input band. The white left-channel and gold right-channel curves use the measured
+complex FIR responses: tests compare it with an independent DFT, ensure queued
 responses do not appear before audio applies them, verify updates after handoff,
 and check zero displayed phase under host bypass. Input analysis remains live
 with Auto Off while the meter is visible, and stops when the editor is hidden.
 The meter stays inside the editor at both scaling limits. Its phase trace uses
 shape-preserving cubic interpolation between measured points, without overshoot,
 and splits at the ±180° wrap instead of drawing a line across the entire track.
-Output sits at the far right of the three-knob Auto row beside Transient.
+Stereo Link sits at the far right of the three-knob Auto row beside Transient.
 
 ![Native editor with live transient history](../../Previews/xuan-phase.png)
 
