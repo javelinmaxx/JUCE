@@ -5,6 +5,10 @@ namespace xuan
 namespace
 {
 constexpr auto pi = juce::MathConstants<double>::pi;
+// Keep the float passed to polar just inside mathematical pi: float(pi) is
+// slightly larger and can itself flip an exact +180 degree target to -180.
+const auto phaseLimit = std::nextafter (juce::MathConstants<float>::pi, 0.f);
+float cappedPhase (double phase) { return static_cast<float> (std::clamp (phase, -static_cast<double> (phaseLimit), static_cast<double> (phaseLimit))); }
 float sigmoid (float t) { return t*t*(3-2*t); }
 int orderFor (int n) { int order = 0; while ((1 << order) < n) ++order; return order; }
 float dot (const float* a, const float* b, int n)
@@ -56,16 +60,24 @@ double PhaseEngine::bandValue (double frequency, const Analysis& a, bool timing)
     const auto blend = t*t*(3-2*t);
     return (1-blend)*local (lo, angle)+blend*local (hi, next);
 }
-float PhaseEngine::phaseAt (double frequency, const Settings& s, const Analysis& a)
+namespace
+{
+double requestedPhase (double frequency, const Settings& s, const Analysis& a)
 {
     const auto weight = 1.0/(1+std::pow (frequency/std::clamp (s.split, 80.f, 4000.f), 4));
     auto phase = (s.low*weight+s.high*(1-weight))*pi/180;
     if (s.automatic && ! juce::exactlyEqual (s.depth, 0.f))
     {
-        phase += std::clamp (s.depth*.01f, -1.f, 1.f)*a.strength*bandValue (frequency, a, false);
+        phase += std::clamp (s.depth*.01f, -1.f, 1.f)*a.strength*PhaseEngine::bandValue (frequency, a, false);
     }
-    return static_cast<float> (phase);
+    return phase;
 }
+}
+float PhaseEngine::phaseAt (double frequency, const Settings& s, const Analysis& a)
+{
+    return cappedPhase (requestedPhase (frequency, s, a));
+}
+
 namespace
 {
 std::vector<float> designImpulse (double rate, const std::function<float(double)>& phaseFunction, bool neutral)
@@ -109,9 +121,9 @@ float PhaseEngine::stereoPhaseAt (double f, const Settings& s, const StereoAnaly
     const auto& own = a.channel[static_cast<size_t> (channel)];
     const auto link = a.stereo ? std::clamp (s.link*.01f, -1.f, 1.f) : 0.f;
     if (link >= 1) return phaseAt (f, s, a.shared);
-    const auto independent = phaseAt (f, s, own);
-    if (link >= 0) return independent+link*(phaseAt (f, s, a.shared)-independent);
-    if (! s.automatic || juce::exactlyEqual (s.depth, 0.f)) return independent;
+    const auto independent = requestedPhase (f, s, own);
+    if (link >= 0) return cappedPhase (independent+link*(requestedPhase (f, s, a.shared)-independent));
+    if (! s.automatic || juce::exactlyEqual (s.depth, 0.f)) return cappedPhase (independent);
     // Push already-earlier and already-later channel anchors farther apart;
     // equal anchors use L-earlier/R-later. No opposing shift in mono layouts.
     const auto rightLater = a.channel[1].anchor >= a.channel[0].anchor;
@@ -119,7 +131,7 @@ float PhaseEngine::stereoPhaseAt (double f, const Settings& s, const StereoAnaly
     const auto strength = std::max (a.channel[0].count > 0 ? a.channel[0].strength : 0.f,
                                     a.channel[1].count > 0 ? a.channel[1].strength : 0.f);
     const auto shift = sign*.0025*(-link)*std::min (1.f, std::abs (s.depth)*.01f)*strength;
-    return independent-static_cast<float> (2*pi*f*shift);
+    return cappedPhase (independent-2*pi*f*shift);
 }
 std::vector<float> PhaseEngine::stereoImpulse (double rate, const Settings& s, const StereoAnalysis& a, int channel)
 {

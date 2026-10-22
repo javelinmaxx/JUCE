@@ -61,8 +61,12 @@ void stereoTests (const juce::File& directory, const std::vector<float>& hit, co
         const auto out = render (s, identical, padded, padded, 127);
         const auto separation = std::abs (peakAt (out[1])-peakAt (out[0]));
         std::cout << "Stereo Link=" << link << " peak spacing=" << separation << " samples\n";
-        if (link < 0) check (std::abs (separation-std::lround (-link*.01*240)) <= 2,
-                            "negative Stereo Link separates identical channel transients proportionally up to 5 ms");
+        if (link < 0)
+        {
+            double difference = 0;
+            for (size_t i = 0; i < padded.size(); ++i) difference += std::abs (out[0][i]-out[1][i]);
+            check (difference > .01, "negative Link retains opposed correction within the phase cap");
+        }
         else check (out[0] == out[1], "identical inputs remain identical at zero and positive Stereo Link");
         for (size_t i = 0; i < padded.size(); ++i) audio << link << ',' << i << ',' << out[0][i] << ',' << out[1][i] << '\n';
         if (link < -99)
@@ -108,8 +112,8 @@ void stereoTests (const juce::File& directory, const std::vector<float>& hit, co
            "mono layouts use the channel correction without artificial stereo separation");
     distinct.stereo = true;
     distinct.channel[0].anchor = .04; distinct.channel[1].anchor = .01;
-    check (xuan::PhaseEngine::stereoPhaseAt (1000, independent, distinct, 0) < xuan::PhaseEngine::phaseAt (1000, independent, distinct.channel[0])-10
-           && xuan::PhaseEngine::stereoPhaseAt (1000, independent, distinct, 1) > xuan::PhaseEngine::phaseAt (1000, independent, distinct.channel[1])+10,
+    check (xuan::PhaseEngine::stereoPhaseAt (80, independent, distinct, 0) < xuan::PhaseEngine::phaseAt (80, independent, distinct.channel[0])-.5f
+           && xuan::PhaseEngine::stereoPhaseAt (80, independent, distinct, 1) > xuan::PhaseEngine::phaseAt (80, independent, distinct.channel[1])+.5f,
            "negative Link pushes the later left anchor later and the earlier right anchor earlier");
     independent.depth = 0;
     check (xuan::PhaseEngine::stereoImpulse (48000, independent, distinct, 0)
@@ -167,10 +171,49 @@ void stereoTests (const juce::File& directory, const std::vector<float>& hit, co
     }
     std::array<std::vector<float>, 2> last;
     for (int ch = 0; ch < 2; ++ch) last[static_cast<size_t> (ch)] = {liveAudio[static_cast<size_t> (ch)].begin()+38000, liveAudio[static_cast<size_t> (ch)].begin()+44000};
-    check (live.targetCount() > 0 && std::abs (peakAt (last[0])-peakAt (last[1])) > 100,
-           "live channel analysis and FIR handoff separate repeated channel transients at negative Link");
+    double liveSide = 0;
+    for (size_t i = 0; i < last[0].size(); ++i) liveSide += std::abs (last[0][i]-last[1][i]);
+    check (live.targetCount() > 0 && liveSide > .01,
+           "live negative Link applies opposed channel correction within the phase cap");
 }
 
+void phaseCapTests (const juce::File& directory)
+{
+    xuan::StereoAnalysis a; a.shared.count = 1;
+    a.shared.targets[0] = {1000, 10000, 2.8f, .025f}; a.channel = {a.shared, a.shared};
+    std::ofstream cap (directory.getChildFile ("phase-cap.csv").getFullPathName().toStdString());
+    cap << "frequency,link,left_deg,right_deg\n";
+    constexpr auto pi = juce::MathConstants<double>::pi;
+    for (float manual : {-180.f, 0.f, 180.f})
+        for (float depth : {-100.f, 0.f, 100.f})
+            for (float link : {-100.f, -50.f, 0.f, 50.f, 100.f})
+            {
+                xuan::Settings s; s.automatic = true; s.low = s.high = manual; s.depth = depth; s.link = link;
+                for (double f = 20; f <= 20000; f += 37)
+                {
+                    check (std::abs (xuan::PhaseEngine::phaseAt (f, s, a.shared)) <= pi,
+                           "combined manual and automatic phase saturates at +/-180 degrees");
+                    for (int ch = 0; ch < 2; ++ch)
+                    {
+                        const auto value = xuan::PhaseEngine::stereoPhaseAt (f, s, a, ch);
+                        check (std::isfinite (value) && std::abs (value) <= pi,
+                               "all stereo correction settings stay within the DSP phase cap before FIR design");
+                    }
+                }
+            }
+    xuan::Settings s; s.automatic = true; s.depth = 100; s.link = -100;
+    for (double f = 20; f <= 20000; f += 10)
+        cap << f << ',' << s.link << ',' << xuan::PhaseEngine::stereoPhaseAt (f, s, a, 0)*180/pi
+            << ',' << xuan::PhaseEngine::stereoPhaseAt (f, s, a, 1)*180/pi << '\n';
+    s.low = s.high = 180; s.link = 100;
+    const auto saturated = xuan::PhaseEngine::phaseAt (1000, s, a.shared);
+    check (saturated > 3.14f && std::atan2 (std::sin (saturated), std::cos (saturated)) > 3.14f,
+           "over-range positive correction stops at +180 rather than wrapping negative");
+    s.low = s.high = -180; s.depth = -100;
+    const auto negative = xuan::PhaseEngine::phaseAt (1000, s, a.shared);
+    check (negative < -3.14f && std::atan2 (std::sin (negative), std::cos (negative)) < -3.14f,
+           "over-range negative correction stops at -180 rather than wrapping positive");
+}
 void phaseDisplayTests()
 {
     const juce::Rectangle<float> track {210, 64, 56, 204};
@@ -215,6 +258,7 @@ void dspTests (const juce::File& directory)
 {
     directory.createDirectory();
     phaseDisplayTests();
+    phaseCapTests (directory);
     XuanPhaseProcessor saved, restored;
     set (saved, "link", -70);
     set (saved, "depth", -75); set (saved, "transient", 700);

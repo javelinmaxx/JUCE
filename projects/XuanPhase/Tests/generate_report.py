@@ -112,8 +112,10 @@ The release plot uses a separate **live-worker** single-hit stream, with Depth
 actual applied FIR response through audio telemetry, including kernel handoffs
 and crossfades, at Transient 40/200/800 ms. Time follows processed audio samples,
 so offline rendering speed does not change the envelope. Release is exponential:
-after one selected time constant, 36.8% of the last correction remains; after
+after one selected time constant, 36.8% of the underlying target strength remains; after
 about seven time constants, the response returns to manual-only processing.
+The phase cap can hold a saturated response at its boundary until the target
+strength has fallen far enough for the visible phase to start decreasing.
 The release starts after the last detected onset frame, rather than the first
 sample of the hit. Rebuilds occur at up to 50 Hz during release and use the
 existing 5 ms response crossfade; the plotted envelope includes that stepping.
@@ -157,6 +159,32 @@ fig.savefig(root/'stereo-link.png',dpi=160); plt.close(fig)
 with wave.open(str(root/'stereo-link-live.wav'),'wb') as wav:
     wav.setnchannels(2); wav.setsampwidth(2); wav.setframerate(48000)
     wav.writeframes((np.clip(np.column_stack([stereo_live['left'],stereo_live['right']]),-1,1)*32767).astype('<i2').tobytes())
+cap=np.genfromtxt(root/'phase-cap.csv',delimiter=',',names=True)
+fig,ax=plt.subplots(figsize=(9,3.5),constrained_layout=True)
+for key in ['left_deg','right_deg']: ax.semilogx(cap['frequency'],cap[key],label=key.replace('_deg','').title())
+for limit in [-180,180]: ax.axhline(limit,color='black',linestyle='--',linewidth=.8)
+ax.set(xlabel='Frequency (Hz)',ylabel='Requested correction (degrees)',ylim=(-195,195),title='Combined correction saturates at ±180° before FIR design')
+ax.grid(alpha=.25);ax.legend();fig.savefig(root/'phase-cap.png',dpi=160);plt.close(fig)
+cap_report="""## Strict phase-correction limit
+
+![DSP phase cap](phase-cap.png)
+
+The final combined manual, automatic, and Stereo Link correction now saturates
+at ±180° at every frequency **before** conversion to a complex FIR target.
+A +200° request stops at +180°; it is not wrapped to −160°. The float limit is
+chosen just below mathematical pi to avoid rounding +pi across the seam when
+converting it to a complex value. No extra phase turns are used for separation.
+
+The regression sweeps 20 Hz–20 kHz, manual −180/0/+180°, Auto Depth
+−100/0/+100%, Stereo Link −100/−50/0/+50/+100%, and both channels. Every
+combined correction must stay within ±pi, and positive/negative over-range
+requests must retain their sign. The plot uses a deliberately over-range
+synthetic target with maximum negative Link to show both saturated boundaries.
+The finite FIR approximates the bounded target and can have small measured
+phase ripple; the cap applies to the actual correction requested from its design.
+Data: [phase-cap.csv](phase-cap.csv).
+
+"""
 stereo_report="""## Stereo Link: shared, independent, and separating correction
 
 ![Measured Stereo Link comparisons](stereo-link.png)
@@ -166,7 +194,11 @@ feed identical dispersed hits to both channels through the actual convolution
 engine at 100% Auto Depth, using a frozen detected target. At +100%, both
 channels receive exactly the same correction; at 0%, each uses its own target
 (which happens to be identical in this example). At negative values, opposing
-transient-guided timing shifts increase separation by up to 5 ms at −100%.
+transient-guided timing shifts aim to separate the channels, but the final
+combined correction is now strictly capped to ±180° at every frequency.
+The previous full-band 5 ms separation is no longer guaranteed: at high
+frequencies, opposing +180°/−180° limits are equivalent, so the largest
+negative Link value can produce less peak spacing than an intermediate value.
 
 | Stereo Link | Absolute channel peak spacing | L/R correlation over complete buffer |
 | --- | ---: | ---: |
@@ -184,8 +216,8 @@ phase response.
 The final subplot runs the real background worker at −100% Link on repeated
 identical hits with the default 200 ms release, starting with no preloaded
 target. It verifies that independent analysis and response handoff actually
-separate the channel peaks; release and scheduling can reduce spacing from
-the 5 ms frozen-target maximum. Listen: [live stereo separation](stereo-link-live.wav).
+apply differing channel corrections within the phase limit; release,
+scheduling, and the cap determine the resulting peak spacing. Listen: [live stereo separation](stereo-link-live.wav).
 
 Mono input layouts disable the opposing shift. Auto Off and zero Auto Depth
 also disable separation. Channel kernels crossfade together, retain block-size
@@ -274,7 +306,7 @@ then fills remaining slots by strength, rather than taking the first 24
 low-frequency peaks. Coverage now extends to 20 kHz (limited to 45% of the
 sample rate).
 
-'''+performance+stereo_report+'''
+'''+performance+cap_report+stereo_report+'''
 
 ## Phase-field display
 
@@ -295,7 +327,8 @@ Additional tests feed ±180°, ±200°, ±540°, and +900° responses to the act
 plot helper, check that wrapping preserves their complex phase, flatten the
 cubic curves to verify they remain within the track, and reject lines joining
 +179° directly to −179°. The plot is clipped to the labeled ±180° limits;
-the DSP retains the full unwrapped delay correction.
+the DSP now saturates the combined correction to ±180° before FIR design,
+rather than retaining extra unwrapped turns.
 Stereo Link sits at the far right of the three-knob Auto row beside Transient.
 
 ![Native editor with live transient history](../../Previews/xuan-phase.png)
