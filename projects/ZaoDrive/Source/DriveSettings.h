@@ -9,5 +9,6 @@ struct Settings
     bool transformer = false, bypass = false;
     float bjtBias = 0, diodeKnee = 0.5f;
     bool smart = false;
+    bool clear = true;
 };
 }

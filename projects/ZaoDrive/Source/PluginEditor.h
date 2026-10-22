@@ -40,7 +40,7 @@ private:
     ZaoDriveProcessor& processor;
     ZaoLookAndFeel look;
     juce::TooltipWindow tooltipWindow { this };
-    ZaoBypassButton bypass, smart { "SMART" };
+    ZaoBypassButton bypass, smart { "SMART" }, clear { "CLEAR" };
     ZaoTransformerSwitch transformer;
     juce::Slider model;
     juce::Label modelLabel;
@@ -48,8 +48,8 @@ private:
     std::array<juce::Label, 7> labels;
     using State = juce::AudioProcessorValueTreeState;
     std::array<std::unique_ptr<State::SliderAttachment>, 7> attachments;
-    std::unique_ptr<State::ButtonAttachment> bypassAttachment, transformerAttachment, smartAttachment;
-    std::array<float, 13> previousSettings {};
+    std::unique_ptr<State::ButtonAttachment> bypassAttachment, transformerAttachment, smartAttachment, clearAttachment;
+    std::array<float, 14> previousSettings {};
     int inputControlCircuit = -1;
     uint32_t previousSmartRevision = 0;
     bool previewRequested = false;

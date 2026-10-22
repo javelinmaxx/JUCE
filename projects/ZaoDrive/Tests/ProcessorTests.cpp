@@ -126,6 +126,7 @@ void optimizationTests()
     for (int mode = 0; mode < 4; ++mode)
     {
         zao::Settings settings; settings.model = mode; settings.bjtBias = -.4f;
+        settings.clear = mode % 2 == 0;
         settings.driveDb = 20; settings.transformer = mode == 1; settings.diodeKnee = .8f;
         auto obsolete = settings; obsolete.driveDb = 0;
         renderer.request (obsolete, {}); renderer.cancel(); renderer.request (settings, {});
@@ -451,6 +452,75 @@ void smartTests()
            "Smart never changes Drive, Bias, Knee or their host automation values");
 }
 
+void clearTests()
+{
+    for (double rate : { 8000., 44100., 48000., 96000., 192000. })
+    {
+        zao::ClearStage stage; stage.prepare (rate); stage.setEnabled (false);
+        double error = 0;
+        for (int i = 0; i < 3*stage.getLatencySamples(); ++i)
+        {
+            const auto output = stage.process ({ i == 0 ? 1.0f : 0.0f, 0 });
+            error = std::max (error, std::abs (static_cast<double> (output[0])-(i == stage.getLatencySamples() ? 1.0 : 0.0)));
+            error = std::max (error, std::abs (static_cast<double> (output[1])));
+        }
+        check (error < 1e-12 && ! stage.isProcessing(), "Clear Off is an exact pure delay with convolution suspended");
+        stage.reset(); stage.setEnabled (true);
+        zao::GreyNoiseFilter reference; reference.prepare (rate);
+        error = 0;
+        for (int i = 0; i < 2048; ++i)
+        {
+            const std::array<float, 2> input { .2f*std::sin (.17f*i), -.1f*std::cos (.13f*i) };
+            const auto output = stage.process (input);
+            for (size_t ch = 0; ch < 2; ++ch)
+                error = std::max (error, std::abs (static_cast<double> (output[ch]-reference.process (input[ch], ch))));
+        }
+        check (error < 1e-7 && stage.isProcessing(), "Clear On matches the contour exactly with independent stereo histories");
+        // Constant input exposes switching edges without masking them with
+        // ordinary waveform slope; wait for capacitor/filter histories to settle.
+        for (int i = 0; i < static_cast<int> (rate*.1); ++i) stage.process ({ .25f, -.15f });
+        auto previous = stage.process ({ .25f, -.15f });
+        double largestStep = 0;
+        for (bool enabled : { false, true, false, true })
+        {
+            stage.setEnabled (enabled);
+            for (int i = 0; i < static_cast<int> (rate*.08); ++i)
+            {
+                const auto output = stage.process ({ .25f, -.15f });
+                for (size_t ch = 0; ch < 2; ++ch)
+                    largestStep = std::max (largestStep, std::abs (static_cast<double> (output[ch]-previous[ch])));
+                previous = output;
+            }
+            check (stage.isProcessing() == enabled, "Clear warms on demand and suspends again after its Off fade");
+        }
+        check (largestStep < .002, "Clear toggles have no abrupt level steps after warming the FIR");
+    }
+    ZaoDriveProcessor processor;
+    check (processor.getSettings().clear, "Clear starts enabled to retain the existing contour path");
+    processor.prepareToPlay (48000, 64); set (processor, "mix", 0); set (processor, "output", 0);
+    const auto latency = processor.getLatencySamples();
+    juce::AudioBuffer<float> block (2, 64); juce::MidiBuffer midi;
+    double error = 0;
+    for (int offset = 0; offset < 8192; offset += 64)
+    {
+        set (processor, "clear", (offset/512)%2 == 0 ? 1.0f : 0.0f);
+        for (int ch = 0; ch < 2; ++ch)
+            for (int i = 0; i < 64; ++i) block.setSample (ch, i, .2f*std::sin (.07f*(offset+i)));
+        processor.processBlock (block, midi);
+        for (int ch = 0; ch < 2; ++ch)
+            for (int i = 0; i < 64; ++i)
+            {
+                const auto index = offset+i-latency;
+                error = std::max (error, std::abs (static_cast<double> (block.getSample (ch, i))
+                    -(index < 0 ? 0.0 : .2f*std::sin (.07f*index))));
+            }
+    }
+    check (error < 1e-7 && processor.getLatencySamples() == latency, "Clear automation preserves exact dry alignment and fixed host latency");
+    auto settings = processor.getSettings();
+    const auto signature = zao::SmartAnalyser::signature (settings); settings.clear = ! settings.clear;
+    check (signature != zao::SmartAnalyser::signature (settings), "Clear toggles invalidate earlier Smart spectral decisions");
+}
+
 void greyNoiseTests()
 {
     using Filter = zao::GreyNoiseFilter;
@@ -459,16 +529,16 @@ void greyNoiseTests()
         { 0, 118.990011 }, { 7, 92.479723 }, { 17, 80.012075 }, { 23, 77.916229 }, { 28, 92.969435 } } })
         check (std::abs (zao::EqualLoudness80::splAtIndex (point.first)-point.second) < 1e-6,
                "80-phon ISO 226 SPL anchors match independent reference values");
-    check (std::abs (Filter::targetDb (750)) < 1e-12
-           && std::abs (Filter::targetDb (2000)+5.495842) < 1e-6,
-           "one-octave contour shift moves the unity reference to 750 Hz and the valley to 2 kHz");
+    check (std::abs (Filter::targetDb (750)+3) < 1e-12
+           && std::abs (Filter::targetDb (2000)+8.495842) < 1e-6,
+           "Clear retains the shifted contour with a minus-three-dB reference at 750 Hz");
     for (double hz : { 10., 50., 315., 500., 750., 1575., 2000., 3150., 6250., 12000. })
-        check (std::abs (Filter::targetDb (hz)-std::min (3.0,
-            zao::EqualLoudness80::splDb (2*hz)-zao::EqualLoudness80::splDb (1500))) < 1e-12,
-               "every shifted contour point matches the original curve at twice its frequency");
-    check (std::abs (Filter::targetDb (20)-3) < 1e-12 && std::abs (Filter::targetDb (12500)-3) < 1e-12
-           && std::abs (Filter::targetDb (0)-3) < 1e-12 && std::abs (Filter::targetDb (20000)-3) < 1e-12,
-           "only upward contour gain is capped at three dB and ISO endpoints are held outside the table");
+        check (std::abs (Filter::targetDb (hz)-std::min (0.0,
+            zao::EqualLoudness80::splDb (2*hz)-zao::EqualLoudness80::splDb (1500)-3)) < 1e-12,
+               "every shifted contour point matches the original curve at twice its frequency lowered by three dB");
+    check (std::abs (Filter::targetDb (20)) < 1e-12 && std::abs (Filter::targetDb (12500)) < 1e-12
+           && std::abs (Filter::targetDb (0)) < 1e-12 && std::abs (Filter::targetDb (20000)) < 1e-12,
+           "Clear target never boosts and holds the shifted ISO endpoint levels");
     for (double rate : { 8000., 32000., 44100., 48000., 96000., 192000. })
     {
         Filter filter; filter.prepare (rate); const auto h = filter.getImpulseResponse();
@@ -480,8 +550,8 @@ void greyNoiseTests()
             impulseError = std::max (impulseError, std::abs (static_cast<double> (filter.process (i == 0 ? 1.0f : 0.0f, 0)-h[j])));
         }
         check (symmetry < 1e-12 && impulseError < 1e-7, "grey FIR has an exactly symmetric impulse and the advertised group delay");
-        check (sum > 1 && sum <= std::pow (10.0, 3.0/20)+1e-6 && std::abs (filter.process (0, 1)) < 1e-12f,
-               "grey FIR has bounded bass emphasis and independent stereo history");
+        check (sum > .5 && sum <= 1.0+1e-6 && std::abs (filter.process (0, 1)) < 1e-12f,
+               "Clear FIR has no bass boost and independent stereo history");
         const auto response = [&] (double hz)
         {
             std::complex<double> result {};
@@ -497,17 +567,17 @@ void greyNoiseTests()
             minimumResponse = std::min (minimumResponse, compensated.real());
             maximumResponse = std::max (maximumResponse, std::abs (compensated));
         }
-        check (phaseError < 1e-10 && minimumResponse > .4,
+        check (phaseError < 1e-10 && minimumResponse > .3,
                "delay compensation leaves a real positive response with no frequency-dependent phase rotation");
-        check (std::abs (20*std::log10 (std::abs (response (750)))) < 1e-5
+        check (std::abs (20*std::log10 (std::abs (response (750)))+3) < 1e-5
                && 20*std::log10 (std::abs (response (1575))) < -1,
-               "shifted 80-phon FIR keeps 750 Hz at unity and moves midrange attenuation down one octave");
-        check (20*std::log10 (maximumResponse) <= 3.00001,
-               "the actual FIR response respects the three dB upward gain cap");
+               "shifted 80-phon FIR keeps 750 Hz at minus three dB and moves midrange attenuation down one octave");
+        check (20*std::log10 (maximumResponse) <= 0.0,
+               "the actual FIR frequency response has no positive gain");
         if (rate >= 32000)
-            check (20*std::log10 (std::abs (response (50))) > 2
-                   && 20*std::log10 (std::abs (response (15000))) > 2,
-                   "80-phon bass and treble emphasis remain present below the cap");
+            check (20*std::log10 (std::abs (response (50))) > -1
+                   && 20*std::log10 (std::abs (response (15000))) > -1,
+                   "Clear bass and treble remain close to unity without boosts");
         filter.reset();
         std::mt19937 random (61); std::uniform_real_distribution<float> noise (-1, 1);
         std::vector<float> input; double error = 0;
@@ -563,7 +633,7 @@ void greyNoiseTests()
 void processorTests()
 {
     ZaoDriveProcessor processor;
-    check (processor.getName() == "Zao Drive" && processor.getParameters().size() == 14,
+    check (processor.getName() == "Zao Drive" && processor.getParameters().size() == 15,
            "all circuits register compatible legacy parameters plus independent Bias and Knee");
     processor.prepareToPlay (48000, 64);
     const auto latency = processor.getLatencySamples();
@@ -595,11 +665,11 @@ void processorTests()
     }
     set (processor, "model", 1); set (processor, "drive", 29); set (processor, "transformer", 1);
     set (processor, "dcBias", 37); set (processor, "tone", 4321);
-    set (processor, "bjtBias", -45); set (processor, "diodeKnee", 73);
+    set (processor, "bjtBias", -45); set (processor, "diodeKnee", 73); set (processor, "clear", 0);
     juce::MemoryBlock state; processor.getStateInformation (state);
     ZaoDriveProcessor restored; restored.setStateInformation (state.getData(), static_cast<int> (state.getSize()));
     const auto saved = restored.getSettings();
-    check (saved.model == 1 && saved.transformer && std::abs (saved.driveDb - 29) < 0.01f
+    check (saved.model == 1 && saved.transformer && ! saved.clear && std::abs (saved.driveDb - 29) < 0.01f
            && std::abs (saved.bjtBias + 0.45f) < 0.001f && std::abs (saved.diodeKnee - 0.73f) < 0.001f
            && std::abs (saved.dcBias - 0.37f) < 0.001f && std::abs (saved.toneHz - 4321) < 0.1f,
            "circuit and transformer settings survive host state recall");
@@ -610,13 +680,14 @@ void processorTests()
         check (restored.getSettings().model == mode, "all four circuits survive saved-state round trips");
     }
     auto legacyState = processor.parameters.copyState();
-    for (const auto* id : { "diodeCircuit", "bjtBias", "diodeKnee" })
+    for (const auto* id : { "diodeCircuit", "bjtBias", "diodeKnee", "clear" })
         legacyState.removeChild (legacyState.getChildWithProperty ("id", id), nullptr);
     legacyState.getChildWithProperty ("id", "model").setProperty ("value", 1.0f, nullptr);
     juce::AudioProcessor::copyXmlToBinary (*legacyState.createXml(), state);
     restored.setStateInformation (state.getData(), static_cast<int> (state.getSize()));
     check (std::abs (restored.getSettings().bjtBias) < 1.0e-6f && std::abs (restored.getSettings().diodeKnee - 0.5f) < 1.0e-6f,
            "legacy states reset new Bias and Knee to neutral defaults after another preset");
+    check (restored.getSettings().clear, "legacy presets restore the previously always-on contour after loading an Off preset");
     check (restored.getSettings().model == 1, "loading an old two-mode state restores Op-Amp after a diode-mode session");
     restored.parameters.getParameter ("model")->setValueNotifyingHost (0.0f);
     check (restored.getSettings().model == 0, "legacy normalized circuit automation still selects BJT and Op-Amp");
@@ -898,6 +969,7 @@ void editorTests (const juce::File& destination, bool tooltip, int previewMode, 
     juce::Slider* contextual = nullptr;
     juce::Button* transformer = nullptr;
     juce::Button* smart = nullptr;
+    juce::Button* clear = nullptr;
     juce::TooltipWindow* window = nullptr;
     for (auto* child : editor->getChildren())
     {
@@ -905,6 +977,7 @@ void editorTests (const juce::File& destination, bool tooltip, int previewMode, 
         if (auto* slider = dynamic_cast<juce::Slider*> (child); slider && slider->getName() == "BIAS") contextual = slider;
         if (auto* button = dynamic_cast<juce::Button*> (child); button && button->getButtonText() == "TRANSFORMER") transformer = button;
         if (auto* button = dynamic_cast<juce::Button*> (child); button && button->getButtonText() == "SMART") smart = button;
+        if (auto* button = dynamic_cast<juce::Button*> (child); button && button->getButtonText() == "CLEAR") clear = button;
         if (auto* tip = dynamic_cast<juce::TooltipWindow*> (child)) window = tip;
         if (dynamic_cast<juce::Slider*> (child) || dynamic_cast<juce::Button*> (child) || dynamic_cast<juce::Label*> (child))
         {
@@ -919,6 +992,17 @@ void editorTests (const juce::File& destination, bool tooltip, int previewMode, 
     check (processor.getSettings().smart, "Smart button updates its host parameter");
     set (processor, "smart", 0);
     check (! smart->getToggleState(), "Smart button follows host automation");
+    check (clear && clear->getX() == smart->getRight()+8 && clear->getY() == smart->getY()
+           && clear->getToggleState(), "Clear sits beside Smart and initially shows the enabled contour");
+    clear->setToggleState (false, juce::sendNotificationSync);
+    check (! processor.getSettings().clear, "Clear button updates its host parameter");
+    for (int i = 0; i < 24; ++i) { juce::Thread::sleep (20); juce::Timer::callPendingTimersSynchronously(); }
+    double clearDifference = 0;
+    for (size_t i = 0; i < expectedBefore.size(); ++i)
+        clearDifference += std::abs (expectedBefore[i]-zaoEditor->getExpectedOutput()[i]);
+    check (clearDifference > .01, "expected-output preview follows the Clear switch");
+    set (processor, "clear", 1);
+    check (clear->getToggleState(), "Clear button follows host automation");
     check (model && contextual && transformer && window && model->getTextFromValue (0) == "BJT CE",
            "initial circuit caption displays the model name");
     model->setValue (1, juce::sendNotificationSync);
@@ -1014,7 +1098,7 @@ int main (int argc, char** argv)
     try
     {
         juce::ScopedJuceInitialiser_GUI gui;
-        circuitTests(); shapeTests(); processorTests(); smartTests(); greyNoiseTests(); optimizationTests();
+        circuitTests(); shapeTests(); processorTests(); smartTests(); clearTests(); greyNoiseTests(); optimizationTests();
         if (argc > 2 && juce::String (argv[1]) == "--editor")
         {
             const auto option = argc > 3 ? juce::String (argv[3]) : juce::String();

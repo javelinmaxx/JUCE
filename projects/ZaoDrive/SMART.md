@@ -7,7 +7,7 @@ Tone, or the physical circuit equations. Existing presets load Smart Off.
 ```mermaid
 flowchart LR
     I[Input] --> D[Align clean input]
-    I --> F[Linear-phase grey FIR]
+    I --> F[Clear contour or flat delay]
     F --> G[Input gain / Drive / circuit / 4x oversampling]
     G --> S[Subtract aligned filtered reference]
     F --> R[Align filtered reference]
@@ -29,9 +29,11 @@ Smart applies harmonic shaping `H` to this branch, then
 only the clean branch reaches the output stages. Smart Off makes `H` the identity.
 The clean branch includes the grey FIR's delay plus the circuit oversampler's
 integer delay; the filtered reference needs only the latter delay. The output
-stages retain the existing transformer compensation delay. The grey curve uses the
-ISO 226:2003 equal-loudness contour at 80 phons, referenced to 1.5 kHz. Only
-upward gain is capped at +3 dB; the contour's negative gains are retained.
+stages retain the existing transformer compensation delay. Clear enables the
+ISO 226:2003 80-phon contour shifted down one octave and lowered by 3 dB:
+750 Hz is −3 dB and the maximum gain is 0 dB. Clear Off supplies a flat feed
+with the same delay. Clear changes invalidate earlier Smart analysis so harmonic
+targets always reflect the current driver feed.
 A symmetric FIR keeps its added phase strictly linear; filter length scales with
 sample rate to hold approximately 2.67 ms delay (128 samples at 48 kHz). See the
 [grey filter report](Tests/Reports/grey-report.md) for its measured response.

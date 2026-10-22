@@ -8,8 +8,8 @@
 
 namespace zao
 {
-// ISO 226:2003 at 80 phons, shifted down one octave, with 750 Hz at unity
-// and upward gain capped at +3 dB.
+// ISO 226:2003 at 80 phons, shifted down one octave and lowered by 3 dB:
+// 750 Hz is -3 dB and the entire response stays at or below 0 dB.
 // Type-I symmetry gives one frequency-independent delay, scaled with the
 // sample rate to keep the same contour and approximately 2.67 ms of latency.
 class GreyNoiseFilter
@@ -51,9 +51,10 @@ public:
             reference += (i == 0 ? 1 : 2)*static_cast<double> (coefficients[static_cast<size_t> (i)])
                 * std::cos (2*juce::MathConstants<double>::pi*EqualLoudness80::referenceFrequencyHz*i/sampleRate);
         }
-        // Keep the shifted 750 Hz reference at unity; paired taps are identical.
-        for (auto& coefficient : coefficients) coefficient /= static_cast<float> (reference);
-        enforceBoostCeiling();
+        const auto referenceGain = std::pow (10.0, targetDb (EqualLoudness80::referenceFrequencyHz)/20);
+        // Preserve the lowered reference rather than normalizing away the cut.
+        for (auto& coefficient : coefficients) coefficient *= static_cast<float> (referenceGain/reference);
+        enforceBoostCeiling (referenceGain);
 #if JUCE_USE_SIMD
         // Prepack the unchanged impulse in double precision. Four independent
         // accumulators avoid a long scalar dependency chain without fast-math.
@@ -128,7 +129,7 @@ private:
     }
     std::vector<Vector> packedCoefficients;
 #endif
-    void enforceBoostCeiling()
+    void enforceBoostCeiling (double referenceGain)
     {
         // Referencing the top of a smoothed contour can lift its plateaus above
         // the target cap. Blend with a pure delay to bound the actual response
@@ -145,9 +146,9 @@ private:
         peak *= 1.000001;
         const auto limit = std::pow (10.0, (EqualLoudness80::maximumBoostDb-.0001)/20);
         if (peak <= limit) return;
-        const auto blend = static_cast<float> ((limit-1)/(peak-1));
+        const auto blend = static_cast<float> ((limit-referenceGain)/(peak-referenceGain));
         for (auto& coefficient : coefficients) coefficient *= blend;
-        coefficients[0] += 1-blend;
+        coefficients[0] += (1-blend)*static_cast<float> (referenceGain);
     }
     int latency = referenceLatencySamples, taps = 2*referenceLatencySamples+1;
     std::vector<float> coefficients;

@@ -5,7 +5,7 @@ GCC 14.2 and a CMake Release build. All results are local wall-clock timings;
 cloud scheduling varies, so these are not promised DAW CPU-meter reductions.
 
 These measurements describe optimization revision `b8b88eaff6`, before the
-subsequent one-octave contour shift. See [the current contour report](grey-report.md)
+subsequent contour shift and Clear toggle. See [the current contour report](grey-report.md)
 for its updated frequency response.
 
 ## Processing measurements

@@ -1,7 +1,7 @@
 #pragma once
 #include "Circuits.h"
 #include "SmartHarmonics.h"
-#include "GreyNoiseFilter.h"
+#include "ClearStage.h"
 #include "../../YinyangCompressor/Source/OversampledTransformer.h"
 #include <juce_dsp/juce_dsp.h>
 #include <memory>
@@ -15,7 +15,7 @@ public:
     {
         sampleRate = rate;
         smart.prepare (rate, smartWorker);
-        greyNoise.prepare (rate);
+        clear.prepare (rate);
         blockSize = std::max (1, maximumBlock);
         oversampling = std::make_unique<juce::dsp::Oversampling<float>> (
             2, 2, juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR, true, true);
@@ -28,7 +28,7 @@ public:
             bjt[ch].prepare (rate * 4); opamp[ch].prepare (rate * 4);
             shunt[ch].prepare (rate * 4); crossover[ch].prepare (rate * 4);
             transformers[ch].prepare (rate);
-            dryDelay[ch].assign (static_cast<size_t> (greyNoise.getLatencySamples()+circuitLatency), 0.0f);
+            dryDelay[ch].assign (static_cast<size_t> (clear.getLatencySamples()+circuitLatency), 0.0f);
             filteredDelay[ch].assign (static_cast<size_t> (std::max (1, circuitLatency)), 0.0f);
             bypassDelay[ch].assign (static_cast<size_t> (getLatency()), 0.0f);
         }
@@ -49,7 +49,7 @@ public:
     // the renderer after this reset.
     void resetSignalPath()
     {
-        greyNoise.reset(); oversampling->reset();
+        clear.reset(); oversampling->reset();
         for (size_t ch = 0; ch < 2; ++ch)
         {
             bjt[ch].reset(); opamp[ch].reset(); shunt[ch].reset(); crossover[ch].reset();
@@ -69,11 +69,12 @@ public:
     SmartHarmonics& getSmart() noexcept { return smart; }
     const SmartHarmonics& getSmart() const noexcept { return smart; }
 
-    int getLatency() const noexcept { return greyNoise.getLatencySamples() + circuitLatency + character::OversampledTransformer::latencySamples; }
+    int getLatency() const noexcept { return clear.getLatencySamples() + circuitLatency + character::OversampledTransformer::latencySamples; }
 
     void process (juce::AudioBuffer<float>& buffer, const Settings& settings)
     {
         setSettings (settings);
+        clear.setEnabled (settings.clear);
         smart.beginBlock (settings);
         const auto channels = std::min (2, buffer.getNumChannels());
         for (int offset = 0; offset < buffer.getNumSamples(); offset += blockSize)
@@ -82,12 +83,17 @@ public:
             for (int i = 0; i < count; ++i)
             {
                 const auto gain = inputGain.getNextValue() * driveGain.getNextValue() * 0.35f;
+                std::array<float, 2> inputSamples;
                 for (int ch = 0; ch < 2; ++ch)
                 {
                     const auto input = ch < channels ? buffer.getSample (ch, offset + i) : 0.0f;
-                    const auto filtered = greyNoise.process (std::clamp (std::isfinite (input) ? input : 0.0f, -32.0f, 32.0f), static_cast<size_t> (ch));
-                    filteredInput.setSample (ch, i, filtered);
-                    scratch.setSample (ch, i, filtered * gain);
+                    inputSamples[static_cast<size_t> (ch)] = std::clamp (std::isfinite (input) ? input : 0.0f, -32.0f, 32.0f);
+                }
+                const auto shaped = clear.process (inputSamples);
+                for (int ch = 0; ch < 2; ++ch)
+                {
+                    filteredInput.setSample (ch, i, shaped[static_cast<size_t> (ch)]);
+                    scratch.setSample (ch, i, shaped[static_cast<size_t> (ch)] * gain);
                 }
             }
             auto hostBlock = juce::dsp::AudioBlock<float> (scratch).getSubBlock (0, static_cast<size_t> (count));
@@ -248,7 +254,7 @@ private:
     }
 
     SmartHarmonics smart;
-    GreyNoiseFilter greyNoise;
+    ClearStage clear;
     double sampleRate = 48000;
     int blockSize = 256, circuitLatency = 0, warmSamples = 0;
     bool firstSettings = true, transformerRunning = false;

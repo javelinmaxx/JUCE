@@ -32,7 +32,8 @@ uint32_t SmartAnalyser::signature (const Settings& s) noexcept
 {
     uint32_t hash = 2166136261u;
     for (float value : { s.inputDb, s.driveDb, s.toneHz, s.bjtBias, s.diodeKnee,
-                         static_cast<float> (s.model), s.smart && ! s.bypass && s.mix > .001f ? 1.0f : 0.0f })
+                         static_cast<float> (s.model), s.smart && ! s.bypass && s.mix > .001f ? 1.0f : 0.0f,
+                         s.clear ? 1.0f : 0.0f })
     {
         uint32_t bits = 0; std::memcpy (&bits, &value, sizeof (bits));
         hash = (hash ^ bits) * 16777619u;

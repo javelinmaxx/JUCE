@@ -34,7 +34,7 @@ public:
     juce::AudioProcessorValueTreeState parameters;
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
-    std::array<std::atomic<float>*, 14> raw {};
+    std::array<std::atomic<float>*, 15> raw {};
     zao::DriveEngine engine;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ZaoDriveProcessor)
 };

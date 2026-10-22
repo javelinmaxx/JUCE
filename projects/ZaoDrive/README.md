@@ -20,10 +20,13 @@ The first knob changes with the mode:
 | OPAMP FB | Input | Adjusts input level from −24 to +24 dB. |
 | DIODE SHUNT / CROSSOVER | Knee | Varies driver impedance, current limit and bandwidth from firm to soft. |
 
-Drive adds up to 36 dB of excitation. A linear-phase FIR shapes the driver input
-with the ISO 226:2003 equal-loudness contour at 80 phons shifted down one octave,
-moving its 0 dB reference from 1.5 kHz to 750 Hz and retaining the +3 dB upward
-gain cap. All features of the derived contour move to half their former frequencies.
+Drive adds up to 36 dB of excitation. **Clear**, beside Smart, toggles the
+linear-phase ISO 226:2003 80-phon contour shifted down one octave. Its entire
+previous curve is lowered by 3 dB: the maximum is now 0 dB, and the shifted
+750 Hz reference is −3 dB. Clear starts On and is recalled with presets;
+older presets load On to retain their contour path. Off fades to a flat,
+delay-matched feed and then stops convolution, saving CPU. Re-enabling warms
+the FIR before a 20 ms fade; latency stays constant.
 The circuit output minus the aligned filtered reference forms a separate wet
 residual, which Tone filters from 1.2–18 kHz. Mix adds that residual to the clean input;
 Output sets the level entering the optional transformer.
@@ -38,7 +41,7 @@ and the [Smart preview](Previews/zao-smart.png).
 
 The **Expected Output** display renders a −12 dBFS, 1 kHz reference through a
 separate instance of the actual audio engine. Gray is the delayed input and amber
-is the predicted output, including Tone, Mix, Output, bypass, and transformer
+is the predicted output, including Clear, Tone, Mix, Output, bypass, and transformer
 settings. It is a reference waveform, not a live oscilloscope or a prediction of
 arbitrary input material. The labeled plot scale fits both input and output,
 starting at ±0.25 FS to keep passive diode behavior visible. Rendering runs on a
@@ -57,7 +60,7 @@ stops processing once its Off fade finishes; re-enabling warms its delay before
 fading in. Circuit processing uses a separate 4× oversampler. Host latency is the
 grey FIR delay (128 samples at 48 kHz), integer circuit oversampler delay,
 plus the transformer's fixed 64 samples and
-stays constant with every model, Mix, bypass, or transformer switching.
+stays constant with every model, Clear, Mix, bypass, or transformer switching.
 
 The clean branch stays flat and is delayed to match the FIR. The FIR's linear
 phase prevents additional frequency-dependent phase rotation when the branches

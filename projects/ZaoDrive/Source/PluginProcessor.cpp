@@ -3,8 +3,8 @@
 
 namespace
 {
-constexpr std::array<const char*, 14> ids {
-    "input", "drive", "tone", "output", "mix", "coreDrive", "dcBias", "model", "transformer", "bypass", "diodeCircuit", "bjtBias", "diodeKnee", "smart" };
+constexpr std::array<const char*, 15> ids {
+    "input", "drive", "tone", "output", "mix", "coreDrive", "dcBias", "model", "transformer", "bypass", "diodeCircuit", "bjtBias", "diodeKnee", "smart", "clear" };
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout ZaoDriveProcessor::createParameterLayout()
@@ -39,6 +39,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout ZaoDriveProcessor::createPar
         "Diode knee", juce::NormalisableRange<float> { 0, 100, 0.1f }, 50,
         juce::AudioParameterFloatAttributes().withLabel ("%")));
     layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "smart", 3 }, "Smart harmonics", false));
+    layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "clear", 4 }, "Clear", true));
     return layout;
 }
 
@@ -55,7 +56,7 @@ zao::Settings ZaoDriveProcessor::getSettings() const noexcept
     const auto value = [this] (size_t index) { return raw[index]->load (std::memory_order_relaxed); };
     return { value (0), value (1), value (2), value (3), value (4) * 0.01f,
              value (5), value (6) * 0.01f, juce::roundToInt (value (7)) + (value (10) >= 0.5f ? 2 : 0),
-             value (8) >= 0.5f, value (9) >= 0.5f, value (11) * 0.01f, value (12) * 0.01f, value (13) >= .5f };
+             value (8) >= 0.5f, value (9) >= 0.5f, value (11) * 0.01f, value (12) * 0.01f, value (13) >= .5f, value (14) >= .5f };
 }
 
 void ZaoDriveProcessor::prepareToPlay (double rate, int maximumBlock)
@@ -98,11 +99,14 @@ void ZaoDriveProcessor::setStateInformation (const void* data, int size)
             auto state = juce::ValueTree::fromXml (*xml);
             // Missing controls must use their documented defaults rather than
             // inherit whatever was selected in the previously loaded session.
-            for (const auto* id : { "diodeCircuit", "bjtBias", "diodeKnee", "smart" })
+            for (const auto* id : { "diodeCircuit", "bjtBias", "diodeKnee", "smart", "clear" })
                 if (! state.getChildWithProperty ("id", id).isValid())
                 {
                     auto legacyDefault = parameters.copyState().getChildWithProperty ("id", id).createCopy();
-                    legacyDefault.setProperty ("value", juce::String (id) == "diodeKnee" ? 50.0f : 0.0f, nullptr);
+                    // Previous versions always used the contour, so legacy
+                    // sessions must load Clear On even after an Off preset.
+                    legacyDefault.setProperty ("value", juce::String (id) == "diodeKnee" ? 50.0f
+                        : juce::String (id) == "clear" ? 1.0f : 0.0f, nullptr);
                     state.appendChild (legacyDefault, nullptr);
                 }
             parameters.replaceState (state);

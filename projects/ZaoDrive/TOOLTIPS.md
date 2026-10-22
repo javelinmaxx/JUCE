@@ -5,11 +5,12 @@
 | Control | Hover hint |
 | --- | --- |
 | Smart | Saves CPU when Off; reduces generated harmonics that clash with the input spectrum. |
+| Clear | Saves CPU when Off; applies the octave-shifted equal-loudness contour without frequency boosts. |
 | Circuit | Selects BJT, op-amp feedback, diode shunt, or series-diode crossover distortion. |
 | BJT Bias | Shifts the BJT base-bias voltage away from its nominal operating point. |
 | Diode Knee | Increases amplifier output impedance and softens current delivery into the Schottky diodes. |
-| Op-Amp Input | Adjusts the level entering the selected circuit after capped, octave-shifted 80-phon shaping. |
-| Drive | Increases the capped, octave-shifted 80-phon-shaped signal driving the selected overdrive circuit. |
+| Op-Amp Input | Adjusts the level entering the selected circuit after optional Clear shaping. |
+| Drive | Increases the signal driving the selected overdrive circuit after optional Clear shaping. |
 | Tone | Sets the low-pass cutoff of the driver-minus-reference wet signal. |
 | Output | Adjusts gain after the wet and dry mix and before the output transformer. |
 | Mix | Adds the driver-minus-reference wet signal to the latency-aligned clean input. |
