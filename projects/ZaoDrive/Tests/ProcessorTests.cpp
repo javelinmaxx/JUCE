@@ -14,6 +14,8 @@ std::vector<DiodeMeasurement> diodeMeasurements;
 double aliasReductionDb = 0, siliconFlatFraction = 0, schottkyFlatFraction = 0;
 struct ShapeResidual { double rate, control, bjt, shunt, series; };
 std::vector<ShapeResidual> shapeResiduals;
+struct AutoMeasurement { double rate; int mode; bool transformer; double gain, errorDb; };
+std::vector<AutoMeasurement> autoMeasurements;
 void check (bool pass, const char* message)
 {
     ++checks;
@@ -452,6 +454,121 @@ void smartTests()
            "Smart never changes Drive, Bias, Knee or their host automation values");
 }
 
+void autoCompensatorTests()
+{
+    for (double rate : { 8000., 44100., 48000., 96000., 192000. })
+        for (float factor : { .1f, 4.f, 15.f })
+        {
+            zao::AutoCompensator match; match.prepare (rate);
+            const auto correction = zao::AutoCompensator::matchingGain (.025, .025*factor*factor);
+            match.setTarget (correction);
+            for (int i = 0; i < static_cast<int> (rate*.03); ++i) match.process ({ .2f*factor, -.1f*factor }, 2);
+            double error = 0;
+            for (int i = 0; i < 4096; ++i)
+            {
+                const auto x = i < 1024 ? .2f : i < 2048 ? .001f : i < 3072 ? 0.f : .8f;
+                const auto output = match.process ({ x*factor, -.5f*x*factor }, 2);
+                error = std::max (error, std::abs (static_cast<double> (output[0]-x)));
+                error = std::max (error, std::abs (static_cast<double> (output[1]+.5f*x)));
+            }
+            check (error < 1e-6 && std::abs (match.currentGain()-correction) < 1e-7,
+                   "fixed Auto gain never changes with audio level, transients or silence and preserves stereo balance");
+            match.setTarget (1);
+            for (int i = 0; i < static_cast<int> (rate*.03); ++i) match.process ({ .2f, -.1f }, 2);
+            const auto output = match.process ({ .2f, -.1f }, 2);
+            check (output == std::array<float, 2> { .2f, -.1f }, "Auto Off returns to exact unity compensation");
+        }
+    check (std::abs (zao::AutoCompensator::matchingGain (0, 0)-1) < 1e-7f,
+           "silent or absent preview output cannot generate an invalid reference gain");
+    check (zao::AutoCompensator::matchingGain (1, 1e-8) <= 63.096f
+           && zao::AutoCompensator::matchingGain (1e-8, 1) >= .015848f,
+           "preview correction is bounded to plus or minus 36 dB");
+
+    zao::PreviewRenderer renderer;
+    zao::PreviewFrame frame;
+    for (int mode = 0; mode < 4; ++mode)
+    {
+        zao::Settings settings; settings.model = mode; settings.autoCompensate = true;
+        settings.transformer = mode % 2 == 1; settings.outputDb = -12;
+        renderer.request (settings, {});
+        const auto deadline = juce::Time::getMillisecondCounterHiRes()+3000;
+        bool ready = false;
+        while (! (ready = renderer.read (frame)) && juce::Time::getMillisecondCounterHiRes() < deadline) juce::Thread::sleep (2);
+        check (ready, "Auto reference renders all four circuits and optional transformer");
+        double in = 0, out = 0;
+        for (size_t i = 0; i < frame.input.size(); ++i)
+        {
+            in += static_cast<double> (frame.input[i])*frame.input[i];
+            out += static_cast<double> (frame.output[i])*frame.output[i];
+        }
+        const auto errorDb = 10*std::log10 (out/in);
+        autoMeasurements.push_back ({ 48000, mode, settings.transformer, frame.matchingGain, errorDb });
+        check (std::abs (errorDb) < 1e-5, "Auto preview input and output have the same RMS without time averaging");
+
+        // Compare the same live engine with and without a fixed published
+        // correction while changing input level; only the final gain may differ.
+        zao::DriveEngine plain, matched; plain.prepare (48000, 128, false); matched.prepare (48000, 128, false);
+        settings.autoCompensate = false;
+        auto compensated = settings; compensated.autoCompensate = true; compensated.autoGain = frame.matchingGain;
+        juce::AudioBuffer<float> a (2, 128), b (2, 128);
+        double error = 0;
+        for (int offset = 0; offset < 16384; offset += 128)
+        {
+            for (int ch = 0; ch < 2; ++ch)
+                for (int i = 0; i < 128; ++i)
+                {
+                    const auto amplitude = offset < 8192 ? .2f : .01f;
+                    const auto x = amplitude*std::sin (static_cast<float> (2*zao::pi*(200+ch*300)*(offset+i)/48000.0));
+                    a.setSample (ch, i, x); b.setSample (ch, i, x);
+                }
+            plain.process (a, settings); matched.process (b, compensated);
+            if (offset > 2048)
+                for (int ch = 0; ch < 2; ++ch)
+                    for (int i = 0; i < 128; ++i)
+                        error = std::max (error, std::abs (static_cast<double> (b.getSample (ch, i)
+                            -a.getSample (ch, i)*frame.matchingGain)));
+        }
+        check (error < 1e-6, "Auto applies the exact fixed reference gain after coloration without live RMS tracking");
+        compensated.bypass = true;
+        for (int i = 0; i < 16; ++i) { b.clear(); matched.process (b, compensated); }
+        std::vector<float> impulse;
+        for (int i = 0; i < 8; ++i)
+        {
+            b.clear(); if (i == 0) b.setSample (0, 0, 1); matched.process (b, compensated);
+            for (int j = 0; j < 128; ++j) impulse.push_back (b.getSample (0, j));
+        }
+        error = 0;
+        for (size_t i = 0; i < impulse.size(); ++i)
+            error = std::max (error, std::abs (static_cast<double> (impulse[i])-(i == static_cast<size_t> (matched.getLatency()) ? 1 : 0)));
+        check (error < 1e-7, "Auto never changes host-bypassed audio or its latency");
+    }
+    // The processor owns the reference worker: closed editors must have exactly
+    // the same gain calibration as open editors, without any audio-thread locks.
+    ZaoDriveProcessor processor;
+    check (! processor.getSettings().autoCompensate, "Auto defaults Off");
+    set (processor, "output", -12); set (processor, "autoCompensate", 1);
+    zao::PreviewFrame hidden;
+    auto deadline = juce::Time::getMillisecondCounterHiRes()+3000;
+    bool ready = false;
+    while (! (ready = processor.readPreview (hidden)) && juce::Time::getMillisecondCounterHiRes() < deadline) juce::Thread::sleep (2);
+    check (ready && std::abs (processor.getSettings().autoGain-hidden.matchingGain) < 1e-7,
+           "Auto publishes the preview reference gain even with no editor");
+    const auto before = processor.getSettings().autoGain;
+    processor.prepareToPlay (48000, 128);
+    juce::AudioBuffer<float> audio (2, 128); juce::MidiBuffer midi;
+    for (int block = 0; block < 32; ++block)
+    {
+        audio.clear(); if (block % 2 != 0) audio.setSample (0, 0, .8f);
+        processor.processBlock (audio, midi);
+    }
+    check (std::abs (processor.getSettings().autoGain-before) < 1e-7, "live content never changes the stored reference correction");
+    set (processor, "output", 0);
+    deadline = juce::Time::getMillisecondCounterHiRes()+3000; ready = false;
+    while (! (ready = processor.readPreview (hidden)) && juce::Time::getMillisecondCounterHiRes() < deadline) juce::Thread::sleep (2);
+    check (ready && std::abs (hidden.matchingGain/before-std::pow (10.0, -12.0/20)) < 1e-5,
+           "reference gain recalculates for Output changes while the editor remains closed");
+}
+
 void clearTests()
 {
     for (double rate : { 8000., 44100., 48000., 96000., 192000. })
@@ -633,7 +750,7 @@ void greyNoiseTests()
 void processorTests()
 {
     ZaoDriveProcessor processor;
-    check (processor.getName() == "Zao Drive" && processor.getParameters().size() == 15,
+    check (processor.getName() == "Zao Drive" && processor.getParameters().size() == 16,
            "all circuits register compatible legacy parameters plus independent Bias and Knee");
     processor.prepareToPlay (48000, 64);
     const auto latency = processor.getLatencySamples();
@@ -665,11 +782,11 @@ void processorTests()
     }
     set (processor, "model", 1); set (processor, "drive", 29); set (processor, "transformer", 1);
     set (processor, "dcBias", 37); set (processor, "tone", 4321);
-    set (processor, "bjtBias", -45); set (processor, "diodeKnee", 73); set (processor, "clear", 0);
+    set (processor, "bjtBias", -45); set (processor, "diodeKnee", 73); set (processor, "clear", 0); set (processor, "autoCompensate", 1);
     juce::MemoryBlock state; processor.getStateInformation (state);
     ZaoDriveProcessor restored; restored.setStateInformation (state.getData(), static_cast<int> (state.getSize()));
     const auto saved = restored.getSettings();
-    check (saved.model == 1 && saved.transformer && ! saved.clear && std::abs (saved.driveDb - 29) < 0.01f
+    check (saved.model == 1 && saved.transformer && ! saved.clear && saved.autoCompensate && std::abs (saved.driveDb - 29) < 0.01f
            && std::abs (saved.bjtBias + 0.45f) < 0.001f && std::abs (saved.diodeKnee - 0.73f) < 0.001f
            && std::abs (saved.dcBias - 0.37f) < 0.001f && std::abs (saved.toneHz - 4321) < 0.1f,
            "circuit and transformer settings survive host state recall");
@@ -680,7 +797,7 @@ void processorTests()
         check (restored.getSettings().model == mode, "all four circuits survive saved-state round trips");
     }
     auto legacyState = processor.parameters.copyState();
-    for (const auto* id : { "diodeCircuit", "bjtBias", "diodeKnee", "clear" })
+    for (const auto* id : { "diodeCircuit", "bjtBias", "diodeKnee", "clear", "autoCompensate" })
         legacyState.removeChild (legacyState.getChildWithProperty ("id", id), nullptr);
     legacyState.getChildWithProperty ("id", "model").setProperty ("value", 1.0f, nullptr);
     juce::AudioProcessor::copyXmlToBinary (*legacyState.createXml(), state);
@@ -688,6 +805,7 @@ void processorTests()
     check (std::abs (restored.getSettings().bjtBias) < 1.0e-6f && std::abs (restored.getSettings().diodeKnee - 0.5f) < 1.0e-6f,
            "legacy states reset new Bias and Knee to neutral defaults after another preset");
     check (restored.getSettings().clear, "legacy presets restore the previously always-on contour after loading an Off preset");
+    check (! restored.getSettings().autoCompensate, "legacy presets reset Auto Off after loading an enabled preset");
     check (restored.getSettings().model == 1, "loading an old two-mode state restores Op-Amp after a diode-mode session");
     restored.parameters.getParameter ("model")->setValueNotifyingHost (0.0f);
     check (restored.getSettings().model == 0, "legacy normalized circuit automation still selects BJT and Op-Amp");
@@ -954,7 +1072,7 @@ void writeSmartReport (const juce::File& directory)
         curve << i*.01 << ',' << zao::SmartAnalyser::intervalDissonance (440, 440*std::pow (2.0, i/1200.0)) << '\n';
 }
 
-void editorTests (const juce::File& destination, bool tooltip, int previewMode, bool smartPreview)
+void editorTests (const juce::File& destination, bool tooltip, int previewMode, bool smartPreview, bool autoPreview)
 {
     ZaoDriveProcessor processor;
     std::unique_ptr<juce::AudioProcessorEditor> editor (processor.createEditor());
@@ -970,6 +1088,7 @@ void editorTests (const juce::File& destination, bool tooltip, int previewMode, 
     juce::Button* transformer = nullptr;
     juce::Button* smart = nullptr;
     juce::Button* clear = nullptr;
+    juce::Button* automatic = nullptr;
     juce::TooltipWindow* window = nullptr;
     for (auto* child : editor->getChildren())
     {
@@ -978,6 +1097,7 @@ void editorTests (const juce::File& destination, bool tooltip, int previewMode, 
         if (auto* button = dynamic_cast<juce::Button*> (child); button && button->getButtonText() == "TRANSFORMER") transformer = button;
         if (auto* button = dynamic_cast<juce::Button*> (child); button && button->getButtonText() == "SMART") smart = button;
         if (auto* button = dynamic_cast<juce::Button*> (child); button && button->getButtonText() == "CLEAR") clear = button;
+        if (auto* button = dynamic_cast<juce::Button*> (child); button && button->getButtonText() == "AUTO") automatic = button;
         if (auto* tip = dynamic_cast<juce::TooltipWindow*> (child)) window = tip;
         if (dynamic_cast<juce::Slider*> (child) || dynamic_cast<juce::Button*> (child) || dynamic_cast<juce::Label*> (child))
         {
@@ -1003,6 +1123,17 @@ void editorTests (const juce::File& destination, bool tooltip, int previewMode, 
     check (clearDifference > .01, "expected-output preview follows the Clear switch");
     set (processor, "clear", 1);
     check (clear->getToggleState(), "Clear button follows host automation");
+    check (automatic && automatic->getY() == 523 && automatic->getX() == 450 && ! automatic->getToggleState(),
+           "Auto starts Off beside the Output section header");
+    automatic->setToggleState (true, juce::sendNotificationSync);
+    check (processor.getSettings().autoCompensate, "Auto button updates its host parameter");
+    for (int i = 0; i < 24; ++i) { juce::Thread::sleep (20); juce::Timer::callPendingTimersSynchronously(); }
+    double previewPower = 0;
+    for (auto value : zaoEditor->getExpectedOutput()) previewPower += static_cast<double> (value)*value;
+    check (std::abs (std::sqrt (previewPower/96)-.25/std::sqrt (2.0)) < 1e-4,
+           "Auto preview shows the level-matched steady reference without extra circuit warmup");
+    set (processor, "autoCompensate", 0);
+    check (! automatic->getToggleState(), "Auto button follows host automation");
     check (model && contextual && transformer && window && model->getTextFromValue (0) == "BJT CE",
            "initial circuit caption displays the model name");
     model->setValue (1, juce::sendNotificationSync);
@@ -1072,6 +1203,7 @@ void editorTests (const juce::File& destination, bool tooltip, int previewMode, 
         check (processor.getSmartAnalysis().count > 0, "Smart preview includes live circuit harmonic analysis");
         window->displayTip (editor->localPointToGlobal (smart->getBounds().getCentre()), smart->getTooltip());
     }
+    if (autoPreview) set (processor, "autoCompensate", 1);
     if (tooltip)
     {
         window->displayTip (editor->localPointToGlobal (model->getBounds().getCentre()), model->getTooltip());
@@ -1098,17 +1230,24 @@ int main (int argc, char** argv)
     try
     {
         juce::ScopedJuceInitialiser_GUI gui;
-        circuitTests(); shapeTests(); processorTests(); smartTests(); clearTests(); greyNoiseTests(); optimizationTests();
+        circuitTests(); shapeTests(); processorTests(); smartTests(); clearTests(); greyNoiseTests(); optimizationTests(); autoCompensatorTests();
         if (argc > 2 && juce::String (argv[1]) == "--editor")
         {
             const auto option = argc > 3 ? juce::String (argv[3]) : juce::String();
             const auto mode = option == "--opamp-preview" ? 1 : option == "--shunt-preview" ? 2
                             : option == "--crossover-preview" ? 3 : -1;
-            editorTests (juce::File (argv[2]), option == "--tooltip", mode, option == "--smart-preview");
+            editorTests (juce::File (argv[2]), option == "--tooltip", mode, option == "--smart-preview", option == "--auto-preview");
         }
         if (argc > 2 && juce::String (argv[1]) == "--grey-report") writeGreyReport (juce::File (argv[2]));
         if (argc > 2 && juce::String (argv[1]) == "--smart-report") writeSmartReport (juce::File (argv[2]));
         if (argc > 2 && juce::String (argv[1]) == "--report") writeReport (juce::File (argv[2]));
+        if (argc > 2 && juce::String (argv[1]) == "--auto-report")
+        {
+            juce::File directory (argv[2]); directory.createDirectory();
+            std::ofstream csv (directory.getChildFile ("auto-rms.csv").getFullPathName().toStdString());
+            csv.precision (12); csv << "rate,mode,transformer,gain,error_db\n";
+            for (const auto& m : autoMeasurements) csv << m.rate << ',' << m.mode << ',' << m.transformer << ',' << m.gain << ',' << m.errorDb << '\n';
+        }
         std::cout << checks << " Zao Drive checks passed\n";
         return 0;
     }

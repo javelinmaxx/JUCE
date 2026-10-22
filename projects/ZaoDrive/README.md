@@ -31,6 +31,20 @@ The circuit output minus the aligned filtered reference forms a separate wet
 residual, which Tone filters from 1.2–18 kHz. Mix adds that residual to the clean input;
 Output sets the level entering the optional transformer.
 
+**Auto**, in the Output section, matches the RMS of the preview's input and
+processed output using a fixed correction after the transformer. It uses the
+same −12 dBFS, 1 kHz reference waveform shown in Expected Output. There is no
+live RMS detector, averaging or automatic reaction to the music: the correction
+stays constant between reference updates, preserving the input's dynamics.
+The shared reference worker recalculates for control or Smart snapshot changes,
+even with the editor closed. Only changes to the correction fade over 20 ms;
+this avoids clicks without continuously modulating the gain. Auto defaults Off,
+is saved with presets and follows host automation. Existing presets load Off.
+The Output knob still controls gain entering the transformer; Auto compensates
+its resulting reference level. Correction is bounded to ±36 dB, with a silent
+reference guard. See the [Auto report](Tests/Reports/auto-report.md) and
+[enabled preview](Previews/zao-auto.png).
+
 **Smart**, beside the circuit header, compares the input and generated wet
 spectra using the supplied 12-TET dissonance curve. It suppresses clashing
 harmonic components directly while leaving the manual circuit settings intact.
@@ -41,14 +55,14 @@ and the [Smart preview](Previews/zao-smart.png).
 
 The **Expected Output** display renders a −12 dBFS, 1 kHz reference through a
 separate instance of the actual audio engine. Gray is the delayed input and amber
-is the predicted output, including Clear, Tone, Mix, Output, bypass, and transformer
+is the predicted output, including Clear, Auto, Tone, Mix, Output, bypass, and transformer
 settings. It is a reference waveform, not a live oscilloscope or a prediction of
 arbitrary input material. The labeled plot scale fits both input and output,
 starting at ±0.25 FS to keep passive diode behavior visible. Rendering runs on a
 dedicated background worker that reuses its prepared filters and oversampler,
-without sharing circuit state or locks with the audio callback. It updates only
-while the editor is visible, at most five times per second when settings or
-Smart results change. Waveforms and the display scale ease between results over
+without sharing circuit state or locks with the audio callback. The processor and editor share this worker, which updates at most five times
+per second when settings or Smart results change. It also runs with the editor
+closed while Auto is enabled, keeping audio and preview calibration identical. Waveforms and the display scale ease between results over
 160 ms at 30 animation frames per second; new targets continue from the current
 displayed shape rather than jumping.
 
@@ -60,7 +74,7 @@ stops processing once its Off fade finishes; re-enabling warms its delay before
 fading in. Circuit processing uses a separate 4× oversampler. Host latency is the
 grey FIR delay (128 samples at 48 kHz), integer circuit oversampler delay,
 plus the transformer's fixed 64 samples and
-stays constant with every model, Clear, Mix, bypass, or transformer switching.
+stays constant with every model, Clear, Auto, Mix, bypass, or transformer switching.
 
 The clean branch stays flat and is delayed to match the FIR. The FIR's linear
 phase prevents additional frequency-dependent phase rotation when the branches

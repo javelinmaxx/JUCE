@@ -1,5 +1,6 @@
 #pragma once
 #include "DriveEngine.h"
+#include <functional>
 
 namespace zao
 {
@@ -7,6 +8,7 @@ struct PreviewFrame
 {
     std::array<float, 96> input {}, output {};
     float peak = 0, scale = .25f;
+    float matchingGain = 1;
     uint32_t revision = 0;
 };
 
@@ -15,11 +17,27 @@ struct PreviewFrame
 class PreviewRenderer final : private juce::Thread
 {
 public:
-    PreviewRenderer();
+    explicit PreviewRenderer (bool startImmediately = true);
     ~PreviewRenderer() override;
     void request (const Settings&, const SmartAnalyser::Result&);
     void cancel();
     bool read (PreviewFrame&) const;
+    // Providers are installed before starting the worker, and read only host
+    // parameter atomics / the analyser's lock-free snapshot. Audio reads just
+    // the published scalar gain, even with the editor closed.
+    void follow (std::function<Settings()>, std::function<SmartAnalyser::Result()>);
+    void setVisible (bool visible) noexcept
+    {
+        if (previewVisible.exchange (visible) != visible) notify();
+    }
+    float readGain() const noexcept { return correction.load (std::memory_order_relaxed); }
+    static std::array<float, 15> keyFor (const Settings& s) noexcept
+    {
+        return { s.inputDb, s.driveDb, s.toneHz, s.outputDb, s.mix, s.coreDriveDb,
+            s.dcBias, static_cast<float> (s.model), s.transformer ? 1.f : 0.f,
+            s.bypass ? 1.f : 0.f, s.bjtBias, s.diodeKnee, s.smart ? 1.f : 0.f,
+            s.clear ? 1.f : 0.f, s.autoCompensate ? 1.f : 0.f };
+    }
 private:
     void run() override;
     mutable juce::CriticalSection mutex;
@@ -28,6 +46,10 @@ private:
     PreviewFrame result;
     std::atomic<uint32_t> revision { 0 };
     bool pending = false;
+    std::function<Settings()> settingsProvider;
+    std::function<SmartAnalyser::Result()> analysisProvider;
+    std::atomic<bool> previewVisible { false };
+    std::atomic<float> correction { 1 };
 };
 
 // Display-only interpolation never changes the audio or the rendered targets.

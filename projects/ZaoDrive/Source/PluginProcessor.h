@@ -1,5 +1,6 @@
 #pragma once
 #include "DriveEngine.h"
+#include "PreviewRenderer.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 
 class ZaoDriveProcessor final : public juce::AudioProcessor
@@ -31,10 +32,13 @@ public:
     zao::Settings getSettings() const noexcept;
     zao::SmartAnalyser::Result getSmartAnalysis() const noexcept { return engine.getSmart().readResult(); }
     uint32_t getSmartSubmittedJobs() const noexcept { return engine.getSmart().getSubmittedJobs(); }
+    void setPreviewVisible (bool visible) noexcept { reference.setVisible (visible); }
+    bool readPreview (zao::PreviewFrame& frame) const { return reference.read (frame); }
     juce::AudioProcessorValueTreeState parameters;
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
-    std::array<std::atomic<float>*, 15> raw {};
+    std::array<std::atomic<float>*, 16> raw {};
     zao::DriveEngine engine;
+    zao::PreviewRenderer reference { false };
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ZaoDriveProcessor)
 };

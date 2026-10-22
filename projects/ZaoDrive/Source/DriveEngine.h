@@ -2,6 +2,7 @@
 #include "Circuits.h"
 #include "SmartHarmonics.h"
 #include "ClearStage.h"
+#include "AutoCompensator.h"
 #include "../../YinyangCompressor/Source/OversampledTransformer.h"
 #include <juce_dsp/juce_dsp.h>
 #include <memory>
@@ -16,6 +17,7 @@ public:
         sampleRate = rate;
         smart.prepare (rate, smartWorker);
         clear.prepare (rate);
+        autoCompensator.prepare (rate);
         blockSize = std::max (1, maximumBlock);
         oversampling = std::make_unique<juce::dsp::Oversampling<float>> (
             2, 2, juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR, true, true);
@@ -50,6 +52,7 @@ public:
     void resetSignalPath()
     {
         clear.reset(); oversampling->reset();
+        autoCompensator.reset();
         for (size_t ch = 0; ch < 2; ++ch)
         {
             bjt[ch].reset(); opamp[ch].reset(); shunt[ch].reset(); crossover[ch].reset();
@@ -75,6 +78,7 @@ public:
     {
         setSettings (settings);
         clear.setEnabled (settings.clear);
+        autoCompensator.setTarget (settings.autoCompensate && ! settings.bypass ? settings.autoGain : 1.0f);
         smart.beginBlock (settings);
         const auto channels = std::min (2, buffer.getNumChannels());
         for (int offset = 0; offset < buffer.getNumSamples(); offset += blockSize)
@@ -158,6 +162,7 @@ public:
                     drySamples[c] = delayedDry; wetSamples[c] = toned;
                 }
                 smart.process (drySamples, wetSamples);
+                std::array<float, 2> processedSamples {}, bypassedSamples {};
                 for (int ch = 0; ch < channels; ++ch)
                 {
                     const auto c = static_cast<size_t> (ch);
@@ -171,6 +176,14 @@ public:
                     const auto wet = clean + transformerAmount * (coloured - clean);
                     const auto bypassed = bypassDelay[c][bypassPosition];
                     bypassDelay[c][bypassPosition] = input;
+                    processedSamples[c] = std::isfinite (wet) ? wet : 0.0f;
+                    bypassedSamples[c] = bypassed;
+                }
+                const auto matched = autoCompensator.process (processedSamples, channels);
+                for (int ch = 0; ch < channels; ++ch)
+                {
+                    const auto c = static_cast<size_t> (ch);
+                    const auto wet = matched[c], bypassed = bypassedSamples[c];
                     const auto output = bypassAmount >= 1.0f ? bypassed : wet + bypassAmount * (bypassed - wet);
                     buffer.setSample (ch, offset + i, std::isfinite (output) ? output : 0.0f);
                 }
@@ -255,6 +268,7 @@ private:
 
     SmartHarmonics smart;
     ClearStage clear;
+    AutoCompensator autoCompensator;
     double sampleRate = 48000;
     int blockSize = 256, circuitLatency = 0, warmSamples = 0;
     bool firstSettings = true, transformerRunning = false;

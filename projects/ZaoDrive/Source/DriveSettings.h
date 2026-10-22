@@ -10,5 +10,7 @@ struct Settings
     float bjtBias = 0, diodeKnee = 0.5f;
     bool smart = false;
     bool clear = true;
+    bool autoCompensate = false;
+    float autoGain = 1; // Runtime reference result, not a host parameter.
 };
 }

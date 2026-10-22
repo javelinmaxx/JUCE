@@ -2,8 +2,14 @@
 
 namespace zao
 {
-PreviewRenderer::PreviewRenderer() : Thread ("Zao waveform preview")
+PreviewRenderer::PreviewRenderer (bool startImmediately) : Thread ("Zao waveform preview")
 {
+    if (startImmediately) startThread (juce::Thread::Priority::low);
+}
+void PreviewRenderer::follow (std::function<Settings()> readSettings, std::function<SmartAnalyser::Result()> readAnalysis)
+{
+    jassert (! isThreadRunning());
+    settingsProvider = std::move (readSettings); analysisProvider = std::move (readAnalysis);
     startThread (juce::Thread::Priority::low);
 }
 PreviewRenderer::~PreviewRenderer()
@@ -33,18 +39,35 @@ bool PreviewRenderer::read (PreviewFrame& frame) const
 }
 void PreviewRenderer::run()
 {
-    DriveEngine engine;
-    engine.prepare (48000, 128, false);
+    std::unique_ptr<DriveEngine> prepared;
     constexpr int warmup = 4096, total = warmup+96;
     std::array<float, total> source;
     for (int i = 0; i < total; ++i)
         source[static_cast<size_t> (i)] = .25f*std::sin (static_cast<float> (2*pi*i/48.0));
     juce::AudioBuffer<float> block (2, 128);
+    std::array<float, 15> previousKey {};
+    uint32_t previousAnalysis = 0;
+    double lastRender = -1000;
+    bool haveKey = false;
     while (! threadShouldExit())
     {
         Settings settings;
         SmartAnalyser::Result analysis;
         uint32_t requested = 0;
+        std::array<float, 15> requestedKey {};
+        if (settingsProvider)
+        {
+            settings = settingsProvider();
+            if (! settings.autoCompensate && ! previewVisible.load()) { wait (50); continue; }
+            analysis = settings.smart ? analysisProvider() : SmartAnalyser::Result {};
+            requestedKey = keyFor (settings);
+            const auto now = juce::Time::getMillisecondCounterHiRes();
+            if ((haveKey && requestedKey == previousKey && analysis.revision == previousAnalysis)
+                || now-lastRender < 200) { wait (50); continue; }
+            previousKey = requestedKey; previousAnalysis = analysis.revision;
+            haveKey = true; lastRender = now; requested = revision.fetch_add (1)+1;
+        }
+        else
         {
             const juce::ScopedLock lock (mutex);
             if (pending)
@@ -54,9 +77,18 @@ void PreviewRenderer::run()
             }
         }
         if (requested == 0) { wait (-1); continue; }
+        if (! prepared)
+        {
+            prepared = std::make_unique<DriveEngine>(); prepared->prepare (48000, 128, false);
+        }
+        auto& engine = *prepared;
         engine.resetSignalPath();
         engine.getSmart().setPreview (settings.smart && ! settings.bypass
             && analysis.signature == SmartAnalyser::signature (settings) ? analysis : SmartAnalyser::Result {});
+        const auto matchPreview = settings.autoCompensate && ! settings.bypass;
+        // Render without compensation, then derive the exact fixed RMS ratio
+        // from this same preview snapshot for both the UI and live audio.
+        settings.autoCompensate = false;
         PreviewFrame frame; frame.revision = requested;
         for (int offset = 0; offset < total && ! threadShouldExit() && revision.load() == requested; offset += 128)
         {
@@ -74,9 +106,35 @@ void PreviewRenderer::run()
                     frame.peak = std::max (frame.peak, std::abs (frame.output[at]));
                 }
         }
+        {
+            double in = 0, out = 0;
+            for (size_t i = 0; i < frame.output.size(); ++i)
+            {
+                in += static_cast<double> (frame.input[i])*frame.input[i];
+                out += static_cast<double> (frame.output[i])*frame.output[i];
+            }
+            const auto amount = AutoCompensator::matchingGain (in/frame.input.size(), out/frame.output.size());
+            frame.matchingGain = amount;
+            frame.peak = 0;
+            for (auto& sample : frame.output)
+            {
+                if (matchPreview) sample *= amount;
+                frame.peak = std::max (frame.peak, std::abs (sample));
+            }
+        }
         frame.scale = std::max (.25f, std::ceil (frame.peak*8)*.125f);
+        if (settingsProvider && keyFor (settingsProvider()) != requestedKey)
+        {
+            // A discarded frame is not a completed calibration. Retry even
+            // if rapid automation returns to this same key before the poll.
+            haveKey = false;
+            continue;
+        }
         const juce::ScopedLock lock (mutex);
-        if (! threadShouldExit() && requested == revision.load()) result = frame;
+        if (! threadShouldExit() && requested == revision.load())
+        {
+            result = frame; correction.store (frame.matchingGain, std::memory_order_relaxed);
+        }
     }
 }
 }

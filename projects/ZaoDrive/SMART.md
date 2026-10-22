@@ -17,6 +17,7 @@ flowchart LR
     D --> A[Add clean plus Mix times wet]
     H --> A
     A --> O[Output gain / optional transformer]
+    O --> C[Optional fixed preview-RMS compensation]
     D -. input spectrum .-> W[Background harmonic analysis]
     T -. wet spectrum .-> W
     W -. targets .-> H
@@ -97,6 +98,11 @@ analysis. Manual circuit changes invalidate earlier results. Smart adds no
 buffered latency; its first decision needs approximately 85 ms of audio at
 48 kHz plus worker scheduling time. Analysis cadence affects response time,
 not host-reported latency.
+
+Auto compensation runs after the transformer, using a fixed gain from the
+preview reference RMS. It does not affect Smart analysis or introduce live
+level averaging. Changes to Smart filter snapshots update the preview reference
+and its correction on the shared reference worker.
 
 The expected-output display applies the current live filter snapshot to its
 1 kHz reference using an independent engine on the preview worker, with live

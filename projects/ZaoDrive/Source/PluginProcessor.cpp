@@ -3,8 +3,8 @@
 
 namespace
 {
-constexpr std::array<const char*, 15> ids {
-    "input", "drive", "tone", "output", "mix", "coreDrive", "dcBias", "model", "transformer", "bypass", "diodeCircuit", "bjtBias", "diodeKnee", "smart", "clear" };
+constexpr std::array<const char*, 16> ids {
+    "input", "drive", "tone", "output", "mix", "coreDrive", "dcBias", "model", "transformer", "bypass", "diodeCircuit", "bjtBias", "diodeKnee", "smart", "clear", "autoCompensate" };
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout ZaoDriveProcessor::createParameterLayout()
@@ -40,6 +40,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout ZaoDriveProcessor::createPar
         juce::AudioParameterFloatAttributes().withLabel ("%")));
     layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "smart", 3 }, "Smart harmonics", false));
     layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "clear", 4 }, "Clear", true));
+    layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "autoCompensate", 5 }, "Auto compensate", false));
     return layout;
 }
 
@@ -49,6 +50,7 @@ ZaoDriveProcessor::ZaoDriveProcessor()
       parameters (*this, nullptr, "ZaoDriveState", createParameterLayout())
 {
     for (size_t i = 0; i < raw.size(); ++i) raw[i] = parameters.getRawParameterValue (ids[i]);
+    reference.follow ([this] { return getSettings(); }, [this] { return getSmartAnalysis(); });
 }
 
 zao::Settings ZaoDriveProcessor::getSettings() const noexcept
@@ -56,7 +58,7 @@ zao::Settings ZaoDriveProcessor::getSettings() const noexcept
     const auto value = [this] (size_t index) { return raw[index]->load (std::memory_order_relaxed); };
     return { value (0), value (1), value (2), value (3), value (4) * 0.01f,
              value (5), value (6) * 0.01f, juce::roundToInt (value (7)) + (value (10) >= 0.5f ? 2 : 0),
-             value (8) >= 0.5f, value (9) >= 0.5f, value (11) * 0.01f, value (12) * 0.01f, value (13) >= .5f, value (14) >= .5f };
+             value (8) >= 0.5f, value (9) >= 0.5f, value (11) * 0.01f, value (12) * 0.01f, value (13) >= .5f, value (14) >= .5f, value (15) >= .5f, reference.readGain() };
 }
 
 void ZaoDriveProcessor::prepareToPlay (double rate, int maximumBlock)
@@ -99,7 +101,7 @@ void ZaoDriveProcessor::setStateInformation (const void* data, int size)
             auto state = juce::ValueTree::fromXml (*xml);
             // Missing controls must use their documented defaults rather than
             // inherit whatever was selected in the previously loaded session.
-            for (const auto* id : { "diodeCircuit", "bjtBias", "diodeKnee", "smart", "clear" })
+            for (const auto* id : { "diodeCircuit", "bjtBias", "diodeKnee", "smart", "clear", "autoCompensate" })
                 if (! state.getChildWithProperty ("id", id).isValid())
                 {
                     auto legacyDefault = parameters.copyState().getChildWithProperty ("id", id).createCopy();

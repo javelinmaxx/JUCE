@@ -28,7 +28,7 @@ class ZaoDriveEditor final : public juce::AudioProcessorEditor, private juce::Ti
 {
 public:
     explicit ZaoDriveEditor (ZaoDriveProcessor&);
-    ~ZaoDriveEditor() override { stopTimer(); setLookAndFeel (nullptr); }
+    ~ZaoDriveEditor() override { stopTimer(); processor.setPreviewVisible (false); setLookAndFeel (nullptr); }
     void paint (juce::Graphics&) override;
     void resized() override;
     const std::array<float, 96>& getExpectedOutput() const noexcept { return previewAnimation.current().output; }
@@ -40,7 +40,7 @@ private:
     ZaoDriveProcessor& processor;
     ZaoLookAndFeel look;
     juce::TooltipWindow tooltipWindow { this };
-    ZaoBypassButton bypass, smart { "SMART" }, clear { "CLEAR" };
+    ZaoBypassButton bypass, smart { "SMART" }, clear { "CLEAR" }, autoCompensate { "AUTO" };
     ZaoTransformerSwitch transformer;
     juce::Slider model;
     juce::Label modelLabel;
@@ -48,13 +48,8 @@ private:
     std::array<juce::Label, 7> labels;
     using State = juce::AudioProcessorValueTreeState;
     std::array<std::unique_ptr<State::SliderAttachment>, 7> attachments;
-    std::unique_ptr<State::ButtonAttachment> bypassAttachment, transformerAttachment, smartAttachment, clearAttachment;
-    std::array<float, 14> previousSettings {};
+    std::unique_ptr<State::ButtonAttachment> bypassAttachment, transformerAttachment, smartAttachment, clearAttachment, autoCompensateAttachment;
     int inputControlCircuit = -1;
-    uint32_t previousSmartRevision = 0;
-    bool previewRequested = false;
-    double lastPreviewRequest = -1000;
-    zao::PreviewRenderer previewRenderer;
     zao::PreviewFrame previewFrame;
     zao::PreviewAnimation previewAnimation;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ZaoDriveEditor)
