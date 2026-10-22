@@ -14,7 +14,12 @@ void XuanPhaseMeter::visibilityChanged() { setActive (isShowing()); }
 void XuanPhaseMeter::setActive (bool active)
 {
     processor.setMeterVisible (active);
-    if (active) { lastColumn = juce::Time::getMillisecondCounterHiRes(); startTimerHz (30); }
+    if (active)
+    {
+        // Visibility and peer callbacks can arrive together; do not reset the
+        // scrolling clock or restart a running timer on duplicate notifications.
+        if (! isTimerRunning()) { lastColumn = juce::Time::getMillisecondCounterHiRes(); startTimerHz (30); repaint(); }
+    }
     else stopTimer();
 }
 juce::Colour XuanPhaseMeter::timingColour (float milliseconds, float energy) noexcept
@@ -40,6 +45,8 @@ void XuanPhaseMeter::append (const xuan::SpectrumFrame& frame)
 }
 void XuanPhaseMeter::timerCallback()
 {
+    // Native peer removal need not send a JUCE visibility notification.
+    if (! isShowing()) { setActive (false); return; }
     const auto now = juce::Time::getMillisecondCounterHiRes();
     const auto oldCeiling = spectrum[xuan::meterCeiling];
     if (processor.readSpectrum (spectrum, spectrumVersion))

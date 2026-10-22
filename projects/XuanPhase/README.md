@@ -124,6 +124,15 @@ with stale input cleared after 200 ms and blank columns for missed UI frames.
 Closing the editor clears its history; sample-rate changes clear incompatible
 frequency history. Audio processing and the fixed latency are unchanged.
 
+Meter startup follows the editor's full parent hierarchy and native peer, so
+AU hosts can mark the child editor visible before attaching their host window
+without leaving its timers stopped. Parent hide/show and peer reattachment
+pause/resume the existing meter; duplicate callbacks do not reset its scroll
+clock. A visible timer also checks for native peer removal, which JUCE can
+perform without sending a visibility event. The hosted-editor regression
+reproduces the AU wrapper attachment order and checks all these transitions;
+this is a Linux lifecycle test, not a run inside Logic Pro on macOS.
+
 The [Auto alignment performance report](Tests/Reports/AUTO_ALIGNMENT.md)
 includes a live three-hit Auto case, measured phase errors, positive/negative
 Depth, short/long release curves, Stereo Link comparisons, and matched-level
@@ -155,6 +164,13 @@ xvfb-run -a build/xuan/XuanPhaseTests --report "$PWD/projects/XuanPhase/Tests/Re
 xvfb-run -a python3 projects/ZaoDrive/Tests/with_x11_atoms.py \
   build/xuan/XuanPhaseTests --editor "$PWD/projects/XuanPhase/Previews/xuan-phase.png"
 python3 projects/XuanPhase/Tests/generate_report.py
+```
+
+Run just the AU-style hosted-editor lifecycle regression on Linux:
+
+```bash
+xvfb-run -a python3 projects/ZaoDrive/Tests/with_x11_atoms.py \
+  build/xuan/XuanPhaseTests --hosted-editor
 ```
 
 The editor capture uses the existing X11 window-atom helper from Zao Drive's

@@ -2,7 +2,7 @@
 #include "PluginProcessor.h"
 #include "../../StagePluginStyle.h"
 #include "PhaseMeter.h"
-class XuanPhaseEditor final : public juce::AudioProcessorEditor, private juce::Timer
+class XuanPhaseEditor final : public juce::AudioProcessorEditor, private juce::Timer, private juce::ComponentMovementWatcher
 {
 public:
     explicit XuanPhaseEditor (XuanPhaseProcessor&);
@@ -11,7 +11,13 @@ public:
     void resized() override;
     void visibilityChanged() override;
 private:
-    void timerCallback() override { repaint(); }
+    using juce::ComponentMovementWatcher::componentMovedOrResized;
+    using juce::ComponentMovementWatcher::componentVisibilityChanged;
+    void updateVisibility();
+    void componentMovedOrResized (bool, bool) override {}
+    void componentPeerChanged() override { updateVisibility(); }
+    void componentVisibilityChanged() override { updateVisibility(); }
+    void timerCallback() override { updateVisibility(); if (isShowing()) repaint(); }
     XuanPhaseProcessor& processor;
     static constexpr int designWidth = 840, designHeight = 490;
     StageLookAndFeel look;

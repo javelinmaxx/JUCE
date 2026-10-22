@@ -540,8 +540,61 @@ void dspTests (const juce::File& directory)
     }
     check (bypassError < 1e-6, "host bypass ignores nonzero rotation and negative Stereo Link while retaining exactly 25 ms latency");
 }
+void hostedEditorTests()
+{
+    XuanPhaseProcessor processor;
+    std::unique_ptr<juce::AudioProcessorEditor> editor (processor.createEditor());
+    XuanPhaseMeter* meter = nullptr;
+    for (auto* child : editor->getChildren()) if (auto* field = dynamic_cast<XuanPhaseMeter*> (child)) meter = field;
+    check (meter != nullptr, "hosted editor contains the phase meter");
+    // Match AU EditorCompHolder: make the editor visible as a child BEFORE
+    // attaching the holder's native peer, then show the holder, not the child.
+    juce::Component holder; holder.setSize (840, 490); holder.addAndMakeVisible (*editor);
+    check (editor->isVisible() && ! editor->isShowing(), "AU-style editor begins visible without an attached window");
+    holder.addToDesktop (0); holder.setVisible (true);
+    check (editor->isShowing(), "host attachment makes the already-visible editor show without changing its visible flag");
+    processor.prepareToPlay (48000, 128);
+    juce::AudioBuffer<float> audio (2, 128); juce::MidiBuffer midi; int sample = 0;
+    const auto pump = [&] (int blocks)
+    {
+        for (int b = 0; b < blocks; ++b)
+        {
+            for (int i = 0; i < 128; ++i, ++sample)
+            {
+                const auto t = sample%6000-2000;
+                const auto x = static_cast<float> (.4*std::exp (-.5*std::pow (t/90., 2))*std::cos (2*juce::MathConstants<double>::pi*900*t/48000));
+                audio.setSample (0, i, x); audio.setSample (1, i, x);
+            }
+            processor.processBlock (audio, midi); juce::Thread::sleep (4); juce::Timer::callPendingTimersSynchronously();
+        }
+    };
+    pump (96);
+    bool visiblePixels = false;
+    for (int x = 0; x < meter->historyImage().getWidth(); ++x)
+        for (int y = 0; y < meter->historyImage().getHeight(); ++y)
+            visiblePixels |= meter->historyImage().getPixelAt (x, y).getBrightness() > .2f;
+    check (meter->historySize() > 5 && visiblePixels,
+           "AU-style delayed native attachment starts the meter timer and input analysis without explicit editor visibility changes");
+    holder.setVisible (false); juce::Thread::sleep (20);
+    xuan::SpectrumFrame frame {}; uint32_t version = 0; processor.readSpectrum (frame, version);
+    const auto before = meter->historyImage().createCopy(); pump (20);
+    check (! processor.readSpectrum (frame, version), "hiding only the host parent stops manual-mode display analysis");
+    bool same = true;
+    for (int x = 0; x < before.getWidth(); ++x)
+        for (int y = 0; y < before.getHeight(); ++y) same &= before.getPixelAt (x, y) == meter->historyImage().getPixelAt (x, y);
+    check (same, "hiding the host parent pauses meter scrolling");
+    holder.setVisible (true); pump (40);
+    check (processor.readSpectrum (frame, version), "showing the host parent restarts the existing editor meter");
+    holder.removeFromDesktop(); pump (10); processor.readSpectrum (frame, version); pump (10);
+    check (! processor.readSpectrum (frame, version), "detaching the host native peer pauses display analysis");
+    holder.addToDesktop (0); holder.setVisible (true); pump (40);
+    check (processor.readSpectrum (frame, version), "reattaching the host peer restarts metering without recreating the editor");
+    editor.reset(); // destroy the child while its host container is still alive
+}
+
 void editor (const juce::File& path)
 {
+    hostedEditorTests();
     XuanPhaseProcessor p; std::unique_ptr<juce::AudioProcessorEditor> e (p.createEditor()); e->addToDesktop (0); e->setVisible (true);
     check (e->getWidth() == 840 && e->getHeight() == 490, "Xuan includes its vertical side meter at the intended scalable size");
     XuanPhaseMeter* meter = nullptr;
@@ -662,6 +715,10 @@ int main (int argc, char** argv)
     juce::ScopedJuceInitialiser_GUI gui;
     try
     {
+        if (argc > 1 && juce::String (argv[1]) == "--hosted-editor")
+        {
+            hostedEditorTests(); std::cout << checks << " hosted editor checks passed\n"; return 0;
+        }
         stateTests<XuanPhaseProcessor> (8);
         dspTests (argc > 2 && juce::String (argv[1]) == "--report" ? juce::File (argv[2]) : juce::File ("/tmp/xuan-report"));
         if (argc > 2 && juce::String (argv[1]) == "--editor") editor (juce::File (argv[2]));

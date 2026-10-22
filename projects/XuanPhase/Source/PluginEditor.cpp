@@ -2,7 +2,7 @@
 #include "../../EditorScaling.h"
 #include "../../EditorTooltips.h"
 using namespace stageStyle;
-XuanPhaseEditor::XuanPhaseEditor (XuanPhaseProcessor& p) : AudioProcessorEditor (&p), processor (p), meter (p)
+XuanPhaseEditor::XuanPhaseEditor (XuanPhaseProcessor& p) : AudioProcessorEditor (&p), ComponentMovementWatcher (this), processor (p), meter (p)
 {
     setOpaque (true); setLookAndFeel (&look);
     look.setColour (juce::TooltipWindow::backgroundColourId, panel);
@@ -40,10 +40,16 @@ XuanPhaseEditor::XuanPhaseEditor (XuanPhaseProcessor& p) : AudioProcessorEditor 
     }
     editorScaling::enable (*this, designWidth, designHeight);
 }
-void XuanPhaseEditor::visibilityChanged()
+void XuanPhaseEditor::visibilityChanged() { updateVisibility(); }
+void XuanPhaseEditor::updateVisibility()
 {
-    meter.setActive (isShowing());
-    if (isShowing()) startTimerHz (20); else stopTimer();
+    // AU hosts make the editor visible inside a holder before attaching that
+    // holder's native peer. Watch the full hierarchy: the child's visible flag
+    // need not change when the host window appears, hides, or is reattached.
+    const auto showing = isShowing();
+    meter.setActive (showing);
+    if (showing) { if (! isTimerRunning()) startTimerHz (20); }
+    else stopTimer();
 }
 void XuanPhaseEditor::resized()
 {

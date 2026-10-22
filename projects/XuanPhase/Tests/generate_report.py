@@ -331,6 +331,15 @@ the DSP now saturates the combined correction to ±180° before FIR design,
 rather than retaining extra unwrapped turns.
 Stereo Link sits at the far right of the three-knob Auto row beside Transient.
 
+A hosted-editor regression reproduces AU EditorCompHolder's lifecycle: a
+visible child editor is added before its parent's native peer exists, then the
+parent is attached and shown without changing the child's visible flag. This
+previously left the meter blank with its timer stopped. The test requires live
+history pixels and automatic analysis startup, then checks parent-only
+hide/show, peer detach/reattach, and destruction while the host container lives.
+These run on Linux/Xvfb against JUCE's real desktop peer and timers; Logic Pro
+and macOS AU rendering still require validation on a Mac.
+
 ![Native editor with live transient history](../../Previews/xuan-phase.png)
 
 Data: [phase.csv](phase.csv), [transient.csv](transient.csv), [auto-live.csv](auto-live.csv), [auto-phase.csv](auto-phase.csv).
