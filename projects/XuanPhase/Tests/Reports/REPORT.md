@@ -181,7 +181,7 @@ The native editor test streams repeated dispersed hits through the real processo
 and worker, observes transient events and both signed timing directions, and
 checks that non-empty image columns move from left to right across the
 three-second history. The history is 168 px wide beside a 56 px applied-phase
-track, with styled guides and a key for 0°, ±45°, ±90°, and ±135°. Green indicates an
+track, with styled guides and a key for 0°, ±45°, ±90°, ±135°, and the ±180° boundaries. Green indicates an
 early input band and red a late input band. The white left-channel and gold right-channel curves use the measured
 complex FIR responses: tests compare it with an independent DFT, ensure queued
 responses do not appear before audio applies them, verify updates after handoff,
@@ -190,6 +190,11 @@ with Auto Off while the meter is visible, and stops when the editor is hidden.
 The meter stays inside the editor at both scaling limits. Its phase trace uses
 shape-preserving cubic interpolation between measured points, without overshoot,
 and splits at the ±180° wrap instead of drawing a line across the entire track.
+Additional tests feed ±180°, ±200°, ±540°, and +900° responses to the actual
+plot helper, check that wrapping preserves their complex phase, flatten the
+cubic curves to verify they remain within the track, and reject lines joining
++179° directly to −179°. The plot is clipped to the labeled ±180° limits;
+the DSP retains the full unwrapped delay correction.
 Stereo Link sits at the far right of the three-knob Auto row beside Transient.
 
 ![Native editor with live transient history](../../Previews/xuan-phase.png)

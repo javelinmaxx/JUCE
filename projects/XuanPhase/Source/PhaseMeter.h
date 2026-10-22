@@ -18,6 +18,8 @@ public:
     int historySize() const noexcept { return columnsWritten; }
     const juce::Image& historyImage() const noexcept { return history; }
     const xuan::RotationFrame& currentRotation() const noexcept { return rotation; }
+    static float rotationDegrees (const xuan::RotationFrame&, int channel, int row) noexcept;
+    static juce::Path rotationPath (const xuan::RotationFrame&, int channel, juce::Rectangle<float>);
     static juce::Colour timingColour (float milliseconds, float energy) noexcept;
 private:
     static constexpr int columns = 90;

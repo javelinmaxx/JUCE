@@ -96,13 +96,17 @@ remains unchanged, so genuine gaps in the input still appear dark.
 A small display hold makes short onsets visible without changing the audio detector.
 
 The **white left-channel** and **gold right-channel** curves in the 56 px track
-show applied rotation
-relative to the 25 ms reference, from −180° to +180° across its track. It is measured from the
-corresponding active FIR, including manual rotation, Auto Depth, response crossfades, and bypass;
+show applied rotation relative to the 25 ms reference, from −180° to +180°
+across the track. They are measured from the corresponding active FIR,
+including manual rotation, Auto Depth, response crossfades, and bypass;
 they do not jump ahead to an unapplied worker target. Guides mark 0°, ±45°,
-±90°, and ±135°, with matching line styles in the key below the track; positive rotation is right of center and negative is left.
+±90°, ±135°, and the ±180° boundaries, with matching line styles in the key
+below the track; positive rotation is right of center and negative is left.
 The history is 168 px wide, and the readout reports the largest absolute
-rotation. The lower strip shows input peak activity in white and detected
+rotation. The scale shows **wrapped phase**, so +200° appears as −160°;
+delay-based separation can span multiple turns in unwrapped phase. Curves are
+clipped to the ±180° track, and smoothing is checked against overshoot.
+The lower strip shows input peak activity in white and detected
 transient activity in amber.
 
 The meter shares the background spectral analysis. Fixed-size atomic snapshots

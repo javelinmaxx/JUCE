@@ -6,7 +6,7 @@ const auto early = juce::Colour (0xff72ce9c), late = juce::Colour (0xfff07880);
 }
 XuanPhaseMeter::XuanPhaseMeter (XuanPhaseProcessor& p) : processor (p)
 {
-    setTooltip ("Shows three seconds of input transients moving left to right, with early bands green, late bands red, and applied left phase in white and right phase in gold against degree guides.");
+    setTooltip ("Shows three seconds of input transients moving left to right, with early bands green, late bands red, and applied left phase in white and right phase in gold wrapped to plus or minus 180 degrees.");
     lastColumn = lastInput = juce::Time::getMillisecondCounterHiRes();
 }
 XuanPhaseMeter::~XuanPhaseMeter() { stopTimer(); processor.setMeterVisible (false); }
@@ -62,6 +62,48 @@ void XuanPhaseMeter::timerCallback()
         append (spectrum); lastColumn = now-std::fmod (now-lastColumn, step); repaint();
     }
 }
+float XuanPhaseMeter::rotationDegrees (const xuan::RotationFrame& frame, int channel, int row) noexcept
+{
+    const auto offset = channel == 0 ? size_t (0) : size_t (2*xuan::meterBins+1);
+    const auto index = static_cast<size_t> (row);
+    const auto angle = std::atan2 (frame[offset+xuan::meterBins+index], frame[offset+index]);
+    return std::isfinite (angle) ? std::clamp (angle*180/juce::MathConstants<float>::pi, -180.f, 180.f) : 0.f;
+}
+juce::Path XuanPhaseMeter::rotationPath (const xuan::RotationFrame& frame, int channel, juce::Rectangle<float> phase)
+{
+    const auto phaseX = [&] (float degrees) { return phase.getCentreX()+std::clamp (degrees, -180.f, 180.f)/180*(phase.getWidth()*.5f-1); };
+    juce::Path response;
+    std::array<float, xuan::meterBins> xs {}, angles {};
+    for (int row = 0; row < xuan::meterBins; ++row)
+    {
+        const auto index = static_cast<size_t> (row);
+        angles[index] = rotationDegrees (frame, channel, row)*juce::MathConstants<float>::pi/180;
+        xs[index] = phaseX (angles[index]*180/juce::MathConstants<float>::pi);
+    }
+    const auto wrapped = [&] (int i) { return std::abs (angles[static_cast<size_t> (i+1)]-angles[static_cast<size_t> (i)]) > juce::MathConstants<float>::pi; };
+    const auto tangent = [&] (int i)
+    {
+        if (i == 0) return wrapped (0) ? 0.f : xs[1]-xs[0];
+        if (i == xuan::meterBins-1) return wrapped (i-1) ? 0.f : xs[static_cast<size_t> (i)]-xs[static_cast<size_t> (i-1)];
+        if (wrapped (i-1) || wrapped (i)) return 0.f;
+        const auto before = xs[static_cast<size_t> (i)]-xs[static_cast<size_t> (i-1)];
+        const auto after = xs[static_cast<size_t> (i+1)]-xs[static_cast<size_t> (i)];
+        return before*after > 0 ? 2*before*after/(before+after) : 0.f;
+    };
+    // Shape-preserving cubic interpolation rounds visual corners without
+    // overshooting measured extrema or drawing across the +/-180 degree seam.
+    const auto dy = phase.getHeight()/(xuan::meterBins-1);
+    response.startNewSubPath (xs[0], phase.getBottom());
+    for (int i = 0; i < xuan::meterBins-1; ++i)
+    {
+        const auto y = phase.getBottom()-i*dy, nextY = y-dy;
+        if (wrapped (i)) response.startNewSubPath (xs[static_cast<size_t> (i+1)], nextY);
+        else response.cubicTo (xs[static_cast<size_t> (i)]+tangent (i)/3, y-dy/3,
+                               xs[static_cast<size_t> (i+1)]-tangent (i+1)/3, nextY+dy/3,
+                               xs[static_cast<size_t> (i+1)], nextY);
+    }
+    return response;
+}
 void XuanPhaseMeter::paint (juce::Graphics& g)
 {
     drawPanel (g, getLocalBounds().toFloat());
@@ -86,11 +128,11 @@ void XuanPhaseMeter::paint (juce::Graphics& g)
     }
     g.setColour (secondary); g.drawText ("PHASE", 210, 48, 56, 14, juce::Justification::centred);
     const auto phaseX = [&] (float degrees) { return phase.getCentreX()+degrees/180*(phase.getWidth()*.5f-1); };
-    // A four-row key keeps degree labels legible in the 56 px track; paired
+    // A five-row key labels the full +/-180 degree range in the 56 px track; paired
     // positive/negative guides share a dash pattern and the same +/- label.
     const auto guide = [&] (juce::Line<float> line, int index)
     {
-        if (index == 0) g.drawLine (line, .8f);
+        if (index == 0 || index == 4) g.drawLine (line, .8f);
         else
         {
             const float dashes[] {static_cast<float> (index == 1 ? 1 : index == 2 ? 4 : 8), 3};
@@ -98,59 +140,32 @@ void XuanPhaseMeter::paint (juce::Graphics& g)
         }
     };
     g.setFont (juce::FontOptions (9));
-    for (int index = 0; index < 4; ++index)
+    for (int index = 0; index < 5; ++index)
     {
         const auto degrees = 45*index;
-        g.setColour (secondary.withAlpha (index == 0 ? .65f : .35f));
+        g.setColour (secondary.withAlpha ((index == 0 || index == 4) ? .65f : .35f));
         for (int sign : {-1, 1})
         {
             if (index == 0 && sign == -1) continue;
             const auto x = phaseX (static_cast<float> (sign*degrees));
             guide ({x, phase.getY(), x, phase.getBottom()}, index);
         }
-        const auto y = 280.f+17*index;
+        const auto y = 278.f+14*index;
         g.setColour (secondary); guide ({212, y+6, 224, y+6}, index);
         const auto text = (index == 0 ? juce::String ("0") : juce::String::fromUTF8 ("±")+juce::String (degrees))
                         +juce::String::fromUTF8 ("°");
         g.drawText (text, 227, juce::roundToInt (y), 39, 13, juce::Justification::centredLeft);
     }
     float maximum = 0;
+    g.saveState(); g.reduceClipRegion (phase.toNearestInt());
     for (int channel : {1, 0})
     {
-        juce::Path response;
-        const auto offset = channel == 0 ? size_t (0) : size_t (2*xuan::meterBins+1);
-        std::array<float, xuan::meterBins> xs {}, angles {};
+        const auto response = rotationPath (rotation, channel, phase);
         for (int row = 0; row < xuan::meterBins; ++row)
-        {
-            const auto index = static_cast<size_t> (row);
-            angles[index] = std::atan2 (rotation[offset+xuan::meterBins+index], rotation[offset+index]);
-            xs[index] = phaseX (angles[index]*180/juce::MathConstants<float>::pi);
-            maximum = std::max (maximum, std::abs (angles[index])*180/juce::MathConstants<float>::pi);
-        }
-        const auto wrapped = [&] (int i) { return std::abs (angles[static_cast<size_t> (i+1)]-angles[static_cast<size_t> (i)]) > juce::MathConstants<float>::pi; };
-        const auto tangent = [&] (int i)
-        {
-            if (i == 0) return wrapped (0) ? 0.f : xs[1]-xs[0];
-            if (i == xuan::meterBins-1) return wrapped (i-1) ? 0.f : xs[static_cast<size_t> (i)]-xs[static_cast<size_t> (i-1)];
-            if (wrapped (i-1) || wrapped (i)) return 0.f;
-            const auto before = xs[static_cast<size_t> (i)]-xs[static_cast<size_t> (i-1)];
-            const auto after = xs[static_cast<size_t> (i+1)]-xs[static_cast<size_t> (i)];
-            return before*after > 0 ? 2*before*after/(before+after) : 0.f;
-        };
-        // Shape-preserving cubic interpolation rounds visual corners without
-        // overshooting measured extrema or drawing across the +/-180 degree seam.
-        const auto dy = phase.getHeight()/(xuan::meterBins-1);
-        response.startNewSubPath (xs[0], phase.getBottom());
-        for (int i = 0; i < xuan::meterBins-1; ++i)
-        {
-            const auto y = phase.getBottom()-i*dy, nextY = y-dy;
-            if (wrapped (i)) response.startNewSubPath (xs[static_cast<size_t> (i+1)], nextY);
-            else response.cubicTo (xs[static_cast<size_t> (i)]+tangent (i)/3, y-dy/3,
-                                   xs[static_cast<size_t> (i+1)]-tangent (i+1)/3, nextY+dy/3,
-                                   xs[static_cast<size_t> (i+1)], nextY);
-        }
+            maximum = std::max (maximum, std::abs (rotationDegrees (rotation, channel, row)));
         g.setColour (channel == 0 ? foreground : amber); g.strokePath (response, juce::PathStrokeType (1.2f));
     }
+    g.restoreState();
     g.setColour (secondary); g.drawText ("NOW", 38, 271, 60, 15, juce::Justification::centredLeft);
     g.drawText ("3 s ago  >", 124, 271, 82, 15, juce::Justification::centredRight);
     g.drawText ("INPUT TRANSIENT", 14, 292, 192, 16, juce::Justification::centredLeft);

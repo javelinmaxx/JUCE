@@ -171,9 +171,50 @@ void stereoTests (const juce::File& directory, const std::vector<float>& hit, co
            "live channel analysis and FIR handoff separate repeated channel transients at negative Link");
 }
 
+void phaseDisplayTests()
+{
+    const juce::Rectangle<float> track {210, 64, 56, 204};
+    xuan::RotationFrame frame {};
+    for (int ch = 0; ch < 2; ++ch)
+    {
+        const auto offset = ch == 0 ? size_t (0) : size_t (2*xuan::meterBins+1);
+        for (int row = 0; row < xuan::meterBins; ++row)
+        {
+            const auto degrees = std::array<float, 16> {0, 45, -45, 90, -90, 135, -135, 179, -179, 180, -180, 200, -200, 540, -540, 900}[static_cast<size_t> (row%16)]*(ch == 0 ? 1.f : -1.f);
+            const auto expected = std::polar (1.f, degrees*juce::MathConstants<float>::pi/180);
+            frame[offset+static_cast<size_t> (row)] = expected.real();
+            frame[offset+xuan::meterBins+static_cast<size_t> (row)] = expected.imag();
+            const auto shown = XuanPhaseMeter::rotationDegrees (frame, ch, row);
+            check (std::isfinite (shown) && std::abs (shown) <= 180,
+                   "phase readout stays within +/-180 degrees even for multi-turn rotations");
+            check (std::abs (std::polar (1.f, shown*juce::MathConstants<float>::pi/180)-expected) < 2e-5,
+                   "display wraps multi-turn phase rather than clamping the underlying rotation");
+        }
+        const auto path = XuanPhaseMeter::rotationPath (frame, ch, track);
+        juce::PathFlatteningIterator lines (path, juce::AffineTransform(), .001f);
+        int segments = 0;
+        while (lines.next())
+        {
+            ++segments;
+            check (lines.x1 >= track.getX() && lines.x1 <= track.getRight()
+                   && lines.x2 >= track.getX() && lines.x2 <= track.getRight(),
+                   "smoothed phase curve never overshoots the +/-180 degree track edges");
+        }
+        check (segments > 0, "bound checks cover rendered cubic segments");
+        for (int row = 0; row < xuan::meterBins; ++row)
+        {
+            const auto value = std::polar (1.f, (row%2 == 0 ? 179.f : -179.f)*juce::MathConstants<float>::pi/180);
+            frame[offset+static_cast<size_t> (row)] = value.real(); frame[offset+xuan::meterBins+static_cast<size_t> (row)] = value.imag();
+        }
+        const auto seam = XuanPhaseMeter::rotationPath (frame, ch, track);
+        juce::PathFlatteningIterator seams (seam);
+        check (! seams.next(), "phase wrap crossings split the path instead of drawing across the display");
+    }
+}
 void dspTests (const juce::File& directory)
 {
     directory.createDirectory();
+    phaseDisplayTests();
     XuanPhaseProcessor saved, restored;
     set (saved, "link", -70);
     set (saved, "depth", -75); set (saved, "transient", 700);
