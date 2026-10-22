@@ -11,16 +11,18 @@ struct Settings
 {
     float low = 0, high = 0, split = 1000, depth = 50, output = 0;
     bool automatic = false, bypass = false;
+    float transient = 200;
     bool operator== (const Settings& b) const noexcept
     { return juce::exactlyEqual (low, b.low) && juce::exactlyEqual (high, b.high)
-          && juce::exactlyEqual (split, b.split) && juce::exactlyEqual (depth, b.depth) && automatic == b.automatic; }
+          && juce::exactlyEqual (split, b.split) && juce::exactlyEqual (depth, b.depth) && automatic == b.automatic
+          && juce::exactlyEqual (transient, b.transient); }
 };
 struct Target { float frequency = 0, width = 0, angle = 0, delay = 0; };
 struct Analysis
 {
     std::array<Target, 24> targets {};
     int count = 0;
-    float flux = 0, crest = 0;
+    float flux = 0, crest = 0, strength = 1;
 };
 inline constexpr int meterBins = 64;
 inline constexpr int meterTransient = 2*meterBins, meterPeak = meterTransient+1, meterCeiling = meterTransient+2;
@@ -67,6 +69,7 @@ public:
     bool readSpectrum (SpectrumFrame& f, uint32_t& v) const noexcept { return spectrumMeter.read (f, v); }
     bool readRotation (RotationFrame& f, uint32_t& v) const noexcept { return rotationMeter.read (f, v); }
     static double meterFrequency (int row, double rate) noexcept;
+    static float releaseStrength (float current, double samples, double rate, float milliseconds);
     static double bandValue (double frequency, const Analysis&, bool timing);
     static float phaseAt (double frequency, const Settings&, const Analysis&);
     static Analysis analyse (const std::vector<float>&, double rate, std::vector<float>& previousMagnitude, double& previousEnergy, SpectrumFrame* = nullptr);
@@ -106,6 +109,7 @@ private:
     std::array<std::array<float, 2*hop>, 2> history {};
     std::array<std::vector<float>, 2> dry;
     std::vector<float> analysisRing, leftAnalysisRing, analysisJob;
+    uint64_t processedSamples = 0, jobSample = 0; // jobState synchronizes the timestamp with its audio frame
     std::atomic<int> jobState { 0 }, displayedTargets { 0 };
     std::atomic<uint32_t> revision { 1 };
     std::atomic<bool> autoActive { false };

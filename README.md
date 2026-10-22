@@ -131,13 +131,14 @@ attacks; this compact version omits Haas search, meters, and band controls.
 Rotate the low and high frequencies independently through ±180°, with a smooth
 adjustable crossover and a fixed **25 ms** reference delay. **Auto** detects
 clear transients and uses their spectrogram phase and phase slopes to align
-narrow frequency bands; **Auto Depth** scales that correction independently of
-the manual settings. Shared stereo processing preserves channel relationships.
+narrow frequency bands; signed **Auto Depth** scales or reverses that correction
+independently of the manual settings, and **Transient** sets its release time. Shared stereo processing preserves channel relationships.
 The side spectrogram moves left to right, colouring early bands green and late
 bands red, with a separate white trace for the phase rotation actually applied.
 
 [Controls and signal path](projects/XuanPhase/README.md) ·
-[Phase and transient measurements](projects/XuanPhase/Tests/Reports/REPORT.md)
+[Phase and transient measurements](projects/XuanPhase/Tests/Reports/REPORT.md) ·
+[Auto alignment performance](projects/XuanPhase/Tests/Reports/AUTO_ALIGNMENT.md)
 
 ## Measured examples
 

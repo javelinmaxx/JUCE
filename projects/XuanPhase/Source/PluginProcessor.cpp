@@ -1,6 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
-namespace { constexpr std::array<const char*, 7> ids { "low", "high", "split", "depth", "output", "automatic", "bypass" }; }
+namespace { constexpr std::array<const char*, 8> ids { "low", "high", "split", "depth", "output", "automatic", "bypass", "transient" }; }
 juce::AudioProcessorValueTreeState::ParameterLayout XuanPhaseProcessor::createParameterLayout()
 {
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
@@ -8,16 +8,18 @@ juce::AudioProcessorValueTreeState::ParameterLayout XuanPhaseProcessor::createPa
     {
         juce::NormalisableRange<float> range (lo, hi, step);
         if (juce::String (id) == "split") range.setSkewForCentre (1000);
+        if (juce::String (id) == "transient") range.setSkewForCentre (200);
         layout.add (std::make_unique<juce::AudioParameterFloat> (juce::ParameterID { id, 1 }, name, range, initial,
             juce::AudioParameterFloatAttributes().withLabel (unit)));
     };
     add ("low", "Low phase", -180, 180, .1f, 0, "deg");
     add ("high", "High phase", -180, 180, .1f, 0, "deg");
     add ("split", "Crossover", 80, 4000, 1, 1000, "Hz");
-    add ("depth", "Auto depth", 0, 100, .1f, 50, "%");
+    add ("depth", "Auto depth", -100, 100, .1f, 50, "%");
     add ("output", "Output", -24, 12, .1f, 0, "dB");
     layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "automatic", 1 }, "Auto phase", false));
     layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { "bypass", 1 }, "Bypass", false));
+    add ("transient", "Transient release", 20, 1000, 1, 200, "ms");
     return layout;
 }
 XuanPhaseProcessor::XuanPhaseProcessor()
@@ -35,7 +37,7 @@ XuanPhaseProcessor::~XuanPhaseProcessor()
 xuan::Settings XuanPhaseProcessor::settings() const noexcept
 {
     const auto value = [&] (size_t i) { return raw[i]->load (std::memory_order_relaxed); };
-    return { value (0), value (1), value (2), value (3), value (4), value (5) >= .5f, value (6) >= .5f };
+    return { value (0), value (1), value (2), value (3), value (4), value (5) >= .5f, value (6) >= .5f, value (7) };
 }
 void XuanPhaseProcessor::prepareToPlay (double rate, int)
 {

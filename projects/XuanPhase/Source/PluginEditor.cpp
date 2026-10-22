@@ -14,14 +14,15 @@ XuanPhaseEditor::XuanPhaseEditor (XuanPhaseProcessor& p) : AudioProcessorEditor 
     automatic.setTooltip ("Saves CPU when Off; uses transient spectrogram phases to align narrow frequency bands.");
     bypassAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "bypass", bypass);
     autoAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "automatic", automatic);
-    constexpr std::array<const char*, 5> ids { "low", "split", "high", "depth", "output" };
-    constexpr std::array<const char*, 5> names { "LOW PHASE", "CROSSOVER", "HIGH PHASE", "AUTO DEPTH", "OUTPUT" };
-    constexpr std::array<const char*, 5> units { " deg", " Hz", " deg", " %", " dB" };
-    constexpr std::array<const char*, 5> hints {
+    constexpr std::array<const char*, 6> ids { "low", "split", "high", "depth", "transient", "output" };
+    constexpr std::array<const char*, 6> names { "LOW PHASE", "CROSSOVER", "HIGH PHASE", "AUTO DEPTH", "TRANSIENT", "OUTPUT" };
+    constexpr std::array<const char*, 6> units { " deg", " Hz", " deg", " %", " ms", " dB" };
+    constexpr std::array<const char*, 6> hints {
         "Rotates frequencies below the crossover relative to the fixed 25 ms reference.",
         "Sets the smooth transition between the low and high manual phase controls.",
         "Rotates frequencies above the crossover relative to the fixed 25 ms reference.",
-        "Scales the transient-guided phase correction without changing the manual rotations.",
+        "Sets automatic phase correction from reverse alignment at negative values to full alignment at positive values.",
+        "Sets how quickly automatic phase correction releases after a transient, with longer times retaining it longer.",
         "Adjusts the output level after manual and automatic phase rotation." };
     for (size_t i = 0; i < sliders.size(); ++i)
     {
@@ -49,7 +50,7 @@ void XuanPhaseEditor::resized()
     bypass.setBounds (450, 30, 74, 28); automatic.setBounds (440, 299, 72, 26);
     for (size_t i = 0; i < sliders.size(); ++i)
     {
-        const auto x = i < 3 ? 63+static_cast<int> (i)*156 : 141+static_cast<int> (i-3)*156;
+        const auto x = 63+static_cast<int> (i%3)*156;
         const auto y = i < 3 ? 160 : 360;
         labels[i].setBounds (x, y-20, 110, 16); sliders[i].setBounds (x, y, 110, 98);
     }

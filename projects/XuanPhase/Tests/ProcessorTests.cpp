@@ -34,6 +34,19 @@ Complex response (const std::vector<float>& ir, double hz, double rate)
 void dspTests (const juce::File& directory)
 {
     directory.createDirectory();
+    XuanPhaseProcessor saved, restored;
+    set (saved, "depth", -75); set (saved, "transient", 700);
+    juce::MemoryBlock state; saved.getStateInformation (state); restored.setStateInformation (state.getData(), static_cast<int> (state.getSize()));
+    check (std::abs (restored.settings().depth+75) < .001f && std::abs (restored.settings().transient-700) < .001f,
+           "negative Depth and Transient release survive session recall");
+    set (saved, "depth", 50);
+    auto oldState = saved.parameters.copyState();
+    for (int i = oldState.getNumChildren()-1; i >= 0; --i)
+        if (oldState.getChild (i).getProperty ("id").toString() == "transient") oldState.removeChild (i, nullptr);
+    XuanPhaseProcessor legacy;
+    legacy.parameters.replaceState (oldState);
+    check (std::abs (legacy.settings().depth-50) < .001f && std::abs (legacy.settings().transient-200) < .001f,
+           "sessions predating Transient retain their stored positive Depth and the new default release");
     std::ofstream phase ((directory.getChildFile ("phase.csv")).getFullPathName().toStdString());
     phase << "setting,frequency,phase_deg,gain_db\n";
     for (double rate : {8000., 44100., 48000., 96000., 192000.})
@@ -161,7 +174,7 @@ void dspTests (const juce::File& directory)
                "detected automatic phase bands join continuously at each target");
     }
     std::ofstream transient (directory.getChildFile ("transient.csv").getFullPathName().toStdString());
-    transient << "sample,dry,depth0,depth50,depth100\n";
+    transient << "sample,dry,depth0,depth50,depth100,depthminus100\n";
     std::array<std::vector<float>, 3> outputs;
     auto padded = hit; padded.resize (7000);
     for (int d = 0; d < 3; ++d)
@@ -169,14 +182,38 @@ void dspTests (const juce::File& directory)
         xuan::Settings s; s.automatic = true; s.depth = static_cast<float> (50*d);
         outputs[static_cast<size_t> (d)] = run (s, padded, 127, 48000, targets);
     }
+    xuan::Settings reversed = full; reversed.depth = -100;
+    const auto negative = run (reversed, padded, 127, 48000, targets);
+    const auto reversedIr = xuan::PhaseEngine::impulse (48000, reversed, targets);
+    std::ofstream targetData (directory.getChildFile ("auto-targets.csv").getFullPathName().toStdString());
+    targetData << "frequency,target_deg,positive_deg,negative_deg\n";
+    for (int t = 0; t < targets.count; ++t)
+    {
+        const auto& target = targets.targets[static_cast<size_t> (t)];
+        const auto positive = response (autoIr, target.frequency, 48000);
+        const auto inverse = response (reversedIr, target.frequency, 48000);
+        const auto scale = 180/juce::MathConstants<double>::pi;
+        targetData << target.frequency << ',' << target.angle*scale << ',' << std::arg (positive)*scale << ',' << std::arg (inverse)*scale << '\n';
+        check (std::abs (std::remainder (std::arg (positive)-target.angle, 2*juce::MathConstants<double>::pi)) < juce::MathConstants<double>::pi/180,
+               "full Depth aligns each detected peak within one degree of the transient anchor");
+        check (std::abs (inverse-std::conj (positive)) < 1e-5,
+               "negative Depth reverses the measured automatic phase rotation");
+    }
+    check (std::abs (xuan::PhaseEngine::releaseStrength (1, 9600, 48000, 200)-std::exp (-1.f)) < 1e-6,
+           "Transient release has the specified exponential time constant in audio samples");
+    check (xuan::PhaseEngine::releaseStrength (1, 9600, 48000, 40) < xuan::PhaseEngine::releaseStrength (1, 9600, 48000, 800),
+           "shorter Transient values release phase correction faster");
     float before = 0, after = 0;
     for (size_t i = 0; i < padded.size(); ++i)
     {
         before = std::max (before, std::abs (outputs[0][i])); after = std::max (after, std::abs (outputs[2][i]));
-        transient << i << ',' << (i >= 1200 ? padded[i-1200] : 0) << ',' << outputs[0][i] << ',' << outputs[1][i] << ',' << outputs[2][i] << '\n';
+        transient << i << ',' << (i >= 1200 ? padded[i-1200] : 0) << ',' << outputs[0][i] << ',' << outputs[1][i] << ',' << outputs[2][i] << ',' << negative[i] << '\n';
     }
     std::cout << "Transient targets=" << targets.count << " peak before=" << before << " after=" << after << '\n';
     check (after > before*1.05f, "phase-guided alignment increases the synthetic dispersed hit peak at full depth");
+    float negativePeak = 0;
+    for (auto x : negative) negativePeak = std::max (negativePeak, std::abs (x));
+    check (negativePeak < before*.95f, "negative Depth spreads the constructed transient instead of aligning its peak");
     const auto neutral = run ({}, padded);
     check (neutral == outputs[0], "zero Auto depth leaves the manual processing sample-identical");
     std::vector<float> noise (2048); std::mt19937 random (18); std::normal_distribution<float> normal (0, .03f);
@@ -226,6 +263,37 @@ void dspTests (const juce::File& directory)
     set (live, "depth", 0);
     for (int i = 0; i < 32; ++i) { block.clear(); live.processBlock (block, midi); juce::Thread::sleep (2); }
     check (live.targetCount() == 0, "zero Depth clears automatic targets in the live worker");
+    std::ofstream releaseData (directory.getChildFile ("auto-release.csv").getFullPathName().toStdString());
+    releaseData << "sample,release_ms,rotation_deg\n";
+    std::array<float, 3> remaining {};
+    for (int trial = 0; trial < 3; ++trial)
+    {
+        const auto milliseconds = std::array<float, 3> {40, 200, 800}[static_cast<size_t> (trial)];
+        XuanPhaseProcessor releasing; set (releasing, "automatic", 1); set (releasing, "depth", -100);
+        set (releasing, "transient", milliseconds); releasing.prepareToPlay (48000, 128); releasing.setMeterVisible (true);
+        xuan::RotationFrame frame {}; uint32_t version = 0; float maxDuring = 0;
+        for (int at = 0; at < 60032; at += 128)
+        {
+            for (int i = 0; i < 128; ++i)
+            {
+                const auto index = at+i-4096;
+                const auto x = index >= 0 && index < static_cast<int> (hit.size()) ? hit[static_cast<size_t> (index)] : 0;
+                block.setSample (0, i, x); block.setSample (1, i, x);
+            }
+            releasing.processBlock (block, midi); juce::Thread::sleep (3);
+            if (releasing.readRotation (frame, version))
+            {
+                float maximum = 0;
+                for (int row = 0; row < xuan::meterBins; ++row)
+                    maximum = std::max (maximum, std::abs (std::atan2 (frame[xuan::meterBins+static_cast<size_t> (row)], frame[static_cast<size_t> (row)]))*180/juce::MathConstants<float>::pi);
+                releaseData << at+128 << ',' << milliseconds << ',' << maximum << '\n';
+                maxDuring = std::max (maxDuring, maximum); remaining[static_cast<size_t> (trial)] = maximum;
+            }
+        }
+        check (maxDuring > 10, "negative Depth activates live transient analysis and applies a reversed response");
+    }
+    check (remaining[0] < 1 && remaining[2] > remaining[1]+1,
+           "the live worker releases short Transient settings faster than long settings");
     XuanPhaseProcessor bypassed; set (bypassed, "low", 90); set (bypassed, "output", 6); bypassed.prepareToPlay (48000, 128);
     double bypassError = 0;
     for (int at = 0; at < 4096; at += 128)
@@ -263,6 +331,10 @@ void editor (const juce::File& path)
         {
             auto* client = dynamic_cast<juce::TooltipClient*> (slider);
             check (client && client->getTooltip().isNotEmpty(), "every phase knob has a hover hint");
+            if (slider->getName() == "TRANSIENT")
+            { slider->setValue (400, juce::sendNotificationSync); check (std::abs (p.settings().transient-400) < .01f, "Transient knob changes its host parameter"); }
+            if (slider->getName() == "OUTPUT")
+                check (slider->getX() == 375, "Output occupies the far-right control position");
             if (slider->getName() == "LOW PHASE")
             { slider->setValue (90, juce::sendNotificationSync); check (std::abs (p.settings().low-90) < .01f, "manual knob changes its host parameter"); }
         }
@@ -350,7 +422,7 @@ int main (int argc, char** argv)
     juce::ScopedJuceInitialiser_GUI gui;
     try
     {
-        stateTests<XuanPhaseProcessor> (7);
+        stateTests<XuanPhaseProcessor> (8);
         dspTests (argc > 2 && juce::String (argv[1]) == "--report" ? juce::File (argv[2]) : juce::File ("/tmp/xuan-report"));
         if (argc > 2 && juce::String (argv[1]) == "--editor") editor (juce::File (argv[2]));
         std::cout << checks << " Xuan Phase checks passed\n"; return 0;

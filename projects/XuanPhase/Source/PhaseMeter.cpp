@@ -115,13 +115,35 @@ void XuanPhaseMeter::paint (juce::Graphics& g)
         g.drawText (text, 227, juce::roundToInt (y), 39, 13, juce::Justification::centredLeft);
     }
     juce::Path response; float maximum = 0;
+    std::array<float, xuan::meterBins> xs {}, angles {};
     for (int row = 0; row < xuan::meterBins; ++row)
     {
-        const auto angle = std::atan2 (rotation[static_cast<size_t> (xuan::meterBins+row)], rotation[static_cast<size_t> (row)]);
-        const auto x = phaseX (angle*180/juce::MathConstants<float>::pi);
-        const auto y = phase.getBottom()-static_cast<float> (row)/(xuan::meterBins-1)*phase.getHeight();
-        if (row == 0) response.startNewSubPath (x, y); else response.lineTo (x, y);
-        maximum = std::max (maximum, std::abs (angle)*180/juce::MathConstants<float>::pi);
+        const auto index = static_cast<size_t> (row);
+        angles[index] = std::atan2 (rotation[xuan::meterBins+index], rotation[index]);
+        xs[index] = phaseX (angles[index]*180/juce::MathConstants<float>::pi);
+        maximum = std::max (maximum, std::abs (angles[index])*180/juce::MathConstants<float>::pi);
+    }
+    const auto wrapped = [&] (int i) { return std::abs (angles[static_cast<size_t> (i+1)]-angles[static_cast<size_t> (i)]) > juce::MathConstants<float>::pi; };
+    const auto tangent = [&] (int i)
+    {
+        if (i == 0) return wrapped (0) ? 0.f : xs[1]-xs[0];
+        if (i == xuan::meterBins-1) return wrapped (i-1) ? 0.f : xs[static_cast<size_t> (i)]-xs[static_cast<size_t> (i-1)];
+        if (wrapped (i-1) || wrapped (i)) return 0.f;
+        const auto before = xs[static_cast<size_t> (i)]-xs[static_cast<size_t> (i-1)];
+        const auto after = xs[static_cast<size_t> (i+1)]-xs[static_cast<size_t> (i)];
+        return before*after > 0 ? 2*before*after/(before+after) : 0.f;
+    };
+    // Shape-preserving cubic interpolation rounds visual corners without
+    // overshooting measured extrema or drawing across the +/-180 degree seam.
+    const auto dy = phase.getHeight()/(xuan::meterBins-1);
+    response.startNewSubPath (xs[0], phase.getBottom());
+    for (int i = 0; i < xuan::meterBins-1; ++i)
+    {
+        const auto y = phase.getBottom()-i*dy, nextY = y-dy;
+        if (wrapped (i)) response.startNewSubPath (xs[static_cast<size_t> (i+1)], nextY);
+        else response.cubicTo (xs[static_cast<size_t> (i)]+tangent (i)/3, y-dy/3,
+                               xs[static_cast<size_t> (i+1)]-tangent (i+1)/3, nextY+dy/3,
+                               xs[static_cast<size_t> (i+1)], nextY);
     }
     g.setColour (foreground); g.strokePath (response, juce::PathStrokeType (1.2f));
     g.setColour (secondary); g.drawText ("NOW", 38, 271, 60, 15, juce::Justification::centredLeft);

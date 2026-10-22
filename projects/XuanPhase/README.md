@@ -1,8 +1,8 @@
 # Xuan Phase
 
 Xuan Phase is J-SONIC's manual and transient-guided phase rotator. It offers
-independent low/high rotation, a smooth adjustable crossover, Auto Depth,
-Output, and a fixed **25 ms reference latency** in a 50%–120% scalable editor.
+independent low/high rotation, a smooth adjustable crossover, signed Auto Depth,
+Transient release, Output, and a fixed **25 ms reference latency** in a 50%–120% scalable editor.
 The 840 × 490 default panel includes a vertical phase-field meter beside the controls.
 
 ![Xuan Phase native editor](Previews/xuan-phase.png)
@@ -42,11 +42,17 @@ fills spare slots with the strongest remaining peaks to avoid low-frequency bias
 estimate how wave packets can meet the strongest transient sample. Relative
 band-delay targets are limited to ±25 ms.
 
-**Auto Depth** scales only these additional corrections: 0% leaves the manual
-response unchanged, and 100% applies the full detected target. A shared stereo
-reference preserves the relationship between channels; nearly cancelling
-anti-phase input uses the left channel as the analysis reference. Targets hold
-between detected onsets, allowing repeated hits to retain their alignment.
+**Auto Depth** ranges from −100% to +100% and scales only these additional
+corrections: 0% leaves the manual response unchanged, +100% applies the full
+detected target, and negative values reverse the correction away from alignment.
+A shared stereo reference preserves the relationship between channels; nearly cancelling
+anti-phase input uses the left channel as the analysis reference.
+
+**Transient** sets the exponential correction release from 20 to 1,000 ms
+(default 200 ms): 36.8% remains after one time constant, counted in audio samples
+after the last detected onset. New onsets refresh the correction; it decays
+back toward the manual response between hits, and returns fully once below 0.1%.
+Release responses update at up to 50 Hz through the existing 5 ms kernel fades.
 Auto Off or Depth 0% stops automatic response updates; a visible meter retains
 lower-rate input analysis for manual use, which stops when the editor is hidden.
 The first part of a new onset must
@@ -87,9 +93,11 @@ with stale input cleared after 200 ms and blank columns for missed UI frames.
 Closing the editor clears its history; sample-rate changes clear incompatible
 frequency history. Audio processing and the fixed latency are unchanged.
 
-The [test report](Tests/Reports/REPORT.md#live-automatic-phase-shifting-case)
-includes a live three-hit Auto case, measured connected-band response, and
-matched-level listening examples.
+The [Auto alignment performance report](Tests/Reports/AUTO_ALIGNMENT.md)
+includes a live three-hit Auto case, measured phase errors, positive/negative
+Depth, short/long release curves, and matched-level listening examples.
+The phase display rounds the curve with shape-preserving cubic interpolation
+and splits at ±180° wraps; Output sits at the far right beside Transient.
 
 ## Build and test
 

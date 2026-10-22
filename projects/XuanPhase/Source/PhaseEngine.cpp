@@ -23,6 +23,10 @@ float dot (const float* a, const float* b, int n)
 #endif
 }
 }
+float PhaseEngine::releaseStrength (float current, double samples, double rate, float milliseconds)
+{
+    return current*static_cast<float> (std::exp (-std::max (0.0, samples)/(rate*.001*std::clamp (milliseconds, 20.f, 1000.f))));
+}
 double PhaseEngine::bandValue (double frequency, const Analysis& a, bool timing)
 {
     if (a.count == 0) return 0;
@@ -56,9 +60,9 @@ float PhaseEngine::phaseAt (double frequency, const Settings& s, const Analysis&
 {
     const auto weight = 1.0/(1+std::pow (frequency/std::clamp (s.split, 80.f, 4000.f), 4));
     auto phase = (s.low*weight+s.high*(1-weight))*pi/180;
-    if (s.automatic && s.depth > 0)
+    if (s.automatic && ! juce::exactlyEqual (s.depth, 0.f))
     {
-        phase += std::clamp (s.depth*.01f, 0.f, 1.f)*bandValue (frequency, a, false);
+        phase += std::clamp (s.depth*.01f, -1.f, 1.f)*a.strength*bandValue (frequency, a, false);
     }
     return static_cast<float> (phase);
 }
@@ -66,7 +70,7 @@ std::vector<float> PhaseEngine::impulse (double rate, const Settings& s, const A
 {
     const auto centre = juce::roundToInt (rate*.025);
     std::vector<float> kernel (static_cast<size_t> (2*centre+1), 0);
-    if (juce::exactlyEqual (s.low, 0.f) && juce::exactlyEqual (s.high, 0.f) && (! s.automatic || s.depth <= 0 || a.count == 0))
+    if (juce::exactlyEqual (s.low, 0.f) && juce::exactlyEqual (s.high, 0.f) && (! s.automatic || juce::exactlyEqual (s.depth, 0.f) || a.count == 0))
     { kernel[static_cast<size_t> (centre)] = 1; return kernel; }
     const auto order = orderFor (8*centre+1), n = 1 << order;
     juce::dsp::FFT designer (order);
@@ -257,6 +261,7 @@ void PhaseEngine::prepare (double rate, std::function<Settings()> provider, bool
     const auto analysisSize = 1 << orderFor (juce::roundToInt (rate*.04));
     analysisRing.assign (static_cast<size_t> (analysisSize), 0); leftAnalysisRing = analysisRing; analysisJob = analysisRing;
     for (auto& slot : slots) { slot.state.store (0); slot.valid = false; slot.tail = {}; slot.overlap = {}; }
+    processedSamples = jobSample = 0;
     jobState.store (0); displayedTargets.store (0); autoActive.store (false); revision.store (1);
     const auto s = readSettings(); preparedSettings = s;
     const auto ir = impulse (rate, s);
@@ -305,6 +310,7 @@ void PhaseEngine::renderTail (int index)
 }
 void PhaseEngine::finishHop()
 {
+    processedSamples += hop;
     spectrumPosition = (spectrumPosition+1)%(partitions+1);
     for (int ch = 0; ch < 2; ++ch)
     {
@@ -347,6 +353,7 @@ void PhaseEngine::finishHop()
             // channels at individual zero crossings in anti-phase material.
             if (midEnergy < leftEnergy*.01)
                 for (int i = 0; i < n; ++i) analysisJob[static_cast<size_t> (i)] = leftAnalysisRing[static_cast<size_t> ((ringPosition+i)%n)];
+            jobSample = processedSamples;
             jobState.store (2, std::memory_order_release);
         }
     }
@@ -356,7 +363,7 @@ void PhaseEngine::process (juce::AudioBuffer<float>& buffer, const Settings& s, 
     juce::ScopedNoDenormals noDenormals;
     const auto channels = std::min (2, buffer.getNumChannels());
     if (dry[0].empty()) return;
-    autoActive.store (s.automatic && s.depth > 0 && ! s.bypass && ! hostBypass, std::memory_order_relaxed);
+    autoActive.store (s.automatic && ! juce::exactlyEqual (s.depth, 0.f) && ! s.bypass && ! hostBypass, std::memory_order_relaxed);
     outputGain.setTargetValue (juce::Decibels::decibelsToGain (std::clamp (s.output, -24.f, 12.f)));
     bypassBlend.setTargetValue (s.bypass || hostBypass ? 1.f : 0.f);
     for (int i = 0; i < buffer.getNumSamples(); ++i)
@@ -402,6 +409,8 @@ void PhaseEngine::process (juce::AudioBuffer<float>& buffer, const Settings& s, 
 void PhaseEngine::run()
 {
     auto last = preparedSettings; uint32_t seen = revision.load(), serial = 0; bool dirty = false;
+    uint64_t lastAnalysisSample = 0, lastReleaseSample = 0;
+    float releaseGain = 0;
     Analysis targets, displayedAnalysis; std::vector<float> previous, displayPrevious;
     double previousEnergy = 0, displayEnergy = 0;
     float transientHold = 0; double lastMeter = juce::Time::getMillisecondCounterHiRes();
@@ -415,7 +424,7 @@ void PhaseEngine::run()
             const auto visible = meterVisible.load (std::memory_order_relaxed);
             // Display-only frames must not change the correction detector's
             // history or generate responses while Auto is inactive/bypassed.
-            const auto correcting = s.automatic && s.depth > 0 && autoActive.load (std::memory_order_relaxed);
+            const auto correcting = s.automatic && ! juce::exactlyEqual (s.depth, 0.f) && autoActive.load (std::memory_order_relaxed);
             const auto result = analyse (analysisJob, sampleRate, correcting ? previous : displayPrevious,
                                          correcting ? previousEnergy : displayEnergy, visible ? &spectrum : nullptr);
             if (visible && meterVisible.load (std::memory_order_relaxed))
@@ -430,10 +439,26 @@ void PhaseEngine::run()
                 }
                 lastMeter = now; spectrum[meterTransient] = transientHold; spectrumMeter.publish (spectrum);
             }
-            if (correcting && result.count > 0) { targets = result; dirty = true; }
+            if (correcting && result.count > 0)
+            {
+                targets = result; releaseGain = 1; lastReleaseSample = jobSample; dirty = true;
+            }
+            else if (correcting && targets.count > 0)
+            {
+                // Follow audio time, not wall-clock worker timing or host block size.
+                releaseGain = releaseStrength (releaseGain, static_cast<double> (jobSample-lastAnalysisSample), sampleRate, s.transient);
+                // Rebuild at most 50 times/s during release; existing 5 ms kernel
+                // fades join those responses without work on the audio callback.
+                if (jobSample-lastReleaseSample >= static_cast<uint64_t> (sampleRate*.02))
+                {
+                    targets.strength = releaseGain; lastReleaseSample = jobSample; dirty = true;
+                    if (releaseGain < .001f) targets = {};
+                }
+            }
+            lastAnalysisSample = jobSample;
             jobState.store (0, std::memory_order_release);
         }
-        if (! s.automatic || s.depth <= 0) { targets = {}; displayedTargets.store (0); }
+        if (! s.automatic || juce::exactlyEqual (s.depth, 0.f)) { targets = {}; displayedTargets.store (0); }
         if (dirty)
         {
             int free = -1;

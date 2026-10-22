@@ -21,8 +21,8 @@ axes[0].legend(fontsize=7)
 for ax in axes: ax.grid(alpha=.25)
 fig.savefig(root/'manual-phase.png', dpi=160); plt.close(fig)
 fig, ax = plt.subplots(figsize=(10, 4), constrained_layout=True)
-for key in ['depth0', 'depth50', 'depth100']:
-    ax.plot(audio['sample']/48, audio[key], label=key.replace('depth', 'Auto Depth ')+'%', alpha=.8)
+for key in ['depthminus100', 'depth0', 'depth50', 'depth100']:
+    ax.plot(audio['sample']/48, audio[key], label=key.replace('depth', 'Auto Depth ').replace('minus','−')+'%', alpha=.8)
 ax.set(xlabel='Time (ms), including reference latency', ylabel='Amplitude', title='Phase-guided alignment of a dispersed transient', xlim=(40,65))
 ax.legend(); ax.grid(alpha=.25); fig.savefig(root/'transient-alignment.png', dpi=160); plt.close(fig)
 # A separate case runs the actual background detector, handoff and crossfade;
@@ -59,9 +59,81 @@ def measurements(key):
     x=audio[key]
     return np.max(np.abs(x)), np.sqrt(np.mean(x*x))
 rows=[]
-for key in ['depth0','depth50','depth100']:
+for key in ['depthminus100','depth0','depth50','depth100']:
     peak,rms=measurements(key)
-    rows.append(f'| {key[5:]}% | {peak:.6f} | {rms:.6f} | {20*np.log10(peak/rms):.3f} dB |')
+    label=key[5:].replace('minus','−')
+    rows.append(f'| {label}% | {peak:.6f} | {rms:.6f} | {20*np.log10(peak/rms):.3f} dB |')
+targets = np.genfromtxt(root/'auto-targets.csv', delimiter=',', names=True)
+release = np.genfromtxt(root/'auto-release.csv', delimiter=',', names=True)
+wrap = lambda degrees: (degrees+180)%360-180
+errors = [wrap(-targets['target_deg']), wrap(targets['positive_deg']-targets['target_deg']), wrap(targets['negative_deg']-targets['target_deg'])]
+fig, axes = plt.subplots(1, 2, figsize=(12, 4), constrained_layout=True)
+x = np.arange(len(targets))
+for i, (name, error) in enumerate(zip(['Auto Off', 'Depth +100%', 'Depth −100%'], errors)):
+    axes[0].bar(x+(i-1)*.24, error, width=.24, label=name)
+axes[0].set(xticks=x, xticklabels=[f'{f:g}' for f in targets['frequency']], xlabel='Detected band (Hz)', ylabel='Residual phase error (degrees)', title='Phase error relative to the detected transient anchor')
+axes[0].axhline(0, color='black', linewidth=.7); axes[0].legend(fontsize=8)
+for ms in [40,200,800]:
+    a=release[release['release_ms']==ms]
+    axes[1].plot(a['sample']/48, a['rotation_deg'], label=f'Transient {ms} ms')
+axes[1].set(xlabel='Stream time (ms, including 25 ms latency)', ylabel='Largest applied rotation (degrees)', title='Live worker: phase correction releases after one hit')
+axes[1].legend(fontsize=8)
+for ax in axes: ax.grid(alpha=.25)
+fig.savefig(root/'auto-performance.png', dpi=160); plt.close(fig)
+error_rows=[]
+for name, error in zip(['Off', '+100%', '−100%'], errors):
+    error_rows.append(f'| {name} | {np.mean(abs(error)):.3f}° | {np.max(abs(error)):.3f}° |')
+release_rows=[]
+for ms in [40,200,800]:
+    a=release[release['release_ms']==ms]
+    release_rows.append(f"| {ms} ms | {np.max(a['rotation_deg']):.3f}° | {a['rotation_deg'][-1]:.6f}° |")
+performance = """## Alignment accuracy, reverse Depth, and Transient release
+
+![Measured phase errors and release behavior](auto-performance.png)
+
+At each detected spectral peak, residual error is the measured FIR rotation
+minus the required rotation toward the common transient anchor, wrapped to
+±180°. This directly measures phase alignment in addition to comparing peaks.
+The deterministic response is frozen at full correction to isolate the alignment
+objective from worker timing and release. Intermediate frequencies follow the
+connected curve; this table measures the four detected peaks only.
+
+| Auto Depth | Mean absolute residual error | Largest absolute residual error |
+| --- | ---: | ---: |
+"""+'\n'.join(error_rows)+"""
+
+Negative Depth reverses the correction: on this constructed hit it doubles the
+phase error and reduces the peak, while positive Depth moves the detected bands
+toward the shared anchor. RMS remains approximately equal. This is a creative
+reverse-alignment control, not a guarantee of lower peak for every input.
+
+The release plot uses a separate **live-worker** single-hit stream, with Depth
+−100% to also verify that negative settings activate analysis. It measures the
+actual applied FIR response through audio telemetry, including kernel handoffs
+and crossfades, at Transient 40/200/800 ms. Time follows processed audio samples,
+so offline rendering speed does not change the envelope. Release is exponential:
+after one selected time constant, 36.8% of the last correction remains; after
+about seven time constants, the response returns to manual-only processing.
+The release starts after the last detected onset frame, rather than the first
+sample of the hit. Rebuilds occur at up to 50 Hz during release and use the
+existing 5 ms response crossfade; the plotted envelope includes that stepping.
+
+| Transient | Largest applied rotation during test | Rotation at end of 1.25 s stream |
+| --- | ---: | ---: |
+"""+'\n'.join(release_rows)+"""
+
+The short release must return below 1°; the long release must retain more
+correction than the medium release. Other checks cover zero Depth, host bypass,
+linked stereo, fixed latency, state recall of all eight parameters, 24-band
+coverage into the high frequencies, and no repeated triggers on stationary noise.
+
+These are reproducible synthetic cases, not a listening benchmark for all music.
+The method prioritizes a detected transient anchor; conflicting components,
+polyphonic material, low-frequency resolution, finite-FIR magnitude ripple,
+and worker scheduling can limit improvement. Higher peak at unchanged RMS is a
+punch indicator, not proof of perceived quality or reconstruction of an original
+undispersed source.
+"""
 (root/'REPORT.md').write_text('''# Xuan Phase test report
 
 ## Manual controls and latency
@@ -76,7 +148,7 @@ is a finite phase-rotation approximation, not a mathematically exact all-pass.
 
 Impulse tests compare the actual hybrid convolution against its designed FIR,
 check block-size invariance at 1 and 127 samples, stereo linking, and neutral
-and bypass delays at 8/44.1/48/96/192 kHz. Host state recall covers all seven
+and bypass delays at 8/44.1/48/96/192 kHz. Host state recall covers all eight
 parameters. Input/output latency stays round(sampleRate × 25 ms) samples.
 
 ## Transient spectral phase and Depth
@@ -85,7 +157,7 @@ parameters. Input/output latency stays round(sampleRate × 25 ms) samples.
 
 Four Gaussian wave packets at 281.25, 843.75, 2437.5 and 6750 Hz have staggered
 centres. Their measured spectrogram phases and slopes generate narrow-band
-targets. The actual audio convolution then runs at Depth 0/50/100%.
+targets. The actual audio convolution then runs at Depth −100/0/50/100%.
 This deterministic test freezes the detected target before rendering, separating
 the phase algorithm's effect from real-time worker scheduling. The reference
 delay is included in every trace. No output gain or loudness normalization is
@@ -110,7 +182,8 @@ hints and the 50%–120% resize limits.
 
 This additional case feeds three repeated dispersed hits into the **real processor
 and analysis worker** at 48 kHz in 128-sample blocks, starting with no detected
-targets. Auto is On at 100% Depth; Low Phase, High Phase, and Output are all zero.
+targets. Auto is On at 100% Depth with the default 200 ms Transient release;
+Low Phase, High Phase, and Output are all zero.
 The block loop gives the background worker 3 ms per block; scheduling can affect
 the first hit. Auto Off is the identical input delayed by the fixed 25 ms.
 No target is preloaded, and no gain compensation or normalization is applied.
@@ -141,6 +214,8 @@ then fills remaining slots by strength, rather than taking the first 24
 low-frequency peaks. Coverage now extends to 20 kHz (limited to 45% of the
 sample rate).
 
+'''+performance+'''
+
 ## Phase-field display
 
 The native editor test streams repeated dispersed hits through the real processor
@@ -153,10 +228,20 @@ complex FIR response: tests compare it with an independent DFT, ensure queued
 responses do not appear before audio applies them, verify updates after handoff,
 and check zero displayed phase under host bypass. Input analysis remains live
 with Auto Off while the meter is visible, and stops when the editor is hidden.
-The meter stays inside the editor at both scaling limits.
+The meter stays inside the editor at both scaling limits. Its phase trace uses
+shape-preserving cubic interpolation between measured points, without overshoot,
+and splits at the ±180° wrap instead of drawing a line across the entire track.
+Output sits at the far right of the three-knob Auto row beside Transient.
 
 ![Native editor with live transient history](../../Previews/xuan-phase.png)
 
 Data: [phase.csv](phase.csv), [transient.csv](transient.csv), [auto-live.csv](auto-live.csv), [auto-phase.csv](auto-phase.csv).
 ''')
 print('\n'.join(rows))
+
+report=(root/'REPORT.md').read_text()
+auto=report[report.index('## Transient spectral phase and Depth'):report.index('## Phase-field display')]
+(root/'AUTO_ALIGNMENT.md').write_text('# Xuan Phase automatic alignment performance\n\n' +
+    'Measured at 48 kHz using the production FIR, convolution engine, and analysis worker.\n' +
+    'Run `XuanPhaseTests --report <this directory>` then `python3 ../generate_report.py` to reproduce.\n\n' + auto +
+    '\nData: [transient](transient.csv), [live audio](auto-live.csv), [phase targets](auto-targets.csv), [release](auto-release.csv).\n')

@@ -6,7 +6,8 @@
 | Crossover | Sets the smooth transition between the low and high manual phase controls. |
 | High Phase | Rotates frequencies above the crossover relative to the fixed 25 ms reference. |
 | Auto | Saves CPU when Off; uses transient spectrogram phases to align narrow frequency bands. |
-| Auto Depth | Scales the transient-guided phase correction without changing the manual rotations. |
+| Auto Depth | Sets automatic phase correction from reverse alignment at negative values to full alignment at positive values. |
+| Transient | Sets how quickly automatic phase correction releases after a transient, with longer times retaining it longer. |
 | Output | Adjusts the output level after manual and automatic phase rotation. |
 | Bypass | Bypasses phase processing while preserving the fixed 25 ms latency. |
 | Phase Field | Shows three seconds of input transients moving left to right, with early bands green, late bands red, and applied phase in white against degree guides. |
