@@ -269,6 +269,11 @@ parent is attached and shown without changing the child's visible flag. This
 previously left the meter blank with its timer stopped. The test requires live
 history pixels and automatic analysis startup, then checks parent-only
 hide/show, peer detach/reattach, and destruction while the host container lives.
+A sustained 900 Hz tone is also processed through two 120 ms message-thread
+stalls: every intervening history column must retain energy, while actual
+silence and stopped processing must clear it. Missed columns hold the previous
+spectrum for at most 200 ms, with decaying onset colours, rather than inserting
+blank stripes or backdating the newest onset.
 These run on Linux/Xvfb against JUCE's real desktop peer and timers; Logic Pro
 and macOS AU rendering still require validation on a Mac.
 

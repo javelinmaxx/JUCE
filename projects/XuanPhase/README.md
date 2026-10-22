@@ -129,7 +129,9 @@ transient activity in amber.
 The meter shares the background spectral analysis. Fixed-size atomic snapshots
 transfer input and applied-response data without GUI locks in the audio callback.
 No display FFT runs on the audio thread. Rendering and scrolling run at 30 Hz,
-with stale input cleared after 200 ms and blank columns for missed UI frames.
+with recent spectra held across short missed UI refreshes to avoid gaps in
+sustained notes; stale input clears after 200 ms. Held transient colours decay,
+and new onsets are never backdated into missed columns.
 Closing the editor clears its history; sample-rate changes clear incompatible
 frequency history. Audio processing and the fixed latency are unchanged.
 

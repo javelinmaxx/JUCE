@@ -632,17 +632,19 @@ void hostedEditorTests()
     check (editor->isShowing(), "host attachment makes the already-visible editor show without changing its visible flag");
     processor.prepareToPlay (48000, 128);
     juce::AudioBuffer<float> audio (2, 128); juce::MidiBuffer midi; int sample = 0;
-    const auto pump = [&] (int blocks)
+    const auto pump = [&] (int blocks, bool dispatch = true, float sustain = -1.f)
     {
         for (int b = 0; b < blocks; ++b)
         {
             for (int i = 0; i < 128; ++i, ++sample)
             {
                 const auto t = sample%6000-2000;
-                const auto x = static_cast<float> (.4*std::exp (-.5*std::pow (t/90., 2))*std::cos (2*juce::MathConstants<double>::pi*900*t/48000));
+                const auto x = sustain >= 0 ? sustain*static_cast<float> (std::cos (2*juce::MathConstants<double>::pi*900*sample/48000))
+                    : static_cast<float> (.4*std::exp (-.5*std::pow (t/90., 2))*std::cos (2*juce::MathConstants<double>::pi*900*t/48000));
                 audio.setSample (0, i, x); audio.setSample (1, i, x);
             }
-            processor.processBlock (audio, midi); juce::Thread::sleep (4); juce::Timer::callPendingTimersSynchronously();
+            processor.processBlock (audio, midi); juce::Thread::sleep (4);
+            if (dispatch) juce::Timer::callPendingTimersSynchronously();
         }
     };
     pump (96);
@@ -652,6 +654,42 @@ void hostedEditorTests()
             visiblePixels |= meter->historyImage().getPixelAt (x, y).getBrightness() > .2f;
     check (meter->historySize() > 5 && visiblePixels,
            "AU-style delayed native attachment starts the meter timer and input analysis without explicit editor visibility changes");
+    // Simulate a busy host message thread while audio and its analysis worker
+    // continue running: a sustained tone must not acquire blank history stripes.
+    pump (64, true, .25f);
+    for (int stall = 0; stall < 2; ++stall)
+    {
+        pump (30, false, .25f);
+        // Let JUCE's timer thread observe the resumed message thread before
+        // checking pixels (its countdown update runs on that other thread).
+        for (int resume = 0; resume < 3; ++resume)
+        {
+            juce::Timer::callPendingTimersSynchronously(); juce::Thread::sleep (4);
+        }
+        for (int x = 0; x < 3; ++x)
+        {
+            bool energy = false;
+            for (int y = 0; y < xuan::meterBins; ++y)
+                energy |= meter->historyImage().getPixelAt (x, y).getBrightness() > .2f;
+            check (energy, "sustained spectrum remains continuous across a 120 ms host UI stall");
+        }
+    }
+    pump (64, true, 0.f);
+    bool silence = true;
+    for (int y = 0; y < xuan::meterBins; ++y)
+        silence &= meter->historyImage().getPixelAt (0, y).getBrightness() < .2f;
+    check (silence, "real silence clears the held sustained spectrum");
+    pump (64, true, .25f);
+    // Drain the final worker snapshot before measuring telemetry expiry.
+    juce::Thread::sleep (40); juce::Timer::callPendingTimersSynchronously();
+    juce::Thread::sleep (4); juce::Timer::callPendingTimersSynchronously();
+    juce::Thread::sleep (340); juce::Timer::callPendingTimersSynchronously();
+    juce::Thread::sleep (4); juce::Timer::callPendingTimersSynchronously();
+    bool stale = true;
+    for (int x = 0; x < 3; ++x)
+        for (int y = 0; y < xuan::meterBins; ++y)
+            stale &= meter->historyImage().getPixelAt (x, y).getBrightness() < .2f;
+    check (stale, "stopped processing does not leave stale sustained spectrum visible");
     holder.setVisible (false); juce::Thread::sleep (20);
     xuan::SpectrumFrame frame {}; uint32_t version = 0; processor.readSpectrum (frame, version);
     const auto before = meter->historyImage().createCopy(); pump (20);

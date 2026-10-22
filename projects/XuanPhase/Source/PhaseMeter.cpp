@@ -32,7 +32,7 @@ juce::Colour XuanPhaseMeter::timingColour (float milliseconds, float energy) noe
 void XuanPhaseMeter::append (const xuan::SpectrumFrame& frame)
 {
     // Moving existing pixels right makes direction unambiguous without
-    // resampling the spectrum or inventing activity between detector updates.
+    // resampling the frequency axis. Short UI stalls use bounded sample holds.
     history.moveImageSection (1, 0, 0, 0, columns-1, xuan::meterBins);
     juce::Image::BitmapData pixels (history, juce::Image::BitmapData::readWrite);
     for (int row = 0; row < xuan::meterBins; ++row)
@@ -48,6 +48,8 @@ void XuanPhaseMeter::timerCallback()
     // Native peer removal need not send a JUCE visibility notification.
     if (! isShowing()) { setActive (false); return; }
     const auto now = juce::Time::getMillisecondCounterHiRes();
+    auto held = spectrum;
+    const auto heldAt = lastInput;
     const auto oldCeiling = spectrum[xuan::meterCeiling];
     if (processor.readSpectrum (spectrum, spectrumVersion))
     {
@@ -56,6 +58,7 @@ void XuanPhaseMeter::timerCallback()
             && std::abs (oldCeiling-spectrum[xuan::meterCeiling]) > 1)
         {
             history.clear (history.getBounds()); transient.fill (0); peak.fill (0); columnsWritten = 0;
+            held.fill (0); // Previous-rate bins no longer share this frequency axis.
         }
     }
     processor.readRotation (rotation, rotationVersion);
@@ -64,8 +67,22 @@ void XuanPhaseMeter::timerCallback()
     const auto advance = std::min (columns, static_cast<int> ((now-lastColumn)/step));
     if (advance > 0)
     {
-        // Missed UI frames are blank, rather than made-up intermediate spectra.
-        for (int i = 1; i < advance; ++i) append ({});
+        // Host UI stalls must not punch holes in sustained spectra. Hold only
+        // the PREVIOUS snapshot (never backdate a newly arrived onset), and only
+        // for 200 ms; real silence and expired telemetry still become dark.
+        const auto firstColumn = now-std::fmod (now-lastColumn, step)-(advance-1)*step;
+        for (int i = 0; i < advance-1; ++i)
+        {
+            const auto age = std::max (0.0, firstColumn+i*step-heldAt);
+            auto frame = age <= 200 ? held : xuan::SpectrumFrame {};
+            // Preserve the detector display's 60 ms decay instead of stretching
+            // an amber onset bar across a missed refresh interval.
+            const auto decay = static_cast<float> (std::exp (-age/60));
+            frame[xuan::meterTransient] *= decay;
+            for (int row = 0; row < xuan::meterBins; ++row)
+                frame[static_cast<size_t> (xuan::meterBins+row)] *= decay;
+            append (frame);
+        }
         append (spectrum); lastColumn = now-std::fmod (now-lastColumn, step); repaint();
     }
 }
