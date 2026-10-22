@@ -27,7 +27,7 @@ Build SHUN DE-ESS, Kuo Stereo, and Zao Drive with CMake using their
 [Zao](../projects/ZaoDrive/README.md)
 instructions. The `build-macos-all.sh` script builds all seven projects as
 VST3 and AU; the individual platform scripts build YinYang Compressor. The Windows
-GitHub workflows provide a manual build of all six plugins and the existing
+GitHub workflows provide a manual build of all seven plugins and the existing
 automatic YinYang Compressor and SHUN DE-ESS builds.
 
 Download the main development branch with Git:
@@ -98,12 +98,12 @@ rescan its plug-ins. The build links the MSVC runtime statically.
 
 ### Build with GitHub Actions
 
-To build **the original six plugins**, open
+To build **all seven plugins, including Xuan Phase**, open
 [All Plugins - Windows VST3](https://github.com/javelinmaxx/Multi-Compressor/actions/workflows/all-plugins-windows.yml)
 in Actions and select **Run workflow** on `master`. This workflow runs only
 when manually requested; pushes and pull requests do not start it. Each plugin
 builds in its own Windows x64 Release job with Visual Studio 2022, tests disabled,
-and the MSVC runtime linked statically. Under **Artifacts**, download the six
+and the MSVC runtime linked statically. Under **Artifacts**, download the seven
 `<project>-Windows-x64-VST3` ZIPs and install the complete `.vst3` folders in
 `C:\Program Files\Common Files\VST3\`. Artifacts are retained for 30 days.
 

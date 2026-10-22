@@ -38,6 +38,9 @@ jobs:
           - project: KuoVelvet
             product: Kuo Velvet
             test_option: VELVET_BUILD_TESTS
+          - project: XuanPhase
+            product: Xuan Phase
+            test_option: XUAN_BUILD_TESTS
     defaults:
       run:
         shell: pwsh
