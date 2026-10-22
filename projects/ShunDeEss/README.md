@@ -14,7 +14,7 @@ The first build provides:
 - Independent detector frequency/bandwidth and attenuation frequency/Q controls,
   plus threshold and maximum reduction (0–18 dB).
 - Attack, release, output, stereo linking, a three-way detector switch, and bypass controls.
-- A timestamped three-second gain-reduction trace and a vertical GR meter.
+- A timestamped three-second gain-reduction trace, a vertical GR meter, and a live stereo input spectrum behind the detector/attenuator curves.
 - VST3 and Standalone targets; AU is also enabled when built on macOS.
 
 The vertical detector switch selects **Absolute** for a fixed input-level threshold,
@@ -40,6 +40,37 @@ settings: [Wideband default](Previews/ResponseExamples/wideband-default.png),
 [Split wide bell](Previews/ResponseExamples/split-wide-bell.png), plus
 [Brilliant spectral](Previews/ResponseExamples/brilliant-spectral.png) and
 [Smooth spectral](Previews/ResponseExamples/smooth-spectral.png).
+
+## Spectrum and detail display
+
+The response plot overlays a live **2–16 kHz input spectrum** in grey behind
+its detector and attenuator curves. Spectrum height uses a separate **−84 to
+0 dBFS** scale; the left-hand 0/−9/−18 dB labels still describe the response
+curves. Stereo channel powers combine after the FFT, so anti-phase channels
+remain visible. The editor performs two 1,024-point Hann-window FFTs at up to
+30 Hz, with fast attack and a 220 ms release; stopped playback fades out.
+Closing or hiding the editor stops sample capture and display FFT work, and
+a full fixed-size display queue drops telemetry without blocking the audio.
+
+In **Brilliant**, gold detail bands marked **DETAIL +** identify the peaks
+being restored after broad attenuation. **Smooth** uses the same selected
+bands, marked **DETAIL −**, for additional suppression. Their centres, widths,
+and strength come from the actual smart attenuator's selected frequencies,
+Attenuator Q, band weights, and effective attenuation amount. Shading is a band
+activity indicator, rather than another dB response curve; it clears in bypass
+and Listen, and fades when processing stops. Wideband and Split-band retain
+the spectrum without smart detail shading.
+
+![Brilliant with live input spectrum and gold detail bands](Previews/ResponseExamples/brilliant-spectrum.png)
+![Smooth with live input spectrum and gold detail bands](Previews/ResponseExamples/smooth-spectrum.png)
+
+[Spectrum display test report](Tests/Reports/spectrum-display.md).
+
+Regenerate the four live previews and run their rendering checks with:
+
+```bash
+build-shun-deess/ShunDeEssTests --spectrum-previews projects/ShunDeEss/Previews/ResponseExamples
+```
 
 ## Build
 

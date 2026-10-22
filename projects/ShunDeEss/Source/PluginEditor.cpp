@@ -566,6 +566,8 @@ ShunDeEssEditor::ShunDeEssEditor (ShunDeEssProcessor& p)
     applyTheme();
     lastTick = juce::Time::getMillisecondCounterHiRes() * 0.001;
     editorScaling::enable (*this, designWidth, designHeight);
+    responseHint.setTooltip ("Shows the stereo input spectrum from minus 84 to 0 dBFS behind the response curves, with active Brilliant restoration or Smooth suppression bands shaded in gold.");
+    addAndMakeVisible (responseHint);
     startTimerHz (30);
 }
 
@@ -599,6 +601,77 @@ void ShunDeEssEditor::paint (juce::Graphics& g)
     paintMeter (g);
     g.restoreState();
     g.restoreState();
+}
+
+void ShunDeEssEditor::updateSpectrum (float elapsed)
+{
+    const auto rate = processor.spectrumSampleRate();
+    if (! juce::exactlyEqual (rate, spectrumRate))
+    {
+        spectrumRate = rate; spectrumPosition = spectrumCount = 0; spectrumLevels.fill (0); responseFrame.fill (0);
+        // Discard any queued samples from the previous sample rate.
+        for (int batch = 0; batch < 8; ++batch)
+            if (processor.readSpectrumSamples (spectrumRead.data(), 1024) == 0) break;
+    }
+    bool received = false;
+    for (int batches = 0; batches < 8; ++batches)
+    {
+        const auto count = processor.readSpectrumSamples (spectrumRead.data(), 1024);
+        if (count == 0) break;
+        received = true;
+        for (int i = 0; i < count; ++i)
+        {
+            spectrumRing[static_cast<size_t> (spectrumPosition)] = spectrumRead[static_cast<size_t> (i)];
+            spectrumPosition = (spectrumPosition+1)%1024;
+            spectrumCount = std::min (1024, spectrumCount+1);
+        }
+    }
+    std::array<float, 64> next {};
+    if (received && spectrumCount == 1024)
+    {
+        static const auto window = []
+        {
+            std::array<float, 1024> result {};
+            for (size_t i = 0; i < result.size(); ++i)
+                result[i] = .5f-.5f*std::cos (2*juce::MathConstants<float>::pi*static_cast<float> (i)/1023);
+            return result;
+        }();
+        for (int ch = 0; ch < 2; ++ch)
+        {
+            displayFftData.fill (0);
+            for (int i = 0; i < 1024; ++i)
+            {
+                const auto& sample = spectrumRing[static_cast<size_t> ((spectrumPosition+i)%1024)];
+                displayFftData[static_cast<size_t> (i)] = (ch == 0 ? sample.left : sample.right)*window[static_cast<size_t> (i)];
+            }
+            displayFft.performFrequencyOnlyForwardTransform (displayFftData.data());
+            if (ch == 0) std::copy_n (displayFftData.begin(), 513, leftMagnitudes.begin());
+        }
+        const auto halfWidth = std::pow (8.f, .5f/63);
+        for (size_t row = 0; row < next.size(); ++row)
+        {
+            const auto hz = 2000.f*std::pow (8.f, static_cast<float> (row)/63);
+            if (hz >= spectrumRate*.5f) continue;
+            const auto first = std::clamp (static_cast<int> (hz/halfWidth*1024/spectrumRate), 1, 512);
+            const auto last = std::clamp (juce::roundToInt (hz*halfWidth*1024/spectrumRate), first, 512);
+            float power = 0;
+            for (int bin = first; bin <= last; ++bin)
+            {
+                const auto left = leftMagnitudes[static_cast<size_t> (bin)], right = displayFftData[static_cast<size_t> (bin)];
+                power = std::max (power, .5f*(left*left+right*right));
+            }
+            next[row] = 2.f/511.5f*std::sqrt (power);
+        }
+    }
+    for (size_t i = 0; i < next.size(); ++i)
+    {
+        const auto time = next[i] > spectrumLevels[i] ? .02f : .22f;
+        const auto blend = std::exp (-std::max (elapsed, .001f)/time);
+        spectrumLevels[i] = next[i]+blend*(spectrumLevels[i]-next[i]);
+    }
+    processor.readResponseFrame (responseFrame, responseVersion);
+    if (std::abs (responseFrame[11]-spectrumRate) > 1) responseFrame.fill (0);
+    if (! received) responseFrame[9] *= std::exp (-elapsed/.12f);
 }
 
 void ShunDeEssEditor::paintResponseDisplay (juce::Graphics& g)
@@ -641,6 +714,51 @@ void ShunDeEssEditor::paintResponseDisplay (juce::Graphics& g)
         const auto label = juce::String (static_cast<int> (frequency / 1000.0f)) + "k";
         g.drawText (label, x - 14.0f, plot.getBottom() + 2.0f, 28.0f, 10.0f,
                     juce::Justification::centred);
+    }
+
+    g.saveState();
+    g.reduceClipRegion (plot.toNearestInt());
+    juce::Path inputSpectrum;
+    inputSpectrum.startNewSubPath (plot.getX(), plot.getBottom());
+    for (size_t bin = 0; bin < spectrumLevels.size(); ++bin)
+    {
+        const auto db = juce::Decibels::gainToDecibels (spectrumLevels[bin], -84.f);
+        const auto y = plot.getBottom()-plot.getHeight()*std::clamp ((db+84)/84, 0.f, 1.f);
+        inputSpectrum.lineTo (plot.getX()+plot.getWidth()*static_cast<float> (bin)/63, y);
+    }
+    inputSpectrum.lineTo (plot.getRight(), plot.getBottom()); inputSpectrum.closeSubPath();
+    g.setColour (theme.secondary.withAlpha (.16f)); g.fillPath (inputSpectrum);
+    g.setColour (theme.text.withAlpha (.38f)); g.strokePath (inputSpectrum, juce::PathStrokeType (.8f));
+    const auto mode = juce::roundToInt (algorithm.getValue());
+    const auto showDetail = mode >= 2 && juce::roundToInt (responseFrame[10]) == mode && responseFrame[9] > .001f;
+    const juce::Colour detailGold (0xffdfb45e);
+    if (showDetail)
+        for (size_t band = 0; band < 4; ++band)
+        {
+            const auto centre = responseFrame[band];
+            const auto strength = std::clamp (responseFrame[band+4]/.28f*responseFrame[9], 0.f, 1.f);
+            if (centre < 2000 || centre >= responseFrame[11]*.5f || strength <= .001f) continue;
+            juce::Path detail;
+            detail.startNewSubPath (plot.getX(), plot.getBottom());
+            for (int point = 0; point <= 160; ++point)
+            {
+                const auto ratio = 2000.f*std::pow (8.f, point/160.f)/centre;
+                const auto q = std::clamp (responseFrame[8], .5f, 4.f);
+                const auto shape = 1.f/std::sqrt (1+std::pow (q*(ratio-1.f/ratio), 2.f));
+                detail.lineTo (plot.getX()+plot.getWidth()*point/160,
+                               plot.getBottom()-plot.getHeight()*.85f*shape*std::sqrt (strength));
+            }
+            detail.lineTo (plot.getRight(), plot.getBottom()); detail.closeSubPath();
+            g.setColour (detailGold.withAlpha (.12f+.24f*std::sqrt (strength))); g.fillPath (detail);
+            g.setColour (detailGold.withAlpha (.55f)); g.strokePath (detail, juce::PathStrokeType (.8f));
+        }
+    g.restoreState();
+    g.setFont (juce::FontOptions (7.f)); g.setColour (theme.secondary);
+    g.drawText ("INPUT  -84..0 dBFS", 42, 392, 150, 11, juce::Justification::centredLeft);
+    if (mode >= 2)
+    {
+        g.setColour (detailGold);
+        g.drawText (mode == 2 ? "DETAIL +" : "DETAIL -", 210, 392, 98, 11, juce::Justification::centredRight);
     }
 
     juce::Path detectorCurve, attenuationCurve;
@@ -691,7 +809,6 @@ void ShunDeEssEditor::paintResponseDisplay (juce::Graphics& g)
     g.setColour (theme.secondary);
     g.drawText ("DETECTOR", 38, 480, 72, 12, juce::Justification::centredLeft);
     g.setColour (theme.meter);
-    const auto mode = juce::roundToInt (algorithm.getValue());
     const auto modeCaption = mode == 3 ? "ATTENUATOR / SMOOTH"
                             : mode == 2 ? "ATTENUATOR / BRILLIANT"
                             : splitBand ? "ATTENUATOR / SPLIT" : "ATTENUATOR / WIDE";
@@ -798,6 +915,8 @@ void ShunDeEssEditor::resized()
     algorithm.setBounds (205, up (702) + 19, 112, 65);
 
     const auto scale = editorScaling::transform (*this, designWidth, designHeight);
+    responseHint.setBounds (24, 340, 300, 105);
+    responseHint.setTransform (scale);
     bypass.setTransform (scale);
     detectorMode.setTransform (scale);
     algorithm.setTransform (scale);
@@ -812,6 +931,9 @@ void ShunDeEssEditor::timerCallback()
     const auto elapsed = static_cast<float> (std::max (0.0, now - lastTick));
     lastTick = now;
     bypass.advance (elapsed);
+    processor.setSpectrumVisible (isShowing());
+    if (isShowing()) updateSpectrum (elapsed);
+    repaint (editorScaling::repaintArea (*this, designWidth, designHeight, {24, 340, 300, 105}));
     const auto spectral = processor.parameters.getRawParameterValue ("smart")->load() >= 0.5f;
     const auto split = processor.parameters.getRawParameterValue ("mode")->load() >= 0.5f;
     const auto detector = processor.parameters.getRawParameterValue ("relative")->load() >= 0.5f ? 2

@@ -55,6 +55,8 @@ ShunDeEssProcessor::ShunDeEssProcessor()
 void ShunDeEssProcessor::prepareToPlay (double rate, int)
 {
     sampleRate = std::isfinite (rate) && rate >= 8000 ? static_cast<float> (rate) : 44100.0f;
+    displaySampleRate.store (sampleRate, std::memory_order_relaxed);
+    sparkleFrequencies = {};
     detectorState = {};
     shelfState = {};
     bellState = {};
@@ -142,6 +144,7 @@ void ShunDeEssProcessor::analyseSpectralDetail (float detectorFrequency, float d
         if (bestBin == 0 || best < meanLevel * 0.45f) break;
         chosenBins[static_cast<size_t> (pick)] = bestBin;
         const auto hz = static_cast<float> (bestBin) * sampleRate / fftSize;
+        sparkleFrequencies[static_cast<size_t> (pick)] = hz;
         const auto omega = 2.0f * pi * hz / sampleRate;
         const auto alpha = std::sin (omega) / (2.0f * std::clamp (attenuationQ, 0.5f, 4.0f));
         auto& f = sparkleFilters[static_cast<size_t> (pick)];
@@ -253,6 +256,25 @@ juce::AudioProcessorParameter* ShunDeEssProcessor::getBypassParameter() const
     return parameters.getParameter ("bypass");
 }
 
+int ShunDeEssProcessor::readSpectrumSamples (SpectrumSample* destination, int maximum) noexcept
+{
+    int first = 0, n1 = 0, second = 0, n2 = 0;
+    spectrumFifo.prepareToRead (maximum, first, n1, second, n2);
+    std::copy_n (spectrumSamples.data()+first, n1, destination);
+    std::copy_n (spectrumSamples.data()+second, n2, destination+n1);
+    spectrumFifo.finishedRead (n1+n2);
+    return n1+n2;
+}
+bool ShunDeEssProcessor::readResponseFrame (ResponseFrame& frame, uint32_t& version) const noexcept
+{
+    const auto before = responseVersion.load();
+    if (before == version || (before&1u)) return false;
+    ResponseFrame next {};
+    for (size_t i = 0; i < next.size(); ++i) next[i] = responseData[i].load();
+    if (responseVersion.load() != before) return false;
+    frame = next; version = before; return true;
+}
+
 void ShunDeEssProcessor::process (juce::AudioBuffer<float>& buffer, bool hostBypassed)
 {
     juce::ScopedNoDenormals noDenormals;
@@ -261,6 +283,25 @@ void ShunDeEssProcessor::process (juce::AudioBuffer<float>& buffer, bool hostByp
         buffer.clear (ch, 0, buffer.getNumSamples());
     if (channels == 0 || buffer.getNumSamples() == 0)
         return;
+
+    const auto display = spectrumVisible.load (std::memory_order_relaxed);
+    if (display)
+    {
+        int first = 0, n1 = 0, second = 0, n2 = 0;
+        spectrumFifo.prepareToWrite (buffer.getNumSamples(), first, n1, second, n2);
+        const auto copy = [&] (int start, int count, int source)
+        {
+            for (int i = 0; i < count; ++i)
+            {
+                const auto left = buffer.getSample (0, source+i);
+                const auto right = buffer.getSample (channels-1, source+i);
+                spectrumSamples[static_cast<size_t> (start+i)] = {
+                    std::isfinite (left) ? left : 0.f, std::isfinite (right) ? right : 0.f };
+            }
+        };
+        copy (first, n1, 0); copy (second, n2, n1);
+        spectrumFifo.finishedWrite (n1+n2);
+    }
 
     const auto value = [&] (size_t index) { return raw[index]->load (std::memory_order_relaxed); };
     const auto splitBand = value (0) >= 0.5f;
@@ -287,7 +328,7 @@ void ShunDeEssProcessor::process (juce::AudioBuffer<float>& buffer, bool hostByp
         updateFilterCoefficients (detectorFrequency, detectorQ, attenuationFrequency, attenuationQ, depth);
     const auto attack = std::exp (-1.0f / (0.001f * attackMs * sampleRate));
     const auto release = std::exp (-1.0f / (0.001f * releaseMs * sampleRate));
-    float blockReduction = 0;
+    float blockReduction = 0, displaySpectralAmount = 0;
 
     for (int i = 0; i < buffer.getNumSamples(); ++i)
     {
@@ -347,6 +388,7 @@ void ShunDeEssProcessor::process (juce::AudioBuffer<float>& buffer, bool hostByp
                 // Both spectral modes use the same broad cut. Brilliant restores
                 // selected detail; Smooth reverses that term to suppress peaks.
                 const auto spectralAmount = amount * spectralAttenuation;
+                displaySpectralAmount = std::max (displaySpectralAmount, spectralAmount);
                 wet = dry[c] + spectralAmount * (shelfOutput - dry[c]);
                 for (size_t peak = 0; peak < sparkleWeights.size(); ++peak)
                     wet += filterSample (dry[c], sparkleStates[c][peak], sparkleFilters[peak])
@@ -357,6 +399,21 @@ void ShunDeEssProcessor::process (juce::AudioBuffer<float>& buffer, bool hostByp
         analysisPosition = (analysisPosition + 1) % 1024;
     }
     reduction.store (bypass ? 0.0f : blockReduction, std::memory_order_relaxed);
+    if (display)
+    {
+        ResponseFrame frame {};
+        for (size_t band = 0; band < 4; ++band)
+        {
+            frame[band] = sparkleFrequencies[band]; frame[band+4] = sparkleWeights[band];
+        }
+        frame[8] = attenuationQ;
+        frame[9] = bypass || listen ? 0.f : displaySpectralAmount;
+        frame[10] = spectralMode ? (smoothMode ? 3.f : 2.f) : 0.f;
+        frame[11] = sampleRate;
+        responseVersion.fetch_add (1);
+        for (size_t i = 0; i < frame.size(); ++i) responseData[i].store (frame[i]);
+        responseVersion.fetch_add (1);
+    }
 }
 
 void ShunDeEssProcessor::getStateInformation (juce::MemoryBlock& data)

@@ -73,7 +73,7 @@ class ShunDeEssEditor final : public juce::AudioProcessorEditor, private juce::T
 {
 public:
     explicit ShunDeEssEditor (ShunDeEssProcessor&);
-    ~ShunDeEssEditor() override { stopTimer(); setLookAndFeel (nullptr); }
+    ~ShunDeEssEditor() override { stopTimer(); processor.setSpectrumVisible (false); setLookAndFeel (nullptr); }
     void paint (juce::Graphics&) override;
     void resized() override;
 private:
@@ -82,6 +82,17 @@ private:
     void paintMeter (juce::Graphics&);
     void paintResponseDisplay (juce::Graphics&);
     void applyTheme();
+    void updateSpectrum (float elapsed);
+    juce::dsp::FFT displayFft { 10 };
+    std::array<ShunDeEssProcessor::SpectrumSample, 1024> spectrumRing {}, spectrumRead {};
+    std::array<float, 2048> displayFftData {};
+    std::array<float, 513> leftMagnitudes {};
+    std::array<float, 64> spectrumLevels {};
+    ShunDeEssProcessor::ResponseFrame responseFrame {};
+    uint32_t responseVersion = 0;
+    int spectrumPosition = 0, spectrumCount = 0;
+    float spectrumRate = 0;
+    juce::Label responseHint;
     ShunDeEssProcessor& processor;
     CompressorLookAndFeel look;
     juce::TooltipWindow tooltipWindow { this };

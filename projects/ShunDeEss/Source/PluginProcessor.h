@@ -31,6 +31,15 @@ public:
 
     juce::AudioProcessorValueTreeState parameters;
     std::atomic<float> reduction { 0.0f };
+    struct SpectrumSample { float left = 0, right = 0; };
+    // Single audio producer / editor consumer; a full queue drops display data.
+    void setSpectrumVisible (bool visible) noexcept { spectrumVisible.store (visible, std::memory_order_relaxed); }
+    int readSpectrumSamples (SpectrumSample*, int maximum) noexcept;
+    float spectrumSampleRate() const noexcept { return displaySampleRate.load (std::memory_order_relaxed); }
+    // Four selected centre frequencies, four DSP weights, Q, effective amount,
+    // spectral mode (0/2/3), and sample rate. Published together, without locks.
+    using ResponseFrame = std::array<float, 12>;
+    bool readResponseFrame (ResponseFrame&, uint32_t&) const noexcept;
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
@@ -54,6 +63,14 @@ private:
     std::array<BiquadCoefficients, 4> sparkleFilters {};
     std::array<float, 4> sparkleWeights {};
     int analysisPosition = 0, hopCounter = 0;
+    std::array<float, 4> sparkleFrequencies {};
+    static constexpr int spectrumCapacity = 8192;
+    juce::AbstractFifo spectrumFifo { spectrumCapacity };
+    std::array<SpectrumSample, spectrumCapacity> spectrumSamples {};
+    std::atomic<bool> spectrumVisible { false };
+    std::atomic<float> displaySampleRate { 44100 };
+    std::array<std::atomic<float>, 12> responseData {};
+    std::atomic<uint32_t> responseVersion { 0 };
     float spectralFlatness = 0, spectralAttenuation = 0;
     bool spectralMode = false;
     float sampleRate = 44100;

@@ -43,13 +43,14 @@ quieter material toward it.
 
 ### SHUN DE-ESS
 
-![SHUN DE-ESS with Relative detection, separate detector and attenuator controls, a response plot, and gain-reduction meter](projects/ShunDeEss/Previews/shun-relative.png)
+![SHUN DE-ESS in Brilliant mode with live input spectrum, gold detail bands, and gain-reduction meter](projects/ShunDeEss/Previews/ResponseExamples/brilliant-spectrum.png)
 
 Control sibilance with separate tuning for what the plugin detects and what it
-attenuates. The response plot shows both curves beside the gain-reduction display.
+attenuates. The response plot shows both curves over a live input spectrum beside the gain-reduction display.
 
 - **Wideband** reduces the full signal; **Split-band** concentrates attenuation
   around the selected band.
+- Gold bands show the smart attenuator’s active detail processing in Brilliant and Smooth.
 - **Brilliant** restores detected spectral detail after smart attenuation;
   **Smooth** reverses that restoration to suppress peaks further.
 - Select **Absolute** detection for a fixed threshold, **Listen** to audition

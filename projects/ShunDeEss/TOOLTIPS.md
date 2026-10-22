@@ -17,3 +17,4 @@
 | Release | Sets how quickly attenuation fades after sibilance ends. |
 | Output | Adjusts the final output level. |
 | Stereo link | Links left and right detection to keep stereo de-essing balanced. |
+| Spectrum / response display | Shows the stereo input spectrum from minus 84 to 0 dBFS behind the response curves, with active Brilliant restoration or Smooth suppression bands shaded in gold. |

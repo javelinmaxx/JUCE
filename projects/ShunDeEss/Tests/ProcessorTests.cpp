@@ -61,6 +61,132 @@ void renderSine (ShunDeEssProcessor& processor, juce::AudioBuffer<float>& buffer
     processor.processBlock (buffer, midi);
 }
 
+void spectrumTests()
+{
+    for (int mode = 0; mode < 4; ++mode)
+    {
+        ShunDeEssProcessor visible, hidden;
+        for (auto* processor : {&visible, &hidden})
+        {
+            set (*processor, "mode", static_cast<float> (mode%2));
+            set (*processor, "smart", mode >= 2 ? 1.f : 0.f);
+            set (*processor, "threshold", -45); set (*processor, "attenuationQ", 2.8f);
+            processor->prepareToPlay (48000, 256);
+        }
+        std::array<ShunDeEssProcessor::SpectrumSample, 1024> samples {};
+        check (visible.readSpectrumSamples (samples.data(), 1024) == 0, "closed-editor spectrum queue starts empty");
+        visible.setSpectrumVisible (true);
+        juce::AudioBuffer<float> a (2, 256), b (2, 256); juce::MidiBuffer midi;
+        std::mt19937 random (72); std::uniform_real_distribution<float> noise (-.06f, .06f);
+        float error = 0, antiPhaseError = 0; bool selected = false, captured = false;
+        uint32_t version = 0; ShunDeEssProcessor::ResponseFrame frame {};
+        for (int block = 0; block < 96; ++block)
+        {
+            for (int i = 0; i < 256; ++i)
+            {
+                const auto t = (block*256+i)/48000.;
+                const auto x = noise (random)+(block%32 < 12 ? .25f*static_cast<float> (std::sin (2*3.141592653589793*6500*t)) : 0);
+                a.setSample (0, i, x); a.setSample (1, i, -x);
+            }
+            b.makeCopyOf (a); visible.processBlock (a, midi); hidden.processBlock (b, midi);
+            for (int ch = 0; ch < 2; ++ch)
+                for (int i = 0; i < 256; ++i) error = std::max (error, std::abs (a.getSample (ch,i)-b.getSample (ch,i)));
+            if (visible.readResponseFrame (frame, version))
+                for (size_t band = 0; band < 4; ++band)
+                    selected |= std::abs (frame[band]-6500) < 70 && frame[band+4] > .01f && frame[9] > .001f;
+            // Intentionally overfill the display queue: rendering must never
+            // back-pressure the audio callback or alter its samples.
+            if (block%48 == 47)
+                while (const auto count = visible.readSpectrumSamples (samples.data(), 1024))
+                    for (int i = 0; i < count; ++i)
+                    {
+                        captured |= std::abs (samples[static_cast<size_t> (i)].left) > .01f;
+                        antiPhaseError = std::max (antiPhaseError, std::abs (samples[static_cast<size_t> (i)].left+samples[static_cast<size_t> (i)].right));
+                    }
+        }
+        check (antiPhaseError < 1e-7f, "spectrum transfer preserves both anti-phase channels for power analysis");
+        check (error < 1e-7f, "visible spectrum and full display queue leave de-essing samples unchanged in every mode");
+        check (captured && hidden.readSpectrumSamples (samples.data(), 1024) == 0,
+               "only an enabled display captures input samples");
+        check (mode < 2 || selected, "gold detail telemetry identifies the actual selected 6.5 kHz DSP band");
+        set (visible, "bypass", 1); visible.processBlock (a, midi); visible.readResponseFrame (frame, version);
+        check (frame[9] < 1e-7f, "bypass clears the displayed smart detail effect");
+    }
+}
+
+void generateSpectrumPreviews (const juce::File& directory)
+{
+    directory.createDirectory();
+    const std::array<const char*, 4> names {"wideband-spectrum.png", "split-spectrum.png", "brilliant-spectrum.png", "smooth-spectrum.png"};
+    for (int mode = 0; mode < 4; ++mode)
+    {
+        ShunDeEssProcessor processor;
+        set (processor, "mode", static_cast<float> (mode%2)); set (processor, "smart", mode >= 2 ? 1.f : 0.f);
+        set (processor, "threshold", -45); set (processor, "attenuationQ", 2.8f);
+        processor.prepareToPlay (48000, 256);
+        std::unique_ptr<juce::AudioProcessorEditor> editor (processor.createEditor());
+        editor->addToDesktop (0); editor->setVisible (true);
+        const auto tick = []
+        {
+            for (int i = 0; i < 4; ++i) { juce::Thread::sleep (15); juce::Timer::callPendingTimersSynchronously(); }
+        };
+        tick(); const auto empty = editor->createComponentSnapshot (editor->getLocalBounds());
+        juce::AudioBuffer<float> audio (2, 256); juce::MidiBuffer midi;
+        std::mt19937 random (72); std::uniform_real_distribution<float> noise (-.06f, .06f);
+        bool selected = false; uint32_t version = 0; ShunDeEssProcessor::ResponseFrame frame {};
+        for (int block = 0; block < 96; ++block)
+        {
+            for (int i = 0; i < 256; ++i)
+            {
+                const auto t = (block*256+i)/48000.;
+                const auto x = noise (random)+(block%32 < 16 ? static_cast<float> (.25*std::sin (2*3.141592653589793*6500*t)
+                    +.12*std::sin (2*3.141592653589793*10000*t)) : 0.f);
+                audio.setSample (0, i, x); audio.setSample (1, i, -x);
+            }
+            processor.processBlock (audio, midi); juce::Thread::sleep (3); juce::Timer::callPendingTimersSynchronously();
+            if (processor.readResponseFrame (frame, version))
+                for (size_t band = 0; band < 4; ++band) selected |= frame[band+4] > .01f && frame[9] > .001f;
+            if (block >= 5 && (mode < 2 || (frame[4] > .01f && frame[9] > .001f))) break;
+        }
+        tick(); const auto image = editor->createComponentSnapshot (editor->getLocalBounds());
+        int changed = 0;
+        for (int x = 42; x < 308; ++x)
+            for (int y = 357; y < 414; ++y) changed += image.getPixelAt (x,y) != empty.getPixelAt (x,y) ? 1 : 0;
+        check (changed > 300, "live anti-phase stereo spectrum renders behind the response curves in all four modes");
+        check (mode < 2 || selected, "Brilliant and Smooth previews use active DSP-selected detail bands");
+        juce::MemoryOutputStream png;
+        check (juce::PNGImageFormat().writeImageToStream (image, png)
+            && directory.getChildFile (names[static_cast<size_t> (mode)]).replaceWithData (png.getData(), png.getDataSize()),
+            "live spectrum preview writes");
+        if (mode >= 2)
+        {
+            const auto goldPixels = [] (const juce::Image& rendered)
+            {
+                int count = 0;
+                for (int x = 42; x < 308; ++x)
+                    for (int y = 357; y < 414; ++y)
+                    {
+                        const auto colour = rendered.getPixelAt (x,y);
+                        count += colour.getRed() > 50 && colour.getGreen()-colour.getBlue() > 15
+                            && colour.getRed()-colour.getGreen() < 50 ? 1 : 0;
+                    }
+                return count;
+            };
+            set (processor, "bypass", 1); processor.processBlock (audio, midi); tick();
+            const auto bypassed = editor->createComponentSnapshot (editor->getLocalBounds());
+            check (goldPixels (image) > goldPixels (bypassed)+200,
+                   "gold shading follows actual active detail processing and disappears in bypass");
+        }
+        // Stopped playback must fade the spectrum rather than freeze it.
+        for (int wait = 0; wait < 14; ++wait) tick();
+        const auto stopped = editor->createComponentSnapshot (editor->getLocalBounds());
+        int faded = 0;
+        for (int x = 42; x < 308; ++x)
+            for (int y = 357; y < 414; ++y) faded += stopped.getPixelAt (x,y) != image.getPixelAt (x,y) ? 1 : 0;
+        check (faded > 300, "spectrum and detail rendering decay after playback stops in every mode");
+    }
+}
+
 void generateResponsePreviews (const juce::File& directory)
 {
     struct Example
@@ -607,6 +733,12 @@ int main (int argc, char** argv)
             std::cout << "SHUN DE-ESS detector/attenuator report generated: " << argv[2] << '\n';
             return 0;
         }
+        if (argc > 2 && juce::String (argv[1]) == "--spectrum-previews")
+        {
+            spectrumTests(); generateSpectrumPreviews (juce::File (argv[2]));
+            std::cout << checks << " spectrum checks passed\n"; return 0;
+        }
+        spectrumTests();
         ShunDeEssProcessor processor;
         check (processor.getParameters().size() == 15, "all de-esser parameters are registered");
         check (processor.getName() == "SHUN DE-ESS", "plug-in identity is SHUN DE-ESS");
@@ -806,7 +938,7 @@ int main (int argc, char** argv)
                         if (auto* readout = dynamic_cast<juce::Label*> (nested))
                             check (readout->getTooltip() == hint, "Shun readout shares its control hint");
             }
-            check (tooltipWindows == 1 && hintedControls == 24,
+            check (tooltipWindows == 1 && hintedControls == 25,
                    "Shun has one tooltip window and hints for every control and caption");
             juce::Slider* modeKnob = nullptr;
             juce::Slider* detectorSwitch = nullptr;
