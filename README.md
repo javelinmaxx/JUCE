@@ -133,6 +133,8 @@ adjustable crossover and a fixed **25 ms** reference delay. **Auto** detects
 clear transients and uses their spectrogram phase and phase slopes to align
 narrow frequency bands; **Auto Depth** scales that correction independently of
 the manual settings. Shared stereo processing preserves channel relationships.
+The side spectrogram moves left to right, colouring early bands green and late
+bands red, with a separate white trace for the phase rotation actually applied.
 
 [Controls and signal path](projects/XuanPhase/README.md) ·
 [Phase and transient measurements](projects/XuanPhase/Tests/Reports/REPORT.md)

@@ -77,6 +77,29 @@ void dspTests (const juce::File& directory)
            "independent low and high controls produce their specified angles at low and high frequency anchors");
     check (std::abs (std::arg (response (anchored, 1000, 48000))*180/juce::MathConstants<double>::pi-22.5) < 1,
            "the manual crossover smoothly averages the two requested phase angles");
+    xuan::PhaseEngine metered; metered.prepare (48000, [anchors] { return anchors; }, false);
+    xuan::RotationFrame measured {}; uint32_t measuredVersion = 0;
+    check (metered.readRotation (measured, measuredVersion), "applied-phase meter has an initial measured response");
+    double meterError = 0;
+    for (int row = 0; row < xuan::meterBins; ++row)
+    {
+        const auto actual = Complex (measured[static_cast<size_t> (row)], measured[static_cast<size_t> (xuan::meterBins+row)]);
+        meterError = std::max (meterError, std::abs (actual-response (anchored, xuan::PhaseEngine::meterFrequency (row, 48000), 48000)));
+    }
+    check (meterError < 1e-5, "meter reports measured FIR phase and magnitude rather than requested knob angles");
+    XuanPhaseProcessor applied; applied.prepareToPlay (48000, 128); applied.setMeterVisible (true);
+    xuan::RotationFrame rotation {}; uint32_t rotationVersion = 0; applied.readRotation (rotation, rotationVersion);
+    set (applied, "low", 90); juce::Thread::sleep (60);
+    check (! applied.readRotation (rotation, rotationVersion), "a queued response does not appear as applied phase before audio picks it up");
+    juce::AudioBuffer<float> silent (2, 128); juce::MidiBuffer emptyMidi;
+    for (int block = 0; block < 8; ++block) { silent.clear(); applied.processBlock (silent, emptyMidi); }
+    check (applied.readRotation (rotation, rotationVersion)
+           && std::abs (std::atan2 (rotation[xuan::meterBins], rotation[0])*180/juce::MathConstants<double>::pi-90) < 1,
+           "audio handoff and fade update the applied-phase display");
+    silent.clear(); applied.processBlockBypassed (silent, emptyMidi);
+    check (applied.readRotation (rotation, rotationVersion) && rotation[2*xuan::meterBins] > .999f
+           && std::abs (rotation[xuan::meterBins]) < 1e-6 && std::abs (rotation[0]-1) < 1e-6,
+           "host bypass displays zero applied rotation");
     // Staggered narrow-band wave packets simulate a dispersed percussive hit.
     std::vector<float> hit (2048);
     for (int i = 0; i < 2048; ++i)
@@ -156,10 +179,12 @@ void dspTests (const juce::File& directory)
 }
 void editor (const juce::File& path)
 {
-    XuanPhaseProcessor p; std::unique_ptr<juce::AudioProcessorEditor> e (p.createEditor()); e->setVisible (true);
-    check (e->getWidth() == 548 && e->getHeight() == 490, "Xuan uses its intended scalable editor size");
+    XuanPhaseProcessor p; std::unique_ptr<juce::AudioProcessorEditor> e (p.createEditor()); e->addToDesktop (0); e->setVisible (true);
+    check (e->getWidth() == 840 && e->getHeight() == 490, "Xuan includes its vertical side meter at the intended scalable size");
+    XuanPhaseMeter* meter = nullptr;
     for (auto* child : e->getChildren())
     {
+        if (auto* field = dynamic_cast<XuanPhaseMeter*> (child)) meter = field;
         if (dynamic_cast<juce::Slider*> (child) || dynamic_cast<juce::Button*> (child) || dynamic_cast<juce::Label*> (child))
         {
             auto* hint = dynamic_cast<juce::TooltipClient*> (child);
@@ -183,12 +208,77 @@ void editor (const juce::File& path)
         }
     }
     set (p, "low", 0);
+    check (meter != nullptr && meter->getX() >= 524 && meter->getHeight() > meter->getWidth(), "vertical phase meter sits beside the original controls");
+    check (meter->getTooltip().isNotEmpty(), "phase meter has a hover hint explaining colours and scroll direction");
+    const auto green = XuanPhaseMeter::timingColour (-1, 1), red = XuanPhaseMeter::timingColour (1, 1);
+    check (green.getGreen() > green.getRed() && red.getRed() > red.getGreen(), "early bands use green and late bands use red");
+    p.prepareToPlay (48000, 128); p.setMeterVisible (true);
+    set (p, "automatic", 1); set (p, "depth", 80); set (p, "low", 25); set (p, "high", -20);
+    juce::AudioBuffer<float> audio (2, 128); juce::MidiBuffer midi;
+    bool earlySeen = false, lateSeen = false, onsetSeen = false, movedRight = false;
+    xuan::SpectrumFrame source {}; uint32_t sourceVersion = 0;
+    std::array<juce::Colour, xuan::meterBins> previousColumn {};
+    int previousColumns = 0;
+    for (int at = 0; at < 144000; at += 128)
+    {
+        for (int i = 0; i < 128; ++i)
+        {
+            const auto t = (at+i)%12000; double x = 0;
+            for (int band = 0; band < 4; ++band)
+            {
+                const auto centre = 1050+55*band;
+                const auto hz = std::array<double, 4> {281.25, 843.75, 2437.5, 6750}[static_cast<size_t> (band)];
+                x += .3*std::exp (-.5*std::pow ((t-centre)/70., 2))*std::cos (2*juce::MathConstants<double>::pi*hz*(t-centre)/48000);
+            }
+            audio.setSample (0, i, static_cast<float> (x)); audio.setSample (1, i, static_cast<float> (x*.5));
+        }
+        p.processBlock (audio, midi); juce::Thread::sleep (3); juce::Timer::callPendingTimersSynchronously();
+        if (p.readSpectrum (source, sourceVersion))
+        {
+            onsetSeen |= source[xuan::meterTransient] > .1f;
+            for (int row = 0; row < xuan::meterBins; ++row)
+            { earlySeen |= source[static_cast<size_t> (xuan::meterBins+row)] < -.02f; lateSeen |= source[static_cast<size_t> (xuan::meterBins+row)] > .02f; }
+        }
+        const auto written = meter->historySize();
+        if (written == previousColumns+1 && previousColumns > 0)
+        {
+            bool same = true, activity = false;
+            for (int row = 0; row < xuan::meterBins; ++row)
+            {
+                same &= meter->historyImage().getPixelAt (1, row) == previousColumn[static_cast<size_t> (row)];
+                activity |= previousColumn[static_cast<size_t> (row)].getBrightness() > .2f;
+            }
+            movedRight |= same && activity;
+        }
+        previousColumns = written;
+        for (int row = 0; row < xuan::meterBins; ++row) previousColumn[static_cast<size_t> (row)] = meter->historyImage().getPixelAt (0, row);
+    }
+    check (onsetSeen && earlySeen && lateSeen, "live transient spectra contain both early and lagging timing indications");
+    check (meter->historySize() > 30 && movedRight, "new spectra enter on the left and existing columns move right");
     auto image = e->createComponentSnapshot (e->getLocalBounds()); juce::MemoryOutputStream png;
     path.getParentDirectory().createDirectory();
     check (juce::PNGImageFormat().writeImageToStream (image, png) && path.replaceWithData (png.getData(), png.getDataSize()), "native phase editor preview is saved");
+    set (p, "automatic", 0); bool manualSpectrum = false;
+    for (int at = 0; at < 12032; at += 128)
+    {
+        for (int i = 0; i < 128; ++i)
+        {
+            const auto t = at+i-4000;
+            const auto x = static_cast<float> (.5*std::exp (-.5*std::pow (t/100., 2))*std::cos (2*juce::MathConstants<double>::pi*900*t/48000));
+            audio.setSample (0, i, x); audio.setSample (1, i, x);
+        }
+        p.processBlock (audio, midi); juce::Thread::sleep (3);
+        if (p.readSpectrum (source, sourceVersion)) manualSpectrum |= source[xuan::meterTransient] > .1f;
+    }
+    check (! p.settings().automatic && manualSpectrum, "input transient meter remains live in manual mode");
+    e->setVisible (false); juce::Thread::sleep (15); p.readSpectrum (source, sourceVersion);
+    for (int i = 0; i < 32; ++i) { audio.clear(); p.processBlock (audio, midi); juce::Thread::sleep (2); }
+    check (! p.readSpectrum (source, sourceVersion), "hidden manual-mode editor stops display-only FFT publication");
+    e->setVisible (true);
     for (float scale : {.5f, 1.2f})
     {
-        e->setSize (juce::roundToInt (548*scale), juce::roundToInt (490*scale));
+        e->setSize (juce::roundToInt (840*scale), juce::roundToInt (490*scale));
+        check (e->getLocalBounds().contains (e->getLocalArea (meter, meter->getLocalBounds())), "side meter remains visible at both resize limits");
         for (auto* c : e->getChildren())
             if (dynamic_cast<juce::Slider*> (c) || dynamic_cast<juce::Button*> (c))
                 check (e->getLocalBounds().contains (e->getLocalArea (c, c->getLocalBounds())), "phase controls fit at both resize limits");

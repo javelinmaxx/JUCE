@@ -1,6 +1,7 @@
 #pragma once
 #include "PluginProcessor.h"
 #include "../../StagePluginStyle.h"
+#include "PhaseMeter.h"
 class XuanPhaseEditor final : public juce::AudioProcessorEditor, private juce::Timer
 {
 public:
@@ -8,10 +9,11 @@ public:
     ~XuanPhaseEditor() override { stopTimer(); setLookAndFeel (nullptr); }
     void paint (juce::Graphics&) override;
     void resized() override;
+    void visibilityChanged() override;
 private:
     void timerCallback() override { repaint(); }
     XuanPhaseProcessor& processor;
-    static constexpr int designWidth = 548, designHeight = 490;
+    static constexpr int designWidth = 840, designHeight = 490;
     StageLookAndFeel look;
     juce::TooltipWindow tooltipWindow { this };
     StageBypassButton bypass, automatic;
@@ -20,4 +22,5 @@ private:
     using State = juce::AudioProcessorValueTreeState;
     std::array<std::unique_ptr<State::SliderAttachment>, 5> attachments;
     std::unique_ptr<State::ButtonAttachment> bypassAttachment, autoAttachment;
+    XuanPhaseMeter meter;
 };

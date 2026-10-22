@@ -22,6 +22,34 @@ struct Analysis
     int count = 0;
     float flux = 0, crest = 0;
 };
+inline constexpr int meterBins = 64;
+inline constexpr int meterTransient = 2*meterBins, meterPeak = meterTransient+1, meterCeiling = meterTransient+2;
+using SpectrumFrame = std::array<float, 2*meterBins+3>; // energy, input timing ms, transient, peak, ceiling Hz
+using RotationFrame = std::array<float, 2*meterBins+1>; // actual response real/imag, bypass
+template <size_t N> class MeterExchange
+{
+    static_assert (std::atomic<float>::is_always_lock_free && std::atomic<uint32_t>::is_always_lock_free);
+public:
+    void reset() noexcept { std::array<float, N> empty {}; publish (empty); }
+    void publish (const std::array<float, N>& frame) noexcept
+    {
+        version.fetch_add (1);
+        for (size_t i = 0; i < N; ++i) data[i].store (frame[i]);
+        version.fetch_add (1);
+    }
+    bool read (std::array<float, N>& frame, uint32_t& last) const noexcept
+    {
+        const auto before = version.load();
+        if (before == 0 || (before&1u) || before == last) return false;
+        std::array<float, N> copy;
+        for (size_t i = 0; i < N; ++i) copy[i] = data[i].load();
+        if (before != version.load()) return false;
+        frame = copy; last = before; return true;
+    }
+private:
+    std::array<std::atomic<float>, N> data {};
+    std::atomic<uint32_t> version { 0 };
+};
 // The worker designs a bounded, real FIR around a 25 ms reference. The audio
 // path uses a direct head plus partitioned FFT tail, with no extra block delay.
 class PhaseEngine final : private juce::Thread
@@ -35,8 +63,12 @@ public:
     void process (juce::AudioBuffer<float>&, const Settings&, bool hostBypass = false);
     int latency() const noexcept { return delay; }
     int targetCount() const noexcept { return displayedTargets.load (std::memory_order_relaxed); }
+    void setMeterVisible (bool visible) noexcept { meterVisible.store (visible); }
+    bool readSpectrum (SpectrumFrame& f, uint32_t& v) const noexcept { return spectrumMeter.read (f, v); }
+    bool readRotation (RotationFrame& f, uint32_t& v) const noexcept { return rotationMeter.read (f, v); }
+    static double meterFrequency (int row, double rate) noexcept;
     static float phaseAt (double frequency, const Settings&, const Analysis&);
-    static Analysis analyse (const std::vector<float>&, double rate, std::vector<float>& previousMagnitude, double& previousEnergy);
+    static Analysis analyse (const std::vector<float>&, double rate, std::vector<float>& previousMagnitude, double& previousEnergy, SpectrumFrame* = nullptr);
     static std::vector<float> impulse (double rate, const Settings&, const Analysis& = {});
     // Deterministic offline loading uses exactly the same partitioned audio path.
     void setOffline (const Settings&, const Analysis& = {});
@@ -56,6 +88,7 @@ private:
         Kernel kernel;
         std::atomic<int> state { 0 }; // free, building, ready, audio-owned
         uint32_t version = 0;
+        std::array<std::complex<float>, meterBins> response {};
         std::array<std::array<float, hop>, 2> tail {}, overlap {};
         bool valid = false;
     };
@@ -63,6 +96,8 @@ private:
     void finishHop();
     void renderTail (int slot);
     void transformTail (const Kernel&, int channel, int age);
+    void prepareMeter (Slot&, const std::vector<float>&);
+    void publishRotation();
     std::array<Slot, 3> slots;
     juce::dsp::FFT fft { 8 };
     std::array<Complex, fftSize> work {}, transformed {}, sum {}, inverse {};
@@ -73,6 +108,11 @@ private:
     std::atomic<int> jobState { 0 }, displayedTargets { 0 };
     std::atomic<uint32_t> revision { 1 };
     std::atomic<bool> autoActive { false };
+    std::atomic<bool> meterVisible { false };
+    MeterExchange<2*meterBins+3> spectrumMeter;
+    MeterExchange<2*meterBins+1> rotationMeter;
+    int meterHopCounter = 0;
+    float meterBypass = 0;
     std::function<Settings()> readSettings;
     Settings preparedSettings;
     double sampleRate = 48000;

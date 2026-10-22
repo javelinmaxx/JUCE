@@ -2,13 +2,14 @@
 #include "../../EditorScaling.h"
 #include "../../EditorTooltips.h"
 using namespace stageStyle;
-XuanPhaseEditor::XuanPhaseEditor (XuanPhaseProcessor& p) : AudioProcessorEditor (&p), processor (p)
+XuanPhaseEditor::XuanPhaseEditor (XuanPhaseProcessor& p) : AudioProcessorEditor (&p), processor (p), meter (p)
 {
     setOpaque (true); setLookAndFeel (&look);
     look.setColour (juce::TooltipWindow::backgroundColourId, panel);
     look.setColour (juce::TooltipWindow::textColourId, foreground);
     look.setColour (juce::TooltipWindow::outlineColourId, grid);
     addAndMakeVisible (bypass); addAndMakeVisible (automatic); automatic.setButtonText ("AUTO");
+    addAndMakeVisible (meter);
     bypass.setTooltip ("Bypasses phase processing while preserving the fixed 25 ms latency.");
     automatic.setTooltip ("Saves CPU when Off; uses transient spectrogram phases to align narrow frequency bands.");
     bypassAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "bypass", bypass);
@@ -36,7 +37,12 @@ XuanPhaseEditor::XuanPhaseEditor (XuanPhaseProcessor& p) : AudioProcessorEditor 
         attachments[i] = std::make_unique<State::SliderAttachment> (p.parameters, ids[i], slider);
         editorTooltips::setHint (slider, labels[i], hints[i]);
     }
-    editorScaling::enable (*this, designWidth, designHeight); startTimerHz (20);
+    editorScaling::enable (*this, designWidth, designHeight);
+}
+void XuanPhaseEditor::visibilityChanged()
+{
+    meter.setActive (isShowing());
+    if (isShowing()) startTimerHz (20); else stopTimer();
 }
 void XuanPhaseEditor::resized()
 {
@@ -48,6 +54,7 @@ void XuanPhaseEditor::resized()
         labels[i].setBounds (x, y-20, 110, 16); sliders[i].setBounds (x, y, 110, 98);
     }
     const auto scale = editorScaling::transform (*this, designWidth, designHeight);
+    meter.setBounds (536, 88, 280, 386); meter.setTransform (scale);
     bypass.setTransform (scale); automatic.setTransform (scale);
     for (auto& s : sliders) s.setTransform (scale);
     for (auto& l : labels) l.setTransform (scale);

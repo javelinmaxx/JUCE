@@ -70,7 +70,11 @@ std::vector<float> PhaseEngine::impulse (double rate, const Settings& s, const A
     }
     return kernel;
 }
-Analysis PhaseEngine::analyse (const std::vector<float>& input, double rate, std::vector<float>& previous, double& previousEnergy)
+double PhaseEngine::meterFrequency (int row, double rate) noexcept
+{
+    return 20*std::pow (std::min (20000.0, rate*.45)/20, static_cast<double> (row)/(meterBins-1));
+}
+Analysis PhaseEngine::analyse (const std::vector<float>& input, double rate, std::vector<float>& previous, double& previousEnergy, SpectrumFrame* meter)
 {
     const auto n = static_cast<int> (input.size());
     juce::dsp::FFT analyser (orderFor (n));
@@ -86,6 +90,22 @@ Analysis PhaseEngine::analyse (const std::vector<float>& input, double rate, std
         time[static_cast<size_t> (i)] = static_cast<float> (x*window);
     }
     analyser.perform (time.data(), spectrum.data(), false);
+    if (meter != nullptr)
+    {
+        meter->fill (0);
+        for (int row = 0; row < meterBins; ++row)
+        {
+            const auto centre = meterFrequency (row, rate);
+            const auto ratio = std::sqrt (std::pow (std::min (20000.0, rate*.45)/20, 1.0/(meterBins-1)));
+            const auto first = std::clamp (static_cast<int> (centre/ratio*n/rate), 1, n/2);
+            const auto last = std::clamp (juce::roundToInt (centre*ratio*n/rate), first, n/2);
+            float magnitude = 0;
+            for (int k = first; k <= last; ++k) magnitude = std::max (magnitude, std::abs (spectrum[static_cast<size_t> (k)]));
+            (*meter)[static_cast<size_t> (row)] = std::clamp ((20*std::log10 (std::max (1e-8f, 2*magnitude/n))+80)/80, 0.f, 1.f);
+        }
+        (*meter)[meterPeak] = peak;
+        (*meter)[meterCeiling] = static_cast<float> (std::min (20000.0, rate*.45));
+    }
     if (previous.size() != static_cast<size_t> (n/2+1)) previous.assign (static_cast<size_t> (n/2+1), 0);
     double flux = 0, total = 0; float largest = 0;
     for (int k = 1; k < n/2; ++k)
@@ -100,6 +120,7 @@ Analysis PhaseEngine::analyse (const std::vector<float>& input, double rate, std
     const auto onset = energy > 1e-7 && result.crest > 2
         && ((energy > previousEnergy*1.5 && result.flux > .15f) || (result.flux > .4f && result.crest > 3));
     previousEnergy = energy;
+    if (meter != nullptr && onset) (*meter)[meterTransient] = std::clamp ((result.crest-2)/4, 0.f, 1.f);
     if (! onset) return result;
     const auto sign = input[static_cast<size_t> (anchor)] < 0 ? pi : 0;
     // Local spectral peaks define narrow bands. Their complex phase and phase
@@ -149,6 +170,36 @@ void PhaseEngine::Kernel::build (const std::vector<float>& ir, int count)
 PhaseEngine::PhaseEngine() : Thread ("Xuan phase analysis") {}
 PhaseEngine::~PhaseEngine() { release(); }
 void PhaseEngine::release() { signalThreadShouldExit(); notify(); stopThread (-1); }
+void PhaseEngine::prepareMeter (Slot& slot, const std::vector<float>& ir)
+{
+    for (int row = 0; row < meterBins; ++row)
+    {
+        const auto f = meterFrequency (row, sampleRate), omega = 2*pi*f/sampleRate;
+        const auto step = std::polar (1.0, -omega);
+        auto phasor = std::polar (1.0, omega*delay); std::complex<double> response {};
+        for (auto tap : ir) { response += static_cast<double> (tap)*phasor; phasor *= step; }
+        slot.response[static_cast<size_t> (row)] = static_cast<Complex> (response);
+    }
+}
+void PhaseEngine::publishRotation()
+{
+    RotationFrame frame {};
+    const auto t = pending >= 0 ? sigmoid (std::min (1.f, static_cast<float> (fadePosition)/fadeLength)) : 0.f;
+    for (size_t row = 0; row < meterBins; ++row)
+    {
+        const auto& old = slots[static_cast<size_t> (active)];
+        auto response = old.response[row];
+        if (pending >= 0)
+        {
+            const auto& next = slots[static_cast<size_t> (pending)];
+            response += t*(next.response[row]-response);
+        }
+        response += meterBypass*(Complex (1, 0)-response);
+        frame[row] = response.real(); frame[meterBins+row] = response.imag();
+    }
+    frame[2*meterBins] = meterBypass;
+    rotationMeter.publish (frame);
+}
 void PhaseEngine::prepare (double rate, std::function<Settings()> provider, bool worker)
 {
     release(); sampleRate = rate; readSettings = std::move (provider);
@@ -156,6 +207,7 @@ void PhaseEngine::prepare (double rate, std::function<Settings()> provider, bool
     partitions = std::max (1, partitions); fadeLength = std::max (1, juce::roundToInt (rate*.005));
     history = {}; position = dryPosition = ringPosition = 0; spectrumPosition = -1;
     active = 0; pending = -1; fadePosition = 0;
+    meterHopCounter = 0; meterBypass = 0; spectrumMeter.reset(); rotationMeter.reset();
     for (auto& channel : spectra) channel.assign (static_cast<size_t> ((partitions+1)*fftSize), {});
     for (auto& channel : dry) channel.assign (static_cast<size_t> (delay), 0);
     const auto analysisSize = 1 << orderFor (juce::roundToInt (rate*.04));
@@ -163,15 +215,18 @@ void PhaseEngine::prepare (double rate, std::function<Settings()> provider, bool
     for (auto& slot : slots) { slot.state.store (0); slot.valid = false; slot.tail = {}; slot.overlap = {}; }
     jobState.store (0); displayedTargets.store (0); autoActive.store (false); revision.store (1);
     const auto s = readSettings(); preparedSettings = s;
-    slots[0].kernel.build (impulse (rate, s), partitions); slots[0].state.store (3);
+    const auto ir = impulse (rate, s);
+    slots[0].kernel.build (ir, partitions); prepareMeter (slots[0], ir); slots[0].state.store (3);
     outputGain.reset (rate, .02); outputGain.setCurrentAndTargetValue (juce::Decibels::decibelsToGain (s.output));
     bypassBlend.reset (rate, .005); bypassBlend.setCurrentAndTargetValue (s.bypass ? 1.f : 0.f);
+    meterBypass = s.bypass ? 1.f : 0.f; publishRotation();
     if (worker) startThread (juce::Thread::Priority::normal);
 }
 void PhaseEngine::setOffline (const Settings& s, const Analysis& a)
 {
     jassert (! isThreadRunning());
-    slots[0].kernel.build (impulse (sampleRate, s, a), partitions);
+    const auto ir = impulse (sampleRate, s, a);
+    slots[0].kernel.build (ir, partitions); prepareMeter (slots[0], ir); publishRotation();
 }
 void PhaseEngine::transformTail (const Kernel& kernel, int channel, int age)
 {
@@ -227,7 +282,11 @@ void PhaseEngine::finishHop()
         }
     }
     renderTail (active); if (pending >= 0) renderTail (pending);
-    if (autoActive.load (std::memory_order_relaxed))
+    if (meterVisible.load (std::memory_order_relaxed)) publishRotation();
+    meterHopCounter += hop;
+    const auto displayDue = meterHopCounter >= juce::roundToInt (sampleRate/30);
+    if (displayDue) meterHopCounter = 0;
+    if (autoActive.load (std::memory_order_relaxed) || (meterVisible.load (std::memory_order_relaxed) && displayDue))
     {
         int expected = 0;
         if (jobState.compare_exchange_strong (expected, 1, std::memory_order_acquire))
@@ -281,6 +340,7 @@ void PhaseEngine::process (juce::AudioBuffer<float>& buffer, const Settings& s, 
         leftAnalysisRing[static_cast<size_t> (ringPosition)] = in[0];
         ringPosition = (ringPosition+1)%static_cast<int> (analysisRing.size());
         const auto gain = outputGain.getNextValue(), bypass = bypassBlend.getNextValue();
+        meterBypass = hostBypass ? 1.f : bypass;
         for (int ch = 0; ch < channels; ++ch)
         {
             const auto c = static_cast<size_t> (ch); const auto wet = out[c]*gain;
@@ -298,15 +358,41 @@ void PhaseEngine::process (juce::AudioBuffer<float>& buffer, const Settings& s, 
 void PhaseEngine::run()
 {
     auto last = preparedSettings; uint32_t seen = revision.load(), serial = 0; bool dirty = false;
-    Analysis targets; std::vector<float> previous; double previousEnergy = 0;
+    Analysis targets, displayedAnalysis; std::vector<float> previous, displayPrevious;
+    double previousEnergy = 0, displayEnergy = 0;
+    float transientHold = 0; double lastMeter = juce::Time::getMillisecondCounterHiRes();
     while (! threadShouldExit())
     {
         const auto s = readSettings(); const auto version = revision.load (std::memory_order_acquire);
         dirty |= ! (s == last);
         if (jobState.load (std::memory_order_acquire) == 2)
         {
-            const auto result = analyse (analysisJob, sampleRate, previous, previousEnergy);
-            if (s.automatic && s.depth > 0 && result.count > 0) { targets = result; dirty = true; }
+            SpectrumFrame spectrum;
+            const auto visible = meterVisible.load (std::memory_order_relaxed);
+            // Display-only frames must not change the correction detector's
+            // history or generate responses while Auto is inactive/bypassed.
+            const auto correcting = s.automatic && s.depth > 0 && autoActive.load (std::memory_order_relaxed);
+            const auto result = analyse (analysisJob, sampleRate, correcting ? previous : displayPrevious,
+                                         correcting ? previousEnergy : displayEnergy, visible ? &spectrum : nullptr);
+            if (visible && meterVisible.load (std::memory_order_relaxed))
+            {
+                const auto now = juce::Time::getMillisecondCounterHiRes();
+                transientHold = std::max (spectrum[meterTransient], transientHold*static_cast<float> (std::exp (-(now-lastMeter)/60)));
+                if (result.count > 0) displayedAnalysis = result;
+                for (int row = 0; row < meterBins; ++row)
+                {
+                    const auto f = meterFrequency (row, sampleRate); double timing = 0, weight = 0;
+                    for (int i = 0; i < displayedAnalysis.count; ++i)
+                    {
+                        const auto& band = displayedAnalysis.targets[static_cast<size_t> (i)];
+                        const auto w = std::exp (-.5*std::pow ((f-band.frequency)/band.width, 2));
+                        timing += w*band.delay*1000; weight += w;
+                    }
+                    spectrum[static_cast<size_t> (meterBins+row)] = static_cast<float> (timing/std::max (1.0, weight))*transientHold;
+                }
+                lastMeter = now; spectrum[meterTransient] = transientHold; spectrumMeter.publish (spectrum);
+            }
+            if (correcting && result.count > 0) { targets = result; dirty = true; }
             jobState.store (0, std::memory_order_release);
         }
         if (! s.automatic || s.depth <= 0) { targets = {}; displayedTargets.store (0); }
@@ -317,7 +403,8 @@ void PhaseEngine::run()
             { int expected = 0; if (slots[static_cast<size_t> (i)].state.compare_exchange_strong (expected, 1, std::memory_order_acquire)) { free = i; break; } }
             if (free < 0) { wait (1); continue; }
             auto& slot = slots[static_cast<size_t> (free)];
-            slot.kernel.build (impulse (sampleRate, s, targets), partitions);
+            const auto ir = impulse (sampleRate, s, targets);
+            slot.kernel.build (ir, partitions); prepareMeter (slot, ir);
             slot.valid = false; slot.version = ++serial;
             slot.state.store (2, std::memory_order_release);
             displayedTargets.store (targets.count, std::memory_order_relaxed);
@@ -325,7 +412,7 @@ void PhaseEngine::run()
         }
         seen = version;
         if (seen != revision.load (std::memory_order_acquire)) continue;
-        wait (autoActive.load (std::memory_order_relaxed) ? 1 : 20);
+        wait (autoActive.load (std::memory_order_relaxed) ? 1 : meterVisible.load (std::memory_order_relaxed) ? 5 : 20);
     }
 }
 }

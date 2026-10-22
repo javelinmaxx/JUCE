@@ -9,6 +9,9 @@ public:
     ~XuanPhaseProcessor() override;
     xuan::Settings settings() const noexcept;
     int targetCount() const noexcept { return engine.targetCount(); }
+    void setMeterVisible (bool visible) noexcept { engine.setMeterVisible (visible); }
+    bool readSpectrum (xuan::SpectrumFrame& f, uint32_t& v) const noexcept { return engine.readSpectrum (f, v); }
+    bool readRotation (xuan::RotationFrame& f, uint32_t& v) const noexcept { return engine.readRotation (f, v); }
     void prepareToPlay (double, int) override;
     void releaseResources() override { engine.release(); }
     bool isBusesLayoutSupported (const BusesLayout&) const override;

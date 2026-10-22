@@ -42,4 +42,18 @@ rotation and output gain. Peak improvement on this constructed signal is not a g
 for arbitrary recordings. Native editor checks cover parameter binding, hover
 hints and the 50%–120% resize limits.
 
+## Phase-field display
+
+The native editor test streams repeated dispersed hits through the real processor
+and worker, observes transient events and both signed timing directions, and
+checks that non-empty image columns move from left to right. Green indicates an
+early input band and red a late input band. The white curve uses the measured
+complex FIR response: tests compare it with an independent DFT, ensure queued
+responses do not appear before audio applies them, verify updates after handoff,
+and check zero displayed phase under host bypass. Input analysis remains live
+with Auto Off while the meter is visible, and stops when the editor is hidden.
+The meter stays inside the editor at both scaling limits.
+
+![Native editor with live transient history](../../Previews/xuan-phase.png)
+
 Data: [phase.csv](phase.csv), [transient.csv](transient.csv).

@@ -3,6 +3,7 @@
 Xuan Phase is J-SONIC's manual and transient-guided phase rotator. It offers
 independent low/high rotation, a smooth adjustable crossover, Auto Depth,
 Output, and a fixed **25 ms reference latency** in a 50%–120% scalable editor.
+The 840 × 490 default panel includes a vertical phase-field meter beside the controls.
 
 ![Xuan Phase native editor](Previews/xuan-phase.png)
 
@@ -43,7 +44,9 @@ response unchanged, and 100% applies the full detected target. A shared stereo
 reference preserves the relationship between channels; nearly cancelling
 anti-phase input uses the left channel as the analysis reference. Targets hold
 between detected onsets, allowing repeated hits to retain their alignment.
-Auto Off or Depth 0% suspends spectral jobs. The first part of a new onset must
+Auto Off or Depth 0% stops automatic response updates; a visible meter retains
+lower-rate input analysis for manual use, which stops when the editor is hidden.
+The first part of a new onset must
 be observed before a target can be computed, so the improvement depends on the
 source and worker scheduling; the phase objective is a punch-oriented heuristic.
 
@@ -53,6 +56,29 @@ handoff transfers immutable responses from the worker, and a 5 ms sigmoid
 crossfade warms both responses on the same signal history. No kernel design,
 heap allocation, or waiting for a worker occurs in the audio callback. Output
 changes are smoothed over 20 ms. Auto analysis is dormant when Off.
+
+## Phase Field meter
+
+The side panel shows five seconds of input spectrogram history on a logarithmic
+frequency axis. **New data enters at the left and moves right** toward older
+history. Brighter pixels mean more input energy; **green** marks frequency bands
+arriving before the detected transient anchor, and **red** marks those arriving
+after it. Colours describe observed input timing, so they also work with Auto Off.
+A small display hold makes short onsets visible without changing the audio detector.
+
+The narrow **white curve** at the right shows applied rotation relative to the
+25 ms reference, from −180° to +180° across its track. It is measured from the
+active FIR, including manual rotation, Auto Depth, response crossfades, and bypass;
+it does not jump ahead to an unapplied worker target. The readout reports the
+largest absolute rotation. The lower strip shows input peak activity in white
+and detected transient activity in amber.
+
+The meter shares the background spectral analysis. Fixed-size atomic snapshots
+transfer input and applied-response data without GUI locks in the audio callback.
+No display FFT runs on the audio thread. Rendering and scrolling run at 30 Hz,
+with stale input cleared after 200 ms and blank columns for missed UI frames.
+Closing the editor clears its history; sample-rate changes clear incompatible
+frequency history. Audio processing and the fixed latency are unchanged.
 
 ## Build and test
 
@@ -75,9 +101,13 @@ Generate measurements and a native preview on Linux:
 
 ```bash
 xvfb-run -a build/xuan/XuanPhaseTests --report "$PWD/projects/XuanPhase/Tests/Reports"
-xvfb-run -a build/xuan/XuanPhaseTests --editor "$PWD/projects/XuanPhase/Previews/xuan-phase.png"
+xvfb-run -a python3 projects/ZaoDrive/Tests/with_x11_atoms.py \
+  build/xuan/XuanPhaseTests --editor "$PWD/projects/XuanPhase/Previews/xuan-phase.png"
 python3 projects/XuanPhase/Tests/generate_report.py
 ```
+
+The editor capture uses the existing X11 window-atom helper from Zao Drive's
+tests so the preview exercises a real desktop window on a bare Xvfb display.
 
 [Hover hints](TOOLTIPS.md) cover every control. See the repository
 [build guide](../../docs/BUILDING.md) for dependencies and installation paths.

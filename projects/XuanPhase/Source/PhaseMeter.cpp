@@ -1,0 +1,118 @@
+#include "PhaseMeter.h"
+using namespace stageStyle;
+namespace
+{
+const auto early = juce::Colour (0xff72ce9c), late = juce::Colour (0xfff07880);
+}
+XuanPhaseMeter::XuanPhaseMeter (XuanPhaseProcessor& p) : processor (p)
+{
+    setTooltip ("Shows input transients moving left to right, with early bands green, late bands red, and applied phase in white.");
+    lastColumn = lastInput = juce::Time::getMillisecondCounterHiRes();
+}
+XuanPhaseMeter::~XuanPhaseMeter() { stopTimer(); processor.setMeterVisible (false); }
+void XuanPhaseMeter::visibilityChanged() { setActive (isShowing()); }
+void XuanPhaseMeter::setActive (bool active)
+{
+    processor.setMeterVisible (active);
+    if (active) { lastColumn = juce::Time::getMillisecondCounterHiRes(); startTimerHz (30); }
+    else stopTimer();
+}
+juce::Colour XuanPhaseMeter::timingColour (float milliseconds, float energy) noexcept
+{
+    if (energy <= 0) return inset;
+    const auto neutral = juce::Colour (0xffa59ba5);
+    const auto colour = neutral.interpolatedWith (milliseconds < 0 ? early : late, std::clamp (std::abs (milliseconds)/.3f, 0.f, 1.f));
+    return inset.interpolatedWith (colour, std::pow (std::clamp (energy, 0.f, 1.f), .85f));
+}
+void XuanPhaseMeter::append (const xuan::SpectrumFrame& frame)
+{
+    // Moving existing pixels right makes direction unambiguous without
+    // resampling the spectrum or inventing activity between detector updates.
+    history.moveImageSection (1, 0, 0, 0, columns-1, xuan::meterBins);
+    juce::Image::BitmapData pixels (history, juce::Image::BitmapData::readWrite);
+    for (int row = 0; row < xuan::meterBins; ++row)
+        pixels.setPixelColour (0, xuan::meterBins-1-row, timingColour (frame[static_cast<size_t> (xuan::meterBins+row)], frame[static_cast<size_t> (row)]));
+    std::move_backward (transient.begin(), transient.end()-1, transient.end());
+    std::move_backward (peak.begin(), peak.end()-1, peak.end());
+    transient[0] = frame[xuan::meterTransient];
+    peak[0] = std::clamp ((juce::Decibels::gainToDecibels (frame[xuan::meterPeak], -60.f)+60)/60, 0.f, 1.f);
+    columnsWritten = std::min (columns, columnsWritten+1);
+}
+void XuanPhaseMeter::timerCallback()
+{
+    const auto now = juce::Time::getMillisecondCounterHiRes();
+    const auto oldCeiling = spectrum[xuan::meterCeiling];
+    if (processor.readSpectrum (spectrum, spectrumVersion))
+    {
+        lastInput = now;
+        if (oldCeiling > 20 && spectrum[xuan::meterCeiling] > 20
+            && std::abs (oldCeiling-spectrum[xuan::meterCeiling]) > 1)
+        {
+            history.clear (history.getBounds()); transient.fill (0); peak.fill (0); columnsWritten = 0;
+        }
+    }
+    processor.readRotation (rotation, rotationVersion);
+    if (now-lastInput > 200) { const auto ceiling = spectrum[xuan::meterCeiling]; spectrum.fill (0); spectrum[xuan::meterCeiling] = ceiling; }
+    constexpr double step = 1000.0/30;
+    const auto advance = std::min (columns, static_cast<int> ((now-lastColumn)/step));
+    if (advance > 0)
+    {
+        // Missed UI frames are blank, rather than made-up intermediate spectra.
+        for (int i = 1; i < advance; ++i) append ({});
+        append (spectrum); lastColumn = now-std::fmod (now-lastColumn, step); repaint();
+    }
+}
+void XuanPhaseMeter::paint (juce::Graphics& g)
+{
+    drawPanel (g, getLocalBounds().toFloat());
+    g.setColour (foreground); g.setFont (juce::FontOptions (13).withStyle ("bold"));
+    g.drawText ("PHASE FIELD", 14, 12, 250, 20, juce::Justification::centredLeft);
+    g.setFont (juce::FontOptions (9));
+    g.setColour (early); g.drawText ("EARLY", 14, 34, 50, 16, juce::Justification::centredLeft);
+    g.setColour (late); g.drawText ("LATE", 68, 34, 50, 16, juce::Justification::centredLeft);
+    g.setColour (secondary); g.drawText ("INPUT / APPLIED PHASE", 124, 34, 145, 16, juce::Justification::centredRight);
+    const juce::Rectangle<float> plot {38, 64, 208, 204}, phase {250, 64, 16, 204};
+    g.setColour (inset); g.fillRect (plot); g.fillRect (phase);
+    g.setImageResamplingQuality (juce::Graphics::lowResamplingQuality);
+    g.drawImage (history, plot);
+    const auto ceiling = spectrum[xuan::meterCeiling] > 20 ? spectrum[xuan::meterCeiling] : 20000.f;
+    g.setFont (juce::FontOptions (9));
+    for (float f : {20.f, 100.f, 1000.f, 10000.f})
+    {
+        if (f > ceiling) continue;
+        const auto y = plot.getBottom()-static_cast<float> (std::log (f/20)/std::log (ceiling/20))*plot.getHeight();
+        g.setColour (grid.withAlpha (.65f)); g.drawHorizontalLine (juce::roundToInt (y), plot.getX(), phase.getRight());
+        g.setColour (secondary); g.drawText (f >= 1000 ? juce::String (f/1000, 0)+"k" : juce::String (f, 0), 4, juce::roundToInt (y)-6, 30, 12, juce::Justification::centredRight);
+    }
+    g.setColour (secondary); g.drawText ("ROT", 248, 48, 20, 14, juce::Justification::centred);
+    g.setColour (grid); g.drawVerticalLine (juce::roundToInt (phase.getCentreX()), phase.getY(), phase.getBottom());
+    juce::Path response; float maximum = 0;
+    for (int row = 0; row < xuan::meterBins; ++row)
+    {
+        const auto angle = std::atan2 (rotation[static_cast<size_t> (xuan::meterBins+row)], rotation[static_cast<size_t> (row)]);
+        const auto x = phase.getCentreX()+angle/juce::MathConstants<float>::pi*7;
+        const auto y = phase.getBottom()-static_cast<float> (row)/(xuan::meterBins-1)*phase.getHeight();
+        if (row == 0) response.startNewSubPath (x, y); else response.lineTo (x, y);
+        maximum = std::max (maximum, std::abs (angle)*180/juce::MathConstants<float>::pi);
+    }
+    g.setColour (foreground); g.strokePath (response, juce::PathStrokeType (1.2f));
+    g.setColour (secondary); g.drawText ("NOW", 38, 271, 60, 15, juce::Justification::centredLeft);
+    g.drawText ("5 s ago  >", 160, 271, 86, 15, juce::Justification::centredRight);
+    g.drawText ("INPUT TRANSIENT", 14, 292, 250, 16, juce::Justification::centredLeft);
+    const juce::Rectangle<float> envelope {38, 312, 208, 30};
+    g.setColour (inset); g.fillRect (envelope);
+    juce::Path trace;
+    for (int col = 0; col < columns; ++col)
+    {
+        const auto x = envelope.getX()+static_cast<float> (col)/(columns-1)*envelope.getWidth();
+        const auto strength = transient[static_cast<size_t> (col)];
+        if (strength > .01f) { g.setColour (amber.withAlpha (.2f+.7f*strength)); g.drawVerticalLine (juce::roundToInt (x), envelope.getBottom()-strength*envelope.getHeight(), envelope.getBottom()); }
+        const auto y = envelope.getBottom()-peak[static_cast<size_t> (col)]*envelope.getHeight();
+        if (col == 0) trace.startNewSubPath (x, y); else trace.lineTo (x, y);
+    }
+    g.setColour (foreground.withAlpha (.65f)); g.strokePath (trace, juce::PathStrokeType (1));
+    g.setColour (secondary); g.setFont (juce::FontOptions (9));
+    g.drawText ("WHITE: APPLIED PHASE", 14, 351, 165, 16, juce::Justification::centredLeft);
+    g.setColour (rotation[2*xuan::meterBins] >= .999f ? secondary : amber);
+    g.drawText (rotation[2*xuan::meterBins] >= .999f ? "BYPASSED" : juce::String (maximum, 1)+" deg max", 177, 351, 89, 16, juce::Justification::centredRight);
+}
