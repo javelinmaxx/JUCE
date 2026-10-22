@@ -191,12 +191,12 @@ void phaseCapTests (const juce::File& directory)
                 xuan::Settings s; s.automatic = true; s.low = s.high = manual; s.depth = depth; s.link = link;
                 for (double f = 20; f <= 20000; f += 37)
                 {
-                    check (std::abs (xuan::PhaseEngine::phaseAt (f, s, a.shared)) <= pi,
-                           "combined manual and automatic phase saturates at +/-180 degrees");
+                    check (std::abs (xuan::PhaseEngine::phaseAt (f, s, a.shared)) <= 150*pi/180,
+                           "combined manual and automatic phase saturates at +/-150 degrees");
                     for (int ch = 0; ch < 2; ++ch)
                     {
                         const auto value = xuan::PhaseEngine::stereoPhaseAt (f, s, a, ch);
-                        check (std::isfinite (value) && std::abs (value) <= pi,
+                        check (std::isfinite (value) && std::abs (value) <= 150*pi/180,
                                "all stereo correction settings stay within the DSP phase cap before FIR design");
                     }
                 }
@@ -207,12 +207,12 @@ void phaseCapTests (const juce::File& directory)
             << ',' << xuan::PhaseEngine::stereoPhaseAt (f, s, a, 1)*180/pi << '\n';
     s.low = s.high = 180; s.link = 100;
     const auto saturated = xuan::PhaseEngine::phaseAt (1000, s, a.shared);
-    check (saturated > 3.14f && std::atan2 (std::sin (saturated), std::cos (saturated)) > 3.14f,
-           "over-range positive correction stops at +180 rather than wrapping negative");
+    check (std::abs (saturated-150*pi/180) < 1e-6 && std::atan2 (std::sin (saturated), std::cos (saturated)) > 0,
+           "over-range positive correction stops at +150 rather than wrapping negative");
     s.low = s.high = -180; s.depth = -100;
     const auto negative = xuan::PhaseEngine::phaseAt (1000, s, a.shared);
-    check (negative < -3.14f && std::atan2 (std::sin (negative), std::cos (negative)) < -3.14f,
-           "over-range negative correction stops at -180 rather than wrapping positive");
+    check (std::abs (negative+150*pi/180) < 1e-6 && std::atan2 (std::sin (negative), std::cos (negative)) < 0,
+           "over-range negative correction stops at -150 rather than wrapping positive");
 }
 void lookaheadTests (const juce::File& directory, const std::vector<float>& hit)
 {
@@ -283,9 +283,61 @@ void lookaheadTests (const juce::File& directory, const std::vector<float>& hit)
         paused.store (false);
         std::cout << "Lookahead late=" << late << " protected filter change=" << protectedChange << " protected phase=" << protectedAngle << " later phase=" << laterAngle << '\n';
         check (frames > 8 && protectedChange < 1e-6f, "the applied phase response stays fixed throughout the protected onset and output peak");
-        check (protectedAngle > .01f || laterAngle > .01f, "the worker applies a correction either before the onset or safely after a missed deadline");
-        if (late) check (protectedAngle < 1e-5f && laterAngle > .01f, "a deliberately late worker leaves the onset unchanged and recovers after it passes");
+        if (late) check (protectedAngle < 1e-5f && laterAngle < 1e-5f,
+                         "a missed attack skips the whole event instead of retuning its early sustain");
+        else check (protectedAngle > .01f, "a timely worker applies the correction before the onset");
     }
+}
+
+void electricPianoTests (const juce::File& directory)
+{
+    constexpr int count = 49152, noteAt = 4096;
+    std::vector<float> piano (count);
+    // A struck, sustained C3 tine-like tone: fast hammer envelope, decaying
+    // harmonics and a weak inharmonic bell partial (not a real instrument sample).
+    for (int i = noteAt; i < count; ++i)
+    {
+        const auto t = (i-noteAt)/48000.;
+        double tone = 0;
+        for (int harmonic = 1; harmonic <= 9; ++harmonic)
+            tone += std::exp (-t*(1.3+.55*harmonic))/harmonic
+                *std::cos (2*juce::MathConstants<double>::pi*130.8128*harmonic*t+.23*harmonic*harmonic);
+        tone += .12*std::exp (-6*t)*std::cos (2*juce::MathConstants<double>::pi*130.8128*7.03*t);
+        piano[static_cast<size_t> (i)] = static_cast<float> (.2*(1-std::exp (-t/.002))*tone);
+    }
+    xuan::Settings settings; settings.automatic = true; settings.depth = 100; settings.transient = 200;
+    std::atomic<bool> paused {true}; const auto mainThread = juce::Thread::getCurrentThreadId();
+    xuan::PhaseEngine engine;
+    engine.prepare (48000, [&]
+    {
+        while (paused.load() && juce::Thread::getCurrentThreadId() != mainThread) juce::Thread::sleep (1);
+        return settings;
+    });
+    juce::AudioBuffer<float> audio (2, 128);
+    std::ofstream trace (directory.getChildFile ("electric-piano.csv").getFullPathName().toStdString());
+    trace << "sample,reference,automatic\n";
+    float error = 0; int targets = 0;
+    for (int at = 0; at < count; at += 128)
+    {
+        // Deliberately miss the attack deadline; the old implementation handed
+        // off its correction ~83 ms later, while this note was still loud.
+        if (at >= noteAt+960) paused.store (false);
+        for (int i = 0; i < 128; ++i)
+            for (int ch = 0; ch < 2; ++ch) audio.setSample (ch, i, piano[static_cast<size_t> (at+i)]);
+        engine.process (audio, settings); juce::Thread::sleep (3);
+        targets = std::max (targets, engine.targetCount());
+        for (int i = 0; i < 128; ++i)
+        {
+            const auto index = at+i-engine.latency();
+            const auto reference = index >= 0 ? piano[static_cast<size_t> (index)] : 0;
+            error = std::max (error, std::abs (reference-audio.getSample (0, i)));
+            trace << at+i << ',' << reference << ',' << audio.getSample (0, i) << '\n';
+        }
+    }
+    paused.store (false);
+    std::cout << "Electric piano: detected targets=" << targets << " missed-attack error=" << error << '\n';
+    check (targets > 0, "the sustained electric-piano fixture exercises automatic target generation");
+    check (error < 1e-5f, "a late correction never fades into the electric piano's attack or sustain");
 }
 
 void phaseDisplayTests()
@@ -382,7 +434,10 @@ void dspTests (const juce::File& directory)
         {
             const auto h = response (ir, hz, 48000);
             const auto error = std::remainder (std::arg (h)-xuan::PhaseEngine::phaseAt (hz, s, {}), 2*juce::MathConstants<double>::pi);
-            check (std::abs (error) < .03, "measured low/high phase follows the designed rotation including 20 Hz extremes");
+            // The finite +/-25 ms Hilbert support has its largest phase ripple
+            // at 20 Hz for a 150-degree target (about 3.9 degrees).
+            check (std::abs (error) < (hz <= 30 ? .075 : .03),
+                   "measured manual phase stays within finite-FIR accuracy, including the 20 Hz endpoint");
             phase << degrees << ',' << hz << ',' << std::arg (h)*180/juce::MathConstants<double>::pi << ',' << 20*std::log10 (std::abs (h)) << '\n';
         }
         std::vector<float> impulse (8000); impulse[0] = 1;
@@ -465,6 +520,7 @@ void dspTests (const juce::File& directory)
     std::vector<float> previous; double energy = 0;
     const auto targets = xuan::PhaseEngine::analyse (hit, 48000, previous, energy);
     lookaheadTests (directory, hit);
+    electricPianoTests (directory);
     check (targets.count >= 3, "transient spectrogram phase produces multiple narrow-band alignment targets");
     for (int i = 0; i < targets.count; ++i)
         check (std::abs (targets.targets[static_cast<size_t> (i)].delay) <= .025, "automatic group-delay targets stay inside the lookahead budget");
@@ -506,8 +562,8 @@ void dspTests (const juce::File& directory)
         const auto inverse = response (reversedIr, target.frequency, 48000);
         const auto scale = 180/juce::MathConstants<double>::pi;
         targetData << target.frequency << ',' << target.angle*scale << ',' << std::arg (positive)*scale << ',' << std::arg (inverse)*scale << '\n';
-        check (std::abs (std::remainder (std::arg (positive)-target.angle, 2*juce::MathConstants<double>::pi)) < juce::MathConstants<double>::pi/180,
-               "full Depth aligns each detected peak within one degree of the transient anchor");
+        check (std::abs (std::remainder (std::arg (positive)-xuan::PhaseEngine::phaseAt (target.frequency, full, targets), 2*juce::MathConstants<double>::pi)) < juce::MathConstants<double>::pi/180,
+               "full Depth follows each capped peak correction within one degree");
         check (std::abs (inverse-std::conj (positive)) < 1e-5,
                "negative Depth reverses the measured automatic phase rotation");
     }

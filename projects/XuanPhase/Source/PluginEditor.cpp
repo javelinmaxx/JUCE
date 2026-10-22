@@ -18,9 +18,9 @@ XuanPhaseEditor::XuanPhaseEditor (XuanPhaseProcessor& p) : AudioProcessorEditor 
     constexpr std::array<const char*, 6> names { "LOW PHASE", "CROSSOVER", "HIGH PHASE", "AUTO DEPTH", "TRANSIENT", "STEREO LINK" };
     constexpr std::array<const char*, 6> units { " deg", " Hz", " deg", " %", " ms", " %" };
     constexpr std::array<const char*, 6> hints {
-        "Rotates frequencies below the crossover relative to the fixed 50 ms compensated reference.",
+        "Rotates frequencies below the crossover relative to the fixed 50 ms compensated reference, with total correction capped at plus or minus 150 degrees.",
         "Sets the smooth transition between the low and high manual phase controls.",
-        "Rotates frequencies above the crossover relative to the fixed 50 ms compensated reference.",
+        "Rotates frequencies above the crossover relative to the fixed 50 ms compensated reference, with total correction capped at plus or minus 150 degrees.",
         "Sets automatic phase correction from reverse alignment at negative values to full alignment at positive values.",
         "Sets how quickly automatic phase correction releases after a transient, with longer times retaining it longer.",
         "Links automatic correction at +100%, processes channels independently at 0%, and separates their transients toward -100%." };
@@ -78,7 +78,7 @@ void XuanPhaseEditor::paint (juce::Graphics& g)
     g.drawText ("MANUAL ROTATION", 38, 100, 340, 20, juce::Justification::centredLeft);
     g.drawText ("TRANSIENT ALIGNMENT", 38, 300, 340, 20, juce::Justification::centredLeft);
     g.setColour (secondary); g.setFont (juce::FontOptions (9));
-    g.drawText ("25 ms phase + 25 ms lookahead / +/-180 degrees / stereo phase control", 38, 120, 460, 16, juce::Justification::centredLeft);
+    g.drawText ("25 ms phase + 25 ms lookahead / +/-150 degrees max / stereo phase control", 38, 120, 460, 16, juce::Justification::centredLeft);
     g.drawText ("Spectral phase targets: " + juce::String (processor.targetCount()), 38, 321, 300, 16, juce::Justification::centredLeft);
     g.restoreState();
 }

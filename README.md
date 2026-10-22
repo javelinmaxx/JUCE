@@ -128,7 +128,7 @@ attacks; this compact version omits Haas search, meters, and band controls.
 
 ![Xuan Phase with independent Low Phase and High Phase knobs, Crossover, Auto Depth, Transient, and Stereo Link](projects/XuanPhase/Previews/xuan-phase.png)
 
-Rotate the low and high frequencies independently through ±180°, with a smooth
+Rotate the low and high frequencies independently with a combined ±150° cap and a smooth
 adjustable crossover, **25 ms correction lookahead**, and **50 ms** total latency. **Auto** detects
 clear transients and uses their spectrogram phase and phase slopes to align
 narrow frequency bands; signed **Auto Depth** scales or reverses that correction

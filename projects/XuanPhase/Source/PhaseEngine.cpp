@@ -5,10 +5,14 @@ namespace xuan
 namespace
 {
 constexpr auto pi = juce::MathConstants<double>::pi;
-// Keep the float passed to polar just inside mathematical pi: float(pi) is
-// slightly larger and can itself flip an exact +180 degree target to -180.
-const auto phaseLimit = std::nextafter (juce::MathConstants<float>::pi, 0.f);
+// Leave headroom from the +/-180 degree wrap seam in the final combined response.
+constexpr auto phaseLimit = static_cast<float> (150*pi/180);
 float cappedPhase (double phase) { return static_cast<float> (std::clamp (phase, -static_cast<double> (phaseLimit), static_cast<double> (phaseLimit))); }
+int64_t attackDeadline (int64_t onset, double rate)
+{
+    return onset+juce::roundToInt (rate*.05)-juce::roundToInt (rate*.025)
+        -juce::roundToInt (rate*.005)-juce::roundToInt (rate*.008);
+}
 float sigmoid (float t) { return t*t*(3-2*t); }
 int orderFor (int n) { int order = 0; while ((1 << order) < n) ++order; return order; }
 float dot (const float* a, const float* b, int n)
@@ -36,10 +40,11 @@ bool PhaseEngine::transitionAllowed (int64_t streamSample, int64_t onsetSample, 
     if (onsetSample < 0) return true;
     const auto reference = juce::roundToInt (rate*.025);
     const auto aheadSamples = juce::roundToInt (rate*.05)-reference;
-    const auto fade = juce::roundToInt (rate*.005), safety = juce::roundToInt (rate*.008);
+    const auto safety = juce::roundToInt (rate*.008);
     // Finish the fade before delayed input reaches the FIR, and keep its entire
-    // finite response stable. A late worker response waits until the hit passes.
-    const auto first = onsetSample+aheadSamples-fade-safety;
+    // finite response stable. New late events are discarded by the audio handoff; releases of
+    // an already accepted event wait until the protected hit has passed.
+    const auto first = attackDeadline (onsetSample, rate);
     const auto last = onsetSample+aheadSamples+2*reference+safety;
     return streamSample < first || streamSample >= last;
 }
@@ -397,6 +402,31 @@ void PhaseEngine::finishHop()
         for (int i = 0; i < 3; ++i)
             if (slots[static_cast<size_t> (i)].state.load (std::memory_order_acquire) == 2
                 && (newest < 0 || slots[static_cast<size_t> (i)].version > slots[static_cast<size_t> (newest)].version)) newest = i;
+        if (newest >= 0 && ! slots[static_cast<size_t> (newest)].parameterChange)
+        {
+            const auto& candidate = slots[static_cast<size_t> (newest)];
+            bool missedAttack = false;
+            for (size_t event = 0; event < candidate.onsets.size(); ++event)
+            {
+                const auto onset = candidate.onsets[event];
+                if (onset >= 0 && onset != slots[static_cast<size_t> (active)].onsets[event]
+                    && static_cast<int64_t> (processedSamples) >= attackDeadline (onset, sampleRate))
+                {
+                    missedAttack = true;
+                }
+            }
+            // A new target is useful only before its note. Applying it after
+            // the protected FIR response still bends a piano's loud sustain.
+            // Reject every later revision of that missed event too; accepted
+            // events may continue their normal release toward the manual curve.
+            if (missedAttack)
+            {
+                for (auto& slot : slots)
+                    if (slot.state.load (std::memory_order_acquire) == 2)
+                        slot.state.store (0, std::memory_order_release);
+                newest = -1;
+            }
+        }
         if (newest >= 0 && std::all_of (slots[static_cast<size_t> (newest)].onsets.begin(),
                                         slots[static_cast<size_t> (newest)].onsets.end(),
                                         [&] (int64_t onset) { return transitionAllowed (static_cast<int64_t> (processedSamples), onset, sampleRate); }))
@@ -604,6 +634,13 @@ void PhaseEngine::run()
                 }
             }
             slot.onsets = eventOnsets;
+            if (targets.shared.count == 0) slot.onsets[0] = -1;
+            for (size_t channel = 0; channel < 2; ++channel)
+                if (targets.channel[channel].count == 0) slot.onsets[channel+1] = -1;
+            // Only detectors contributing to this response constrain its handoff.
+            if (s.link <= 0 || ! targets.stereo) slot.onsets[0] = -1;
+            else if (s.link >= 100) slot.onsets[1] = slot.onsets[2] = -1;
+            slot.parameterChange = ! (s == last);
             slot.valid = false; slot.version = ++serial;
             slot.state.store (2, std::memory_order_release);
             const auto independentCount = std::max (targets.channel[0].count, targets.channel[1].count);

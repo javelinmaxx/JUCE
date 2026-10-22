@@ -6,7 +6,7 @@ const auto early = juce::Colour (0xff72ce9c), late = juce::Colour (0xfff07880);
 }
 XuanPhaseMeter::XuanPhaseMeter (XuanPhaseProcessor& p) : processor (p)
 {
-    setTooltip ("Shows three seconds of input transients moving left to right, with early bands green, late bands red, and applied left phase in white and right phase in gold wrapped to plus or minus 180 degrees.");
+    setTooltip ("Shows three seconds of input transients moving left to right, with early bands green, late bands red, and applied left phase in white and right phase in gold on a plus or minus 180 degree scale with correction targets capped at plus or minus 150 degrees.");
     lastColumn = lastInput = juce::Time::getMillisecondCounterHiRes();
 }
 XuanPhaseMeter::~XuanPhaseMeter() { stopTimer(); processor.setMeterVisible (false); }

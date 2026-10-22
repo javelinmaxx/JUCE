@@ -26,6 +26,10 @@ The maximum audio tail is approximately 75 ms including lookahead. Rotated
 transients can move or spread around the compensated reference; host latency
 remains fixed rather than following each frequency's group delay.
 
+The final combined manual, Auto and stereo correction is capped at **±150°**
+to leave 30° of headroom from the wrap seam. Manual parameter ranges remain
+±180° for existing automation; requests beyond the cap saturate at ±150°.
+
 The desired positive-frequency response is unit magnitude with phase
 `low × w(f) + high × (1 − w(f))`, where `w(f) = 1 / (1 + (f / crossover)^4)`.
 The worker builds a real, conjugate-symmetric FIR and tapers its outer edges.
@@ -45,7 +49,7 @@ coverage across logarithmic regions up to 20 kHz (or 45% of sample rate), then
 fills spare slots with the strongest remaining peaks to avoid low-frequency bias. Their complex phase and locally unwrapped phase slopes
 estimate how wave packets can meet the strongest transient sample. Relative
 band-delay targets are limited to ±25 ms. The final combined manual, Auto,
-and Stereo Link phase is saturated to ±180° before FIR design; values beyond
+and Stereo Link phase is saturated to ±150° before FIR design; values beyond
 the limit stop at that boundary rather than wrapping into another turn.
 
 **Auto Depth** ranges from −100% to +100% and scales only these additional
@@ -59,7 +63,7 @@ detected target, and negative values reverse the correction away from alignment.
 - **0%** detects, corrects, and releases each channel independently, with no
   contribution from the shared target.
 - **−100%** keeps independent correction and adds opposing shifts of up to
-  2.5 ms per channel at full Depth, subject to the final ±180° cap,
+  2.5 ms per channel at full Depth, subject to the final ±150° cap,
   aiming to move their transients farther apart; the channel whose detected anchor is earlier moves earlier, and the
   later one moves later (equal anchors use left-earlier/right-later).
 
@@ -77,7 +81,7 @@ when loading older sessions, which default to +100% Link.
 after the protected onset response has passed. New distinct onsets refresh
 the correction; it decays
 back toward the manual response between hits, and returns fully once below 0.1%.
-A saturated correction can remain at the ±180° boundary until its decaying
+A saturated correction can remain at the ±150° boundary until its decaying
 target strength falls far enough for the requested phase to leave the cap.
 Release responses update at up to 50 Hz through the existing 5 ms kernel fades.
 Auto Off or Depth 0% stops automatic response updates; a visible meter retains
@@ -87,8 +91,8 @@ of retuning on each overlapping FFT frame. The target remains fixed through
 the lookahead and the entire finite FIR response, plus an 8 ms safety margin;
 release starts after this hold. A distinct onset more than 40 ms later can
 start a new collection. A response that misses the safe pre-onset handoff
-window waits until the protected hit has passed, avoiding a late crossfade
-through its attack. Closely spaced/overlapping transients and worker scheduling
+window is discarded for that note, including later release revisions of that
+missed event, avoiding a late crossfade through a still-loud sustain. Closely spaced/overlapping transients and worker scheduling
 still limit what this punch-oriented heuristic can align.
 
 The audio thread performs a short SIMD FIR head and a partitioned FFT tail.
@@ -118,7 +122,7 @@ they do not jump ahead to an unapplied worker target. Guides mark 0°, ±45°,
 ±90°, ±135°, and the ±180° boundaries, with matching line styles in the key
 below the track; positive rotation is right of center and negative is left.
 The history is 168 px wide, and the readout reports the largest absolute
-rotation. The DSP correction is strictly capped to ±180°, including combined manual,
+rotation. The DSP correction is strictly capped to ±150°, including combined manual,
 Auto, and Stereo Link contributions. The meter measures the finite FIR, whose
 phase can show small approximation ripple near the boundary. The display
 uses principal phase for that measured complex response. Curves are

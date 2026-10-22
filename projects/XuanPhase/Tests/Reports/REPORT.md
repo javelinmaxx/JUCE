@@ -7,8 +7,8 @@
 The same FIR used by the processor is measured at 20, 50, 200, 1k, 5k and
 12k Hz for opposite low/high settings, with a 1 kHz crossover. Phase is measured
 relative to the compensated 50 ms latency (25 ms input lookahead plus
-the 25 ms FIR center). The endpoints reach approximately ±180° at
-20 Hz; intermediate-angle magnitude ripple is shown explicitly. The response
+the 25 ms FIR center). Requests at the manual endpoints saturate at ±150°
+before design; finite-FIR phase and magnitude ripple are shown explicitly. The response
 is a finite phase-rotation approximation, not a mathematically exact all-pass.
 
 Impulse tests compare the actual hybrid convolution against its designed FIR,
@@ -30,10 +30,10 @@ applied; both RMS and crest are reported to expose magnitude changes.
 
 | Auto Depth | Peak | RMS over the full 7,000-sample buffer | Crest factor |
 | --- | ---: | ---: | ---: |
-| −100% | 0.272990 | 0.028242 | 19.705 dB |
+| −100% | 0.273170 | 0.028242 | 19.711 dB |
 | 0% | 0.382388 | 0.028242 | 22.632 dB |
 | 50% | 0.483089 | 0.028242 | 24.663 dB |
-| 100% | 0.532231 | 0.028242 | 25.504 dB |
+| 100% | 0.532159 | 0.028242 | 25.503 dB |
 
 Depth 0 is sample-identical to manual-only processing. Full Depth must improve
 the dispersed hit's peak by at least 5% in this test. Detected group-delay
@@ -93,7 +93,8 @@ minus the required rotation toward the common transient anchor, wrapped to
 ±180°. This directly measures phase alignment in addition to comparing peaks.
 The deterministic response is frozen at full correction to isolate the alignment
 objective from worker timing and release. Intermediate frequencies follow the
-connected curve; this table measures the four detected peaks only.
+connected curve; this table measures the four detected peaks only. Corrections
+that need more than ±150° retain some residual alignment error at the cap.
 
 | Auto Depth | Mean absolute residual error | Largest absolute residual error |
 | --- | ---: | ---: |
@@ -121,9 +122,9 @@ existing 5 ms response crossfade; the plotted envelope includes that stepping.
 
 | Transient | Largest applied rotation during test | Rotation at end of 1.25 s stream |
 | --- | ---: | ---: |
-| 40 ms | 145.890° | 0.000000° |
-| 200 ms | 145.890° | 0.826293° |
-| 800 ms | 145.890° | 39.492200° |
+| 40 ms | 146.018° | 0.000000° |
+| 200 ms | 146.018° | 0.783377° |
+| 800 ms | 146.018° | 39.492200° |
 
 The short release must return below 1°; the long release must retain more
 correction than the medium release. Other checks cover zero Depth, host bypass,
@@ -142,18 +143,21 @@ undispersed source.
 ![DSP phase cap](phase-cap.png)
 
 The final combined manual, automatic, and Stereo Link correction now saturates
-at ±180° at every frequency **before** conversion to a complex FIR target.
-A +200° request stops at +180°; it is not wrapped to −160°. The float limit is
-chosen just below mathematical pi to avoid rounding +pi across the seam when
-converting it to a complex value. No extra phase turns are used for separation.
+at ±150° at every frequency **before** conversion to a complex FIR target.
+A +200° request stops at +150°, leaving 30° of headroom from the wrap seam.
+No extra phase turns are used for separation; existing manual parameter ranges
+remain ±180° for automation compatibility.
 
 The regression sweeps 20 Hz–20 kHz, manual −180/0/+180°, Auto Depth
 −100/0/+100%, Stereo Link −100/−50/0/+50/+100%, and both channels. Every
-combined correction must stay within ±pi, and positive/negative over-range
+combined correction must stay within ±150°, and positive/negative over-range
 requests must retain their sign. The plot uses a deliberately over-range
 synthetic target with maximum negative Link to show both saturated boundaries.
 The finite FIR approximates the bounded target and can have small measured
 phase ripple; the cap applies to the actual correction requested from its design.
+At the 20 Hz manual endpoint, finite-FIR phase error is about 3.9 degrees for
+a 150-degree target; the manual regression allows 4.3 degrees there and 1.8
+degrees at its other measurement frequencies.
 Data: [phase-cap.csv](phase-cap.csv).
 
 ## Lookahead and onset stability
@@ -170,14 +174,16 @@ Repeated detections from overlapping FFT frames do not repeatedly redesign it.
 Target strength holds through the lookahead and full FIR response plus an
 8 ms safety margin; Transient release starts after that hold. An onset more
 than 40 ms later can begin a new collection. Responses arriving too late for
-the pre-onset 5 ms crossfade are held until the protected hit has passed.
+the pre-onset 5 ms crossfade are discarded for that event, including subsequent
+release revisions, so they cannot fade into a still-loud piano sustain.
 
 The test streams a dispersed hit through the real worker with Transient at
 its fastest 20 ms setting. It records changes to the actual applied complex
 FIR response, and requires it to stay fixed through an interval containing
 the delayed transient peak. A second run deliberately pauses the worker until
 its safe pre-onset deadline has passed: the hit must retain the previous,
-neutral response, and correction must recover after the protected interval.
+neutral response for the entire note; a later release revision must not revive
+the discarded correction.
 No audio callback waits for the worker.
 
 | Worker | Largest filter change in checked onset interval |
@@ -194,6 +200,17 @@ promised to match this isolated synthetic case. Additional checks cover exact
 and safe transition boundaries at each rate.
 Data: [lookahead.csv](lookahead.csv).
 
+![Sustained electric-piano regression](electric-piano.png)
+
+A second fixture uses a simulated C3 electric-piano note with a 2 ms hammer
+attack, nine decaying harmonics, an inharmonic bell partial, and a long sustain.
+With a deliberately late worker, it must generate spectral targets yet retain
+the delayed input throughout the note, with maximum sample error below 0.00001.
+The previous handoff could start a 5 ms fade about 83 ms after the onset, while
+the note was still loud. The new handoff discards that missed event instead.
+This checks late-attack modulation, not every source of warble in a real piano.
+Data: [electric-piano.csv](electric-piano.csv).
+
 ## Stereo Link: shared, independent, and separating correction
 
 ![Measured Stereo Link comparisons](stereo-link.png)
@@ -204,15 +221,15 @@ engine at 100% Auto Depth, using a frozen detected target. At +100%, both
 channels receive exactly the same correction; at 0%, each uses its own target
 (which happens to be identical in this example). At negative values, opposing
 transient-guided timing shifts aim to separate the channels, but the final
-combined correction is now strictly capped to ±180° at every frequency.
+combined correction is now strictly capped to ±150° at every frequency.
 The previous full-band 5 ms separation is no longer guaranteed: at high
-frequencies, opposing +180°/−180° limits are equivalent, so the largest
+frequencies, saturation constrains the opposing time shifts, so the largest
 negative Link value can produce less peak spacing than an intermediate value.
 
 | Stereo Link | Absolute channel peak spacing | L/R correlation over complete buffer |
 | --- | ---: | ---: |
-| -100% | 0.000 ms | 0.9753 |
-| -50% | 1.188 ms | 0.7049 |
+| -100% | 0.167 ms | 0.4869 |
+| -50% | 0.500 ms | 0.2952 |
 | +0% | 0.000 ms | 1.0000 |
 | +50% | 0.000 ms | 1.0000 |
 | +100% | 0.000 ms | 1.0000 |
@@ -259,7 +276,7 @@ Additional tests feed ±180°, ±200°, ±540°, and +900° responses to the act
 plot helper, check that wrapping preserves their complex phase, flatten the
 cubic curves to verify they remain within the track, and reject lines joining
 +179° directly to −179°. The plot is clipped to the labeled ±180° limits;
-the DSP now saturates the combined correction to ±180° before FIR design,
+the DSP now saturates the combined correction to ±150° before FIR design,
 rather than retaining extra unwrapped turns.
 Stereo Link sits at the far right of the three-knob Auto row beside Transient.
 

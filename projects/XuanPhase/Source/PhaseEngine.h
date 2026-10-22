@@ -103,7 +103,7 @@ private:
         std::array<int64_t, 3> onsets {{-1, -1, -1}};
         std::array<std::array<std::complex<float>, meterBins>, 2> response {};
         std::array<std::array<float, hop>, 2> tail {}, overlap {};
-        bool valid = false;
+        bool valid = false, parameterChange = false;
     };
     void run() override;
     void finishHop();
