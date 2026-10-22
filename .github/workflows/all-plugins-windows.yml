@@ -1,0 +1,85 @@
+name: All Plugins - Windows VST3
+
+# Build only when explicitly requested from the Actions tab.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: all-plugins-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.product }} - Windows x64 Release
+    runs-on: windows-2022
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: YinyangCompressor
+            product: YinYang Compressor
+            test_option: YINYANG_BUILD_TESTS
+          - project: ShunDeEss
+            product: SHUN DE-ESS
+            test_option: SHUN_BUILD_TESTS
+          - project: KuoStereo
+            product: Kuo Stereo
+            test_option: KUO_BUILD_TESTS
+          - project: ZaoDrive
+            product: Zao Drive
+            test_option: ZAO_BUILD_TESTS
+          - project: RenTransformer
+            product: Ren Transformer
+            test_option: REN_BUILD_TESTS
+          - project: KuoVelvet
+            product: Kuo Velvet
+            test_option: VELVET_BUILD_TESTS
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      PLUGIN_PROJECT: ${{ matrix.project }}
+      PLUGIN_PRODUCT: ${{ matrix.product }}
+      PLUGIN_TEST_OPTION: ${{ matrix.test_option }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Configure VST3
+        run: |
+          $source = Join-Path $env:GITHUB_WORKSPACE "projects/$env:PLUGIN_PROJECT"
+          $build = Join-Path $env:GITHUB_WORKSPACE "build/windows/$env:PLUGIN_PROJECT"
+          & cmake -S $source -B $build -G 'Visual Studio 17 2022' -A x64 `
+            "-D$($env:PLUGIN_TEST_OPTION)=OFF" `
+            '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded$<$<CONFIG:Debug>:Debug>'
+          if ($LASTEXITCODE -ne 0) { throw "CMake configuration failed (exit $LASTEXITCODE)." }
+
+      - name: Build VST3
+        run: |
+          $build = Join-Path $env:GITHUB_WORKSPACE "build/windows/$env:PLUGIN_PROJECT"
+          & cmake --build $build --config Release --target "$($env:PLUGIN_PROJECT)_VST3" --parallel 4
+          if ($LASTEXITCODE -ne 0) { throw "VST3 build failed (exit $LASTEXITCODE)." }
+
+      - name: Check Windows bundle
+        run: |
+          $build = Join-Path $env:GITHUB_WORKSPACE "build/windows/$env:PLUGIN_PROJECT"
+          $bundle = Join-Path $build "$($env:PLUGIN_PROJECT)_artefacts/Release/VST3/$($env:PLUGIN_PRODUCT).vst3"
+          $binary = Join-Path $bundle "Contents/x86_64-win/$($env:PLUGIN_PRODUCT).vst3"
+          if (-not (Test-Path -LiteralPath $binary -PathType Leaf)) {
+            throw "Windows VST3 binary missing: $binary"
+          }
+          Get-ChildItem -LiteralPath $bundle -Recurse
+
+      - name: Upload Windows VST3
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.project }}-Windows-x64-VST3
+          # Upload the parent directory to preserve the whole .vst3 bundle.
+          path: build/windows/${{ matrix.project }}/${{ matrix.project }}_artefacts/Release/VST3/
+          if-no-files-found: error
+          retention-days: 30
