@@ -31,6 +31,18 @@ float PhaseEngine::releaseStrength (float current, double samples, double rate, 
 {
     return current*static_cast<float> (std::exp (-std::max (0.0, samples)/(rate*.001*std::clamp (milliseconds, 20.f, 1000.f))));
 }
+bool PhaseEngine::transitionAllowed (int64_t streamSample, int64_t onsetSample, double rate) noexcept
+{
+    if (onsetSample < 0) return true;
+    const auto reference = juce::roundToInt (rate*.025);
+    const auto aheadSamples = juce::roundToInt (rate*.05)-reference;
+    const auto fade = juce::roundToInt (rate*.005), safety = juce::roundToInt (rate*.008);
+    // Finish the fade before delayed input reaches the FIR, and keep its entire
+    // finite response stable. A late worker response waits until the hit passes.
+    const auto first = onsetSample+aheadSamples-fade-safety;
+    const auto last = onsetSample+aheadSamples+2*reference+safety;
+    return streamSample < first || streamSample >= last;
+}
 double PhaseEngine::bandValue (double frequency, const Analysis& a, bool timing)
 {
     if (a.count == 0) return 0;
@@ -299,17 +311,18 @@ void PhaseEngine::publishRotation()
 void PhaseEngine::prepare (double rate, std::function<Settings()> provider, bool worker)
 {
     release(); sampleRate = rate; readSettings = std::move (provider);
-    delay = juce::roundToInt (rate*.025); partitions = (2*delay+1-hop+hop-1)/hop;
+    delay = juce::roundToInt (rate*.025); lookahead = juce::roundToInt (rate*.05)-delay; aheadPosition = 0; partitions = (2*delay+1-hop+hop-1)/hop;
     partitions = std::max (1, partitions); fadeLength = std::max (1, juce::roundToInt (rate*.005));
     history = {}; position = dryPosition = ringPosition = 0; spectrumPosition = -1;
     active = 0; pending = -1; fadePosition = 0;
     meterHopCounter = 0; meterBypass = 0; spectrumMeter.reset(); rotationMeter.reset();
     for (auto& channel : spectra) channel.assign (static_cast<size_t> ((partitions+1)*fftSize), {});
-    for (auto& channel : dry) channel.assign (static_cast<size_t> (delay), 0);
+    for (auto& channel : dry) channel.assign (static_cast<size_t> (latency()), 0);
+    for (auto& channel : ahead) channel.assign (static_cast<size_t> (lookahead), 0);
     const auto analysisSize = 1 << orderFor (juce::roundToInt (rate*.04));
     analysisRing.assign (static_cast<size_t> (analysisSize), 0); leftAnalysisRing = rightAnalysisRing = analysisRing; analysisJob = analysisRing;
     channelJobs = {analysisRing, analysisRing}; channelCount = jobChannels = 2;
-    for (auto& slot : slots) { slot.state.store (0); slot.valid = false; slot.tail = {}; slot.overlap = {}; }
+    for (auto& slot : slots) { slot.state.store (0); slot.onsets.fill (-1); slot.valid = false; slot.tail = {}; slot.overlap = {}; }
     processedSamples = jobSample = 0;
     jobState.store (0); displayedTargets.store (0); autoActive.store (false); revision.store (1);
     const auto s = readSettings(); preparedSettings = s;
@@ -384,7 +397,9 @@ void PhaseEngine::finishHop()
         for (int i = 0; i < 3; ++i)
             if (slots[static_cast<size_t> (i)].state.load (std::memory_order_acquire) == 2
                 && (newest < 0 || slots[static_cast<size_t> (i)].version > slots[static_cast<size_t> (newest)].version)) newest = i;
-        if (newest >= 0)
+        if (newest >= 0 && std::all_of (slots[static_cast<size_t> (newest)].onsets.begin(),
+                                        slots[static_cast<size_t> (newest)].onsets.end(),
+                                        [&] (int64_t onset) { return transitionAllowed (static_cast<int64_t> (processedSamples), onset, sampleRate); }))
         {
             for (int i = 0; i < 3; ++i)
                 if (i != newest && slots[static_cast<size_t> (i)].state.load() == 2) slots[static_cast<size_t> (i)].state.store (0, std::memory_order_release);
@@ -438,7 +453,10 @@ void PhaseEngine::process (juce::AudioBuffer<float>& buffer, const Settings& s, 
             const auto c = static_cast<size_t> (ch);
             const auto raw = ch < channels ? buffer.getSample (ch, i) : 0;
             in[c] = std::isfinite (raw) ? std::clamp (raw, -32.f, 32.f) : 0;
-            history[c][static_cast<size_t> (position)] = history[c][static_cast<size_t> (position+hop)] = in[c];
+            // Analysis observes raw input; convolution receives it 25 ms later.
+            const auto delayed = ahead[c][static_cast<size_t> (aheadPosition)];
+            ahead[c][static_cast<size_t> (aheadPosition)] = in[c];
+            history[c][static_cast<size_t> (position)] = history[c][static_cast<size_t> (position+hop)] = delayed;
             bypassed[c] = dry[c][static_cast<size_t> (dryPosition)]; dry[c][static_cast<size_t> (dryPosition)] = in[c];
             const auto evaluate = [&] (int index)
             {
@@ -466,7 +484,8 @@ void PhaseEngine::process (juce::AudioBuffer<float>& buffer, const Settings& s, 
             slots[static_cast<size_t> (active)].state.store (0, std::memory_order_release);
             active = pending; pending = -1;
         }
-        dryPosition = (dryPosition+1)%delay;
+        dryPosition = (dryPosition+1)%latency();
+        aheadPosition = (aheadPosition+1)%lookahead;
         if (++position == hop) { position = 0; finishHop(); }
     }
 }
@@ -476,6 +495,10 @@ void PhaseEngine::run()
     uint64_t lastAnalysisSample = 0;
     std::array<uint64_t, 3> lastReleaseSample {};
     std::array<float, 3> releaseGain {};
+    std::array<Analysis, 3> collected;
+    std::array<int64_t, 3> eventOnsets {{-1, -1, -1}};
+    std::array<uint64_t, 3> collectUntil {}, holdUntil {};
+    std::array<bool, 3> collecting {};
     StereoAnalysis targets; Analysis displayedAnalysis; std::vector<float> previous, displayPrevious;
     std::array<std::vector<float>, 2> channelPrevious;
     std::array<double, 2> channelEnergy {};
@@ -511,15 +534,32 @@ void PhaseEngine::run()
                 if (! correcting) return;
                 if (detected.count > 0)
                 {
-                    held = detected;
-                    // Channel onsets can arrive in different overlapping frames;
-                    // compare absolute audio timestamps when choosing separation direction.
-                    held.anchor += (static_cast<double> (jobSample)-static_cast<double> (analysisJob.size()))/sampleRate;
-                    releaseGain[index] = 1; lastReleaseSample[index] = jobSample; dirty = true;
+                    auto next = detected;
+                    next.anchor += (static_cast<double> (jobSample)-static_cast<double> (analysisJob.size()))/sampleRate;
+                    const auto anchor = static_cast<int64_t> (std::llround (next.anchor*sampleRate));
+                    // The same onset is visible in many overlapping FFT frames.
+                    // Collect 5 ms of context, then latch once instead of retuning
+                    // the filter for every frame of that same transient.
+                    if (eventOnsets[index] < 0 || anchor-eventOnsets[index] > juce::roundToInt (sampleRate*.04))
+                    {
+                        collecting[index] = true; collected[index] = next; eventOnsets[index] = anchor;
+                        collectUntil[index] = jobSample+static_cast<uint64_t> (juce::roundToInt (sampleRate*.005));
+                    }
+                    else if (collecting[index]) collected[index] = next;
                 }
-                else if (held.count > 0)
+                if (collecting[index])
                 {
-                    releaseGain[index] = releaseStrength (releaseGain[index], static_cast<double> (jobSample-lastAnalysisSample), sampleRate, s.transient);
+                    if (jobSample < collectUntil[index]) return;
+                    held = collected[index]; collecting[index] = false; releaseGain[index] = 1;
+                    eventOnsets[index] = static_cast<int64_t> (std::llround (held.anchor*sampleRate));
+                    holdUntil[index] = static_cast<uint64_t> (std::max (int64_t (0), eventOnsets[index]))
+                        +static_cast<uint64_t> (lookahead+2*delay+juce::roundToInt (sampleRate*.008));
+                    lastReleaseSample[index] = holdUntil[index]; dirty = true;
+                }
+                else if (held.count > 0 && jobSample > holdUntil[index])
+                {
+                    const auto elapsed = jobSample-std::max (lastAnalysisSample, holdUntil[index]);
+                    releaseGain[index] = releaseStrength (releaseGain[index], static_cast<double> (elapsed), sampleRate, s.transient);
                     if (jobSample-lastReleaseSample[index] >= static_cast<uint64_t> (sampleRate*.02))
                     {
                         held.strength = releaseGain[index]; lastReleaseSample[index] = jobSample; dirty = true;
@@ -540,7 +580,10 @@ void PhaseEngine::run()
             lastAnalysisSample = jobSample;
             jobState.store (0, std::memory_order_release);
         }
-        if (! s.automatic || juce::exactlyEqual (s.depth, 0.f)) { targets = {}; displayedTargets.store (0); }
+        if (! s.automatic || juce::exactlyEqual (s.depth, 0.f))
+        {
+            targets = {}; collecting.fill (false); eventOnsets.fill (-1); displayedTargets.store (0);
+        }
         if (dirty)
         {
             int free = -1;
@@ -560,6 +603,7 @@ void PhaseEngine::run()
                     slot.kernels[static_cast<size_t> (ch)].build (ir, partitions); prepareMeter (slot, ir, ch);
                 }
             }
+            slot.onsets = eventOnsets;
             slot.valid = false; slot.version = ++serial;
             slot.state.store (2, std::memory_order_release);
             const auto independentCount = std::max (targets.channel[0].count, targets.channel[1].count);

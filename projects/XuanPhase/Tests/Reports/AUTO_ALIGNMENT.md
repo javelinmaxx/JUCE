@@ -40,14 +40,14 @@ and analysis worker** at 48 kHz in 128-sample blocks, starting with no detected
 targets. Auto is On at 100% Depth with the default 200 ms Transient release;
 Low Phase and High Phase are zero, gain is unity, and Stereo Link is +100%.
 The block loop gives the background worker 3 ms per block; scheduling can affect
-the first hit. Auto Off is the identical input delayed by the fixed 25 ms.
+the first hit. Auto Off is the identical input delayed by the fixed 50 ms.
 No target is preloaded, and no gain compensation or normalization is applied.
 
 | Hit | Auto Off peak | Live Auto peak | Peak increase | RMS change |
 | --- | ---: | ---: | ---: | ---: |
-| 1 | 0.382388 | 0.490522 | 28.3% | +0.0003 dB |
-| 2 | 0.382388 | 0.490522 | 28.3% | +0.0003 dB |
-| 3 | 0.382388 | 0.490522 | 28.3% | +0.0007 dB |
+| 1 | 0.382388 | 0.490522 | 28.3% | -0.0000 dB |
+| 2 | 0.382388 | 0.490522 | 28.3% | -0.0000 dB |
+| 3 | 0.382388 | 0.490522 | 28.3% | -0.0000 dB |
 
 Each RMS window spans 4,096 samples including the complete hit and response tail.
 Tests require the last hit's peak to improve by at least 5% while RMS stays within
@@ -102,15 +102,15 @@ after one selected time constant, 36.8% of the underlying target strength remain
 about seven time constants, the response returns to manual-only processing.
 The phase cap can hold a saturated response at its boundary until the target
 strength has fallen far enough for the visible phase to start decreasing.
-The release starts after the last detected onset frame, rather than the first
-sample of the hit. Rebuilds occur at up to 50 Hz during release and use the
+The release starts after the protected onset hold (lookahead + complete FIR
+response + 8 ms safety margin), rather than the first sample of the hit. Rebuilds occur at up to 50 Hz during release and use the
 existing 5 ms response crossfade; the plotted envelope includes that stepping.
 
 | Transient | Largest applied rotation during test | Rotation at end of 1.25 s stream |
 | --- | ---: | ---: |
-| 40 ms | 149.858° | 0.000000° |
-| 200 ms | 149.858° | 0.525365° |
-| 800 ms | 179.943° | 45.187300° |
+| 40 ms | 145.890° | 0.000000° |
+| 200 ms | 145.890° | 0.826293° |
+| 800 ms | 145.890° | 39.492200° |
 
 The short release must return below 1°; the long release must retain more
 correction than the medium release. Other checks cover zero Depth, host bypass,
@@ -123,6 +123,7 @@ polyphonic material, low-frequency resolution, finite-FIR magnitude ripple,
 and worker scheduling can limit improvement. Higher peak at unchanged RMS is a
 punch indicator, not proof of perceived quality or reconstruction of an original
 undispersed source.
+
 ## Strict phase-correction limit
 
 ![DSP phase cap](phase-cap.png)
@@ -141,6 +142,44 @@ synthetic target with maximum negative Link to show both saturated boundaries.
 The finite FIR approximates the bounded target and can have small measured
 phase ripple; the cap applies to the actual correction requested from its design.
 Data: [phase-cap.csv](phase-cap.csv).
+
+## Lookahead and onset stability
+
+![Live lookahead and delayed-worker regression](lookahead.png)
+
+The input now has 25 ms of actual delay **before** phase convolution, while
+analysis continues to see the raw input. Together with the 25 ms FIR center,
+reported host latency is 50 ms at every setting, including bypass and Auto Off.
+The entire finite response can extend to approximately 75 ms after input.
+
+Auto gathers 5 ms of context and latches the detected target once per onset.
+Repeated detections from overlapping FFT frames do not repeatedly redesign it.
+Target strength holds through the lookahead and full FIR response plus an
+8 ms safety margin; Transient release starts after that hold. An onset more
+than 40 ms later can begin a new collection. Responses arriving too late for
+the pre-onset 5 ms crossfade are held until the protected hit has passed.
+
+The test streams a dispersed hit through the real worker with Transient at
+its fastest 20 ms setting. It records changes to the actual applied complex
+FIR response, and requires it to stay fixed through an interval containing
+the delayed transient peak. A second run deliberately pauses the worker until
+its safe pre-onset deadline has passed: the hit must retain the previous,
+neutral response, and correction must recover after the protected interval.
+No audio callback waits for the worker.
+
+| Worker | Largest filter change in checked onset interval |
+| --- | ---: |
+| Normal | 0.00000000 |
+| Late | 0.00000000 |
+
+The zero changes demonstrate removal of kernel modulation in this constructed
+onset interval; static phase rotation can still reshape or ring on a transient.
+A late hit may receive less correction instead of a warbling crossfade.
+Closely spaced transients, manual automation, and arbitrary recordings are not
+promised to match this isolated synthetic case. Additional checks cover exact
+50 ms neutral/bypass latency at 8/44.1/48/96/192 kHz, the entire reported tail,
+and safe transition boundaries at each rate.
+Data: [lookahead.csv](lookahead.csv).
 
 ## Stereo Link: shared, independent, and separating correction
 

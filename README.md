@@ -21,7 +21,7 @@ the JUCE framework is included in this repository.
 | [Zao Drive](projects/ZaoDrive/README.md) | Overdrive | Four circuit models, Smart harmonic shaping, Clear contour, waveform preview, Auto compensation |
 | [Ren Transformer](projects/RenTransformer/README.md) | Transformer coloration | YinYang's transformer stage in a compact four-knob interface |
 | [Kuo Velvet](projects/KuoVelvet/README.md) | Convolution widening | Kuo's Velvet stage with Width, Transient, Attack, and Output controls |
-| [Xuan Phase](projects/XuanPhase/README.md) | Phase rotation | Independent low/high rotation, fixed 25 ms reference, spectral transient alignment and Auto Depth |
+| [Xuan Phase](projects/XuanPhase/README.md) | Phase rotation | Independent low/high rotation, 25 ms lookahead, spectral transient alignment and Auto Depth |
 
 ### YinYang Compressor
 
@@ -129,7 +129,7 @@ attacks; this compact version omits Haas search, meters, and band controls.
 ![Xuan Phase with independent Low Phase and High Phase knobs, Crossover, Auto Depth, Transient, and Stereo Link](projects/XuanPhase/Previews/xuan-phase.png)
 
 Rotate the low and high frequencies independently through ±180°, with a smooth
-adjustable crossover and a fixed **25 ms** reference delay. **Auto** detects
+adjustable crossover, **25 ms correction lookahead**, and **50 ms** total latency. **Auto** detects
 clear transients and uses their spectrogram phase and phase slopes to align
 narrow frequency bands; signed **Auto Depth** scales or reverses that correction
 independently of the manual settings, and **Transient** sets its release time.

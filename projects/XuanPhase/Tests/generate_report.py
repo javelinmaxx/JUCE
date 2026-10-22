@@ -15,7 +15,7 @@ for degrees in [-180, -90, 0, 90, 180]:
     rows = phase[phase['setting'] == degrees]
     axes[0].semilogx(rows['frequency'], rows['phase_deg'], 'o-', label=f'Low {degrees:+} / High {-degrees:+} deg')
     axes[1].semilogx(rows['frequency'], rows['gain_db'], 'o-')
-axes[0].set(ylabel='Phase relative to 25 ms reference (degrees)', xlabel='Frequency (Hz)', title='Independent low/high rotation')
+axes[0].set(ylabel='Phase relative to compensated 50 ms latency (degrees)', xlabel='Frequency (Hz)', title='Independent low/high rotation')
 axes[1].set(ylabel='Magnitude (dB)', xlabel='Frequency (Hz)', title='Finite-FIR magnitude ripple')
 axes[0].legend(fontsize=7)
 for ax in axes: ax.grid(alpha=.25)
@@ -23,18 +23,18 @@ fig.savefig(root/'manual-phase.png', dpi=160); plt.close(fig)
 fig, ax = plt.subplots(figsize=(10, 4), constrained_layout=True)
 for key in ['depthminus100', 'depth0', 'depth50', 'depth100']:
     ax.plot(audio['sample']/48, audio[key], label=key.replace('depth', 'Auto Depth ').replace('minus','−')+'%', alpha=.8)
-ax.set(xlabel='Time (ms), including reference latency', ylabel='Amplitude', title='Phase-guided alignment of a dispersed transient', xlim=(40,65))
+ax.set(xlabel='Time (ms), including reference latency', ylabel='Amplitude', title='Phase-guided alignment of a dispersed transient', xlim=(65,90))
 ax.legend(); ax.grid(alpha=.25); fig.savefig(root/'transient-alignment.png', dpi=160); plt.close(fig)
 # A separate case runs the actual background detector, handoff and crossfade;
 # no target is injected and both manual rotations remain zero with unity gain.
 live = np.genfromtxt(root/'auto-live.csv', delimiter=',', names=True)
 curve = np.genfromtxt(root/'auto-phase.csv', delimiter=',', names=True)
 fig, axes = plt.subplots(3, 1, figsize=(11, 9), constrained_layout=True)
-for key, label in [('reference', 'Auto Off (25 ms reference)'), ('automatic', 'Live Auto, Depth 100%')]:
+for key, label in [('reference', 'Auto Off (50 ms reference)'), ('automatic', 'Live Auto, Depth 100%')]:
     axes[0].plot(live['sample']/48000, live[key], label=label, alpha=.75, linewidth=.7)
-    rows = live[(live['sample'] >= 36864+1200+850) & (live['sample'] <= 36864+1200+1450)]
-    axes[1].plot((rows['sample']-36864-1200)/48, rows[key], label=label, alpha=.8)
-axes[0].set(xlabel='Stream time (seconds, including 25 ms latency)', ylabel='Amplitude', title='Live automatic phase correction: three dispersed hits')
+    rows = live[(live['sample'] >= 36864+2400+850) & (live['sample'] <= 36864+2400+1450)]
+    axes[1].plot((rows['sample']-36864-2400)/48, rows[key], label=label, alpha=.8)
+axes[0].set(xlabel='Stream time (seconds, including 50 ms latency)', ylabel='Amplitude', title='Live automatic phase correction: three dispersed hits')
 axes[1].set(xlabel='Time relative to the last hit (ms, reference delay removed)', ylabel='Amplitude', title='Last hit after the worker has detected and applied correction')
 # Unwrap before plotting so a +/-180 degree display wrap is not mistaken for
 # a discontinuity in the complex frequency response.
@@ -45,7 +45,7 @@ for ax in axes: ax.grid(alpha=.25); ax.legend(fontsize=8)
 fig.savefig(root/'auto-live.png', dpi=160); plt.close(fig)
 live_rows=[]
 for number, start in enumerate([4096,20480,36864], 1):
-    rows=live[start+1200:start+1200+4096]
+    rows=live[start+2400:start+2400+4096]
     before, after=rows['reference'], rows['automatic']
     p0,p1=np.max(abs(before)),np.max(abs(after))
     r0,r1=np.sqrt(np.mean(before**2)),np.sqrt(np.mean(after**2))
@@ -76,7 +76,7 @@ axes[0].axhline(0, color='black', linewidth=.7); axes[0].legend(fontsize=8)
 for ms in [40,200,800]:
     a=release[release['release_ms']==ms]
     axes[1].plot(a['sample']/48, a['rotation_deg'], label=f'Transient {ms} ms')
-axes[1].set(xlabel='Stream time (ms, including 25 ms latency)', ylabel='Largest applied rotation (degrees)', title='Live worker: phase correction releases after one hit')
+axes[1].set(xlabel='Stream time (ms, including 50 ms latency)', ylabel='Largest applied rotation (degrees)', title='Live worker: phase correction releases after one hit')
 axes[1].legend(fontsize=8)
 for ax in axes: ax.grid(alpha=.25)
 fig.savefig(root/'auto-performance.png', dpi=160); plt.close(fig)
@@ -116,8 +116,8 @@ after one selected time constant, 36.8% of the underlying target strength remain
 about seven time constants, the response returns to manual-only processing.
 The phase cap can hold a saturated response at its boundary until the target
 strength has fallen far enough for the visible phase to start decreasing.
-The release starts after the last detected onset frame, rather than the first
-sample of the hit. Rebuilds occur at up to 50 Hz during release and use the
+The release starts after the protected onset hold (lookahead + complete FIR
+response + 8 ms safety margin), rather than the first sample of the hit. Rebuilds occur at up to 50 Hz during release and use the
 existing 5 ms response crossfade; the plotted envelope includes that stepping.
 
 | Transient | Largest applied rotation during test | Rotation at end of 1.25 s stream |
@@ -150,10 +150,10 @@ for ax,link in zip(axes.flat,[-100,0,100]):
     a=stereo[stereo['link']==link]
     ax.plot(a['sample']/48,a['left'],label='Left',alpha=.8)
     ax.plot(a['sample']/48,a['right'],label='Right',alpha=.8)
-    ax.set(xlim=(39,58),xlabel='Time (ms, including reference latency)',ylabel='Amplitude',title=f'Stereo Link {link:+}%: identical input hits')
+    ax.set(xlim=(64,83),xlabel='Time (ms, including reference latency)',ylabel='Amplitude',title=f'Stereo Link {link:+}%: identical input hits')
 a=stereo_live[(stereo_live['sample']>=38000)&(stereo_live['sample']<44000)]
 for key in ['left','right']: axes[1,1].plot((a['sample']-36864)/48,a[key],label=key.title(),alpha=.8)
-axes[1,1].set(xlim=(39,60),xlabel='Time from last hit start (ms, including reference latency)',ylabel='Amplitude',title='Live worker at −100% Link: last repeated hit')
+axes[1,1].set(xlim=(64,85),xlabel='Time from last hit start (ms, including reference latency)',ylabel='Amplitude',title='Live worker at −100% Link: last repeated hit')
 for ax in axes.flat: ax.grid(alpha=.25); ax.legend(fontsize=8)
 fig.savefig(root/'stereo-link.png',dpi=160); plt.close(fig)
 with wave.open(str(root/'stereo-link-live.wav'),'wb') as wav:
@@ -165,7 +165,8 @@ for key in ['left_deg','right_deg']: ax.semilogx(cap['frequency'],cap[key],label
 for limit in [-180,180]: ax.axhline(limit,color='black',linestyle='--',linewidth=.8)
 ax.set(xlabel='Frequency (Hz)',ylabel='Requested correction (degrees)',ylim=(-195,195),title='Combined correction saturates at ±180° before FIR design')
 ax.grid(alpha=.25);ax.legend();fig.savefig(root/'phase-cap.png',dpi=160);plt.close(fig)
-cap_report="""## Strict phase-correction limit
+cap_report="""
+## Strict phase-correction limit
 
 ![DSP phase cap](phase-cap.png)
 
@@ -183,6 +184,65 @@ synthetic target with maximum negative Link to show both saturated boundaries.
 The finite FIR approximates the bounded target and can have small measured
 phase ripple; the cap applies to the actual correction requested from its design.
 Data: [phase-cap.csv](phase-cap.csv).
+
+"""
+ahead=np.genfromtxt(root/'lookahead.csv',delimiter=',',names=True)
+fig,axes=plt.subplots(2,2,figsize=(12,6),constrained_layout=True)
+ahead_rows=[]
+# The full-buffer peak anchors the expected protected body; production guards
+# use the detected per-onset anchor and include extra safety on both ends.
+normal=ahead[ahead['late_worker']==0]
+anchor=normal['sample'][np.argmax(abs(normal['reference']))]-2400
+for late in [0,1]:
+    a=ahead[ahead['late_worker']==late]
+    t=a['sample']/48
+    axes[0,late].plot(t,a['reference'],label='50 ms reference',alpha=.8)
+    axes[0,late].plot(t,a['automatic'],label='Live Auto',alpha=.8)
+    axes[0,late].set(xlim=((anchor+2400)/48-12,(anchor+2400)/48+12),xlabel='Stream time (ms)',ylabel='Amplitude',title='Normal worker' if late==0 else 'Deliberately late worker: stable fallback')
+    axes[1,late].plot(t,a['filter_change'],label='Applied complex-response change')
+    first,last=(anchor+1200)/48,(anchor+3120)/48
+    axes[1,late].axvspan(first,last,color='green',alpha=.15,label='Checked onset interval')
+    axes[1,late].set(xlabel='Stream time (ms)',ylabel='Largest change between meter snapshots',title='No filter retuning through the onset',xlim=(anchor/48-10,(anchor+6000)/48))
+    protected=a[(a['sample']>=anchor+1200)&(a['sample']<anchor+3000)]
+    ahead_rows.append(f"| {'Late' if late else 'Normal'} | {np.max(protected['filter_change']):.8f} |")
+for ax in axes.flat: ax.grid(alpha=.25);ax.legend(fontsize=7)
+fig.savefig(root/'lookahead.png',dpi=160);plt.close(fig)
+ahead_report="""## Lookahead and onset stability
+
+![Live lookahead and delayed-worker regression](lookahead.png)
+
+The input now has 25 ms of actual delay **before** phase convolution, while
+analysis continues to see the raw input. Together with the 25 ms FIR center,
+reported host latency is 50 ms at every setting, including bypass and Auto Off.
+The entire finite response can extend to approximately 75 ms after input.
+
+Auto gathers 5 ms of context and latches the detected target once per onset.
+Repeated detections from overlapping FFT frames do not repeatedly redesign it.
+Target strength holds through the lookahead and full FIR response plus an
+8 ms safety margin; Transient release starts after that hold. An onset more
+than 40 ms later can begin a new collection. Responses arriving too late for
+the pre-onset 5 ms crossfade are held until the protected hit has passed.
+
+The test streams a dispersed hit through the real worker with Transient at
+its fastest 20 ms setting. It records changes to the actual applied complex
+FIR response, and requires it to stay fixed through an interval containing
+the delayed transient peak. A second run deliberately pauses the worker until
+its safe pre-onset deadline has passed: the hit must retain the previous,
+neutral response, and correction must recover after the protected interval.
+No audio callback waits for the worker.
+
+| Worker | Largest filter change in checked onset interval |
+| --- | ---: |
+"""+'\n'.join(ahead_rows)+"""
+
+The zero changes demonstrate removal of kernel modulation in this constructed
+onset interval; static phase rotation can still reshape or ring on a transient.
+A late hit may receive less correction instead of a warbling crossfade.
+Closely spaced transients, manual automation, and arbitrary recordings are not
+promised to match this isolated synthetic case. Additional checks cover exact
+50 ms neutral/bypass latency at 8/44.1/48/96/192 kHz, the entire reported tail,
+and safe transition boundaries at each rate.
+Data: [lookahead.csv](lookahead.csv).
 
 """
 stereo_report="""## Stereo Link: shared, independent, and separating correction
@@ -234,14 +294,15 @@ a promise of maximum separation for every transient source.
 
 The same FIR used by the processor is measured at 20, 50, 200, 1k, 5k and
 12k Hz for opposite low/high settings, with a 1 kHz crossover. Phase is measured
-relative to the 25 ms reference. The endpoints reach approximately ±180° at
+relative to the compensated 50 ms latency (25 ms input lookahead plus
+the 25 ms FIR center). The endpoints reach approximately ±180° at
 20 Hz; intermediate-angle magnitude ripple is shown explicitly. The response
 is a finite phase-rotation approximation, not a mathematically exact all-pass.
 
 Impulse tests compare the actual hybrid convolution against its designed FIR,
 check block-size invariance at 1 and 127 samples, stereo linking, and neutral
 and bypass delays at 8/44.1/48/96/192 kHz. Host state recall covers all eight
-parameters. Input/output latency stays round(sampleRate × 25 ms) samples.
+parameters. Input/output latency stays round(sampleRate × 50 ms) samples.
 
 ## Transient spectral phase and Depth
 
@@ -277,7 +338,7 @@ and analysis worker** at 48 kHz in 128-sample blocks, starting with no detected
 targets. Auto is On at 100% Depth with the default 200 ms Transient release;
 Low Phase and High Phase are zero, gain is unity, and Stereo Link is +100%.
 The block loop gives the background worker 3 ms per block; scheduling can affect
-the first hit. Auto Off is the identical input delayed by the fixed 25 ms.
+the first hit. Auto Off is the identical input delayed by the fixed 50 ms.
 No target is preloaded, and no gain compensation or normalization is applied.
 
 | Hit | Auto Off peak | Live Auto peak | Peak increase | RMS change |
@@ -306,7 +367,7 @@ then fills remaining slots by strength, rather than taking the first 24
 low-frequency peaks. Coverage now extends to 20 kHz (limited to 45% of the
 sample rate).
 
-'''+performance+cap_report+stereo_report+'''
+'''+performance+cap_report+ahead_report+stereo_report+'''
 
 ## Phase-field display
 

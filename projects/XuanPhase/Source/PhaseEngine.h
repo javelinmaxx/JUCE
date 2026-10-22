@@ -55,7 +55,8 @@ private:
     std::atomic<uint32_t> version { 0 };
 };
 // The worker designs a bounded, real FIR around a 25 ms reference. The audio
-// path uses a direct head plus partitioned FFT tail, with no extra block delay.
+// input has a separate 25 ms correction lookahead, for 50 ms total latency.
+// Convolution uses a direct head plus FFT tail with no extra block delay.
 class PhaseEngine final : private juce::Thread
 {
 public:
@@ -65,7 +66,9 @@ public:
     void release();
     void changed() noexcept { revision.fetch_add (1, std::memory_order_release); notify(); }
     void process (juce::AudioBuffer<float>&, const Settings&, bool hostBypass = false);
-    int latency() const noexcept { return delay; }
+    int latency() const noexcept { return delay+lookahead; }
+    double tailSeconds() const noexcept { return static_cast<double> (latency()+delay)/sampleRate; }
+    static bool transitionAllowed (int64_t streamSample, int64_t onsetSample, double rate) noexcept;
     int targetCount() const noexcept { return displayedTargets.load (std::memory_order_relaxed); }
     void setMeterVisible (bool visible) noexcept { meterVisible.store (visible); }
     bool readSpectrum (SpectrumFrame& f, uint32_t& v) const noexcept { return spectrumMeter.read (f, v); }
@@ -97,6 +100,7 @@ private:
         std::array<Kernel, 2> kernels;
         std::atomic<int> state { 0 }; // free, building, ready, audio-owned
         uint32_t version = 0;
+        std::array<int64_t, 3> onsets {{-1, -1, -1}};
         std::array<std::array<std::complex<float>, meterBins>, 2> response {};
         std::array<std::array<float, hop>, 2> tail {}, overlap {};
         bool valid = false;
@@ -112,7 +116,7 @@ private:
     std::array<Complex, fftSize> work {}, transformed {}, sum {}, inverse {};
     std::array<std::vector<Complex>, 2> spectra;
     std::array<std::array<float, 2*hop>, 2> history {};
-    std::array<std::vector<float>, 2> dry;
+    std::array<std::vector<float>, 2> dry, ahead;
     std::vector<float> analysisRing, leftAnalysisRing, rightAnalysisRing, analysisJob;
     std::array<std::vector<float>, 2> channelJobs;
     int channelCount = 2, jobChannels = 2;
@@ -128,7 +132,7 @@ private:
     std::function<Settings()> readSettings;
     Settings preparedSettings;
     double sampleRate = 48000;
-    int delay = 1200, partitions = 18, spectrumPosition = -1, position = 0, dryPosition = 0, ringPosition = 0;
+    int delay = 1200, lookahead = 1200, aheadPosition = 0, partitions = 18, spectrumPosition = -1, position = 0, dryPosition = 0, ringPosition = 0;
     int active = 0, pending = -1, fadePosition = 0, fadeLength = 240;
     juce::SmoothedValue<float> bypassBlend;
 };

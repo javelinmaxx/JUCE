@@ -214,6 +214,80 @@ void phaseCapTests (const juce::File& directory)
     check (negative < -3.14f && std::atan2 (std::sin (negative), std::cos (negative)) < -3.14f,
            "over-range negative correction stops at -180 rather than wrapping positive");
 }
+void lookaheadTests (const juce::File& directory, const std::vector<float>& hit)
+{
+    constexpr double rate = 48000;
+    const auto peak = std::max_element (hit.begin(), hit.end(), [] (float a, float b) { return std::abs (a) < std::abs (b); })-hit.begin();
+    const auto anchor = static_cast<int64_t> (4096+peak);
+    for (double r : {8000., 44100., 48000., 96000., 192000.})
+    {
+        const auto source = juce::roundToInt (r*.1), ref = juce::roundToInt (r*.025);
+        const auto ahead = juce::roundToInt (r*.05)-ref;
+        const auto first = source+ahead-juce::roundToInt (r*.005)-juce::roundToInt (r*.008);
+        const auto last = source+ahead+2*ref+juce::roundToInt (r*.008);
+        check (xuan::PhaseEngine::transitionAllowed (first-1, source, r)
+               && ! xuan::PhaseEngine::transitionAllowed (first, source, r)
+               && ! xuan::PhaseEngine::transitionAllowed (last-1, source, r)
+               && xuan::PhaseEngine::transitionAllowed (last, source, r),
+               "late response transitions are excluded from the whole protected onset at every sample rate");
+    }
+    std::ofstream trace (directory.getChildFile ("lookahead.csv").getFullPathName().toStdString());
+    trace << "late_worker,sample,reference,automatic,filter_change\n";
+    for (bool late : {false, true})
+    {
+        xuan::Settings settings; settings.automatic = true; settings.depth = 100; settings.transient = 20;
+        std::atomic<bool> paused {late}; const auto mainThread = juce::Thread::getCurrentThreadId();
+        xuan::PhaseEngine engine;
+        engine.prepare (rate, [&]
+        {
+            while (paused.load() && juce::Thread::getCurrentThreadId() != mainThread) juce::Thread::sleep (1);
+            return settings;
+        });
+        engine.setMeterVisible (true);
+        xuan::RotationFrame previous {}, frame {}; uint32_t version = 0; engine.readRotation (previous, version);
+        juce::AudioBuffer<float> audio (2, 128); float protectedChange = 0, protectedAngle = 0, laterAngle = 0;
+        int frames = 0;
+        for (int at = 0; at < 24576; at += 128)
+        {
+            if (at >= anchor+960) paused.store (false); // make the response late on purpose
+            for (int i = 0; i < 128; ++i)
+            {
+                const auto index = at+i-4096;
+                const auto input = index >= 0 && index < static_cast<int> (hit.size()) ? hit[static_cast<size_t> (index)] : 0;
+                audio.setSample (0, i, input); audio.setSample (1, i, -.5f*input);
+            }
+            engine.process (audio, settings); juce::Thread::sleep (3);
+            float change = 0, rotation = 0;
+            if (engine.readRotation (frame, version))
+            {
+                for (int row = 0; row < xuan::meterBins; ++row)
+                {
+                    const auto now = std::complex<float> (frame[static_cast<size_t> (row)], frame[xuan::meterBins+static_cast<size_t> (row)]);
+                    const auto before = std::complex<float> (previous[static_cast<size_t> (row)], previous[xuan::meterBins+static_cast<size_t> (row)]);
+                    change = std::max (change, std::abs (now-before)); rotation = std::max (rotation, std::abs (std::arg (now)));
+                }
+                if (at+128 >= anchor+1200 && at+128 < anchor+3120)
+                {
+                    ++frames; protectedChange = std::max (protectedChange, change); protectedAngle = std::max (protectedAngle, rotation);
+                }
+                if (at > anchor+4200) laterAngle = std::max (laterAngle, rotation);
+                previous = frame;
+            }
+            for (int i = 0; i < 128; ++i)
+            {
+                const auto index = at+i-engine.latency()-4096;
+                const auto reference = index >= 0 && index < static_cast<int> (hit.size()) ? hit[static_cast<size_t> (index)] : 0;
+                trace << late << ',' << at+i << ',' << reference << ',' << audio.getSample (0, i) << ',' << change << '\n';
+            }
+        }
+        paused.store (false);
+        std::cout << "Lookahead late=" << late << " protected filter change=" << protectedChange << " protected phase=" << protectedAngle << " later phase=" << laterAngle << '\n';
+        check (frames > 8 && protectedChange < 1e-6f, "the applied phase response stays fixed throughout the protected onset and output peak");
+        check (protectedAngle > .01f || laterAngle > .01f, "the worker applies a correction either before the onset or safely after a missed deadline");
+        if (late) check (protectedAngle < 1e-5f && laterAngle > .01f, "a deliberately late worker leaves the onset unchanged and recovers after it passes");
+    }
+}
+
 void phaseDisplayTests()
 {
     const juce::Rectangle<float> track {210, 64, 56, 204};
@@ -286,8 +360,10 @@ void dspTests (const juce::File& directory)
     for (double rate : {8000., 44100., 48000., 96000., 192000.})
     {
         XuanPhaseProcessor p; p.prepareToPlay (rate, 127);
-        const auto latency = juce::roundToInt (rate*.025);
-        check (p.getLatencySamples() == latency, "host latency is the nearest sample to 25 ms at every sample rate");
+        const auto latency = juce::roundToInt (rate*.05);
+        check (std::abs (p.getTailLengthSeconds()-(latency+juce::roundToInt (rate*.025))/rate) < 1e-9,
+               "reported tail includes the added lookahead and entire finite phase response");
+        check (p.getLatencySamples() == latency, "host latency is the nearest sample to 50 ms at every sample rate");
         std::vector<float> input (static_cast<size_t> (2*latency+2048)); input[0] = 1;
         for (bool bypass : {false, true})
         {
@@ -312,7 +388,7 @@ void dspTests (const juce::File& directory)
         std::vector<float> impulse (8000); impulse[0] = 1;
         const auto actual = run (s, impulse);
         double error = 0;
-        for (size_t i = 0; i < actual.size(); ++i) error = std::max (error, std::abs (static_cast<double> (actual[i])-(i < ir.size() ? ir[i] : 0)));
+        for (size_t i = 0; i < actual.size(); ++i) error = std::max (error, std::abs (static_cast<double> (actual[i])-(i >= 1200 && i-1200 < ir.size() ? ir[i-1200] : 0)));
         check (error < 2e-6, "hybrid convolution matches the designed impulse without adding a block of latency");
         const auto other = run (s, impulse, 1);
         check (other == actual, "phase processing is independent of host block boundaries");
@@ -388,6 +464,7 @@ void dspTests (const juce::File& directory)
            "24 automatic bands cover low and high frequencies instead of filling exclusively from low peaks");
     std::vector<float> previous; double energy = 0;
     const auto targets = xuan::PhaseEngine::analyse (hit, 48000, previous, energy);
+    lookaheadTests (directory, hit);
     check (targets.count >= 3, "transient spectrogram phase produces multiple narrow-band alignment targets");
     for (int i = 0; i < targets.count; ++i)
         check (std::abs (targets.targets[static_cast<size_t> (i)].delay) <= .025, "automatic group-delay targets stay inside the lookahead budget");
@@ -442,7 +519,7 @@ void dspTests (const juce::File& directory)
     for (size_t i = 0; i < padded.size(); ++i)
     {
         before = std::max (before, std::abs (outputs[0][i])); after = std::max (after, std::abs (outputs[2][i]));
-        transient << i << ',' << (i >= 1200 ? padded[i-1200] : 0) << ',' << outputs[0][i] << ',' << outputs[1][i] << ',' << outputs[2][i] << ',' << negative[i] << '\n';
+        transient << i << ',' << (i >= 2400 ? padded[i-2400] : 0) << ',' << outputs[0][i] << ',' << outputs[1][i] << ',' << outputs[2][i] << ',' << negative[i] << '\n';
     }
     std::cout << "Transient targets=" << targets.count << " peak before=" << before << " after=" << after << '\n';
     check (after > before*1.05f, "phase-guided alignment increases the synthetic dispersed hit peak at full depth");
@@ -476,10 +553,10 @@ void dspTests (const juce::File& directory)
         live.processBlock (block, midi); juce::Thread::sleep (3);
         for (int i = 0; i < 128; ++i)
         {
-            const auto expected = at+i >= 1200 ? stream[static_cast<size_t> (at+i-1200)] : 0;
+            const auto expected = at+i >= 2400 ? stream[static_cast<size_t> (at+i-2400)] : 0;
             liveAudio << at+i << ',' << expected << ',' << block.getSample (0, i) << '\n';
             liveDifference += std::abs (block.getSample (0, i)-expected);
-            if (at+i >= 36864+1200 && at+i < 36864+1200+4096)
+            if (at+i >= 36864+2400 && at+i < 36864+2400+4096)
             {
                 const auto out = block.getSample (0, i);
                 settledInputPeak = std::max (settledInputPeak, std::abs (expected));
@@ -536,9 +613,9 @@ void dspTests (const juce::File& directory)
         block.clear(); if (at == 0) block.setSample (0, 0, 1);
         bypassed.processBlockBypassed (block, midi);
         for (int i = 0; i < 128; ++i)
-            bypassError = std::max (bypassError, std::abs (static_cast<double> (block.getSample (0, i))-(at+i == 1200 ? 1 : 0)));
+            bypassError = std::max (bypassError, std::abs (static_cast<double> (block.getSample (0, i))-(at+i == 2400 ? 1 : 0)));
     }
-    check (bypassError < 1e-6, "host bypass ignores nonzero rotation and negative Stereo Link while retaining exactly 25 ms latency");
+    check (bypassError < 1e-6, "host bypass ignores nonzero rotation and negative Stereo Link while retaining exactly 50 ms latency");
 }
 void hostedEditorTests()
 {

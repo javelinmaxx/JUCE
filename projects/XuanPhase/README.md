@@ -2,12 +2,13 @@
 
 Xuan Phase is J-SONIC's manual and transient-guided phase rotator. It offers
 independent low/high rotation, a smooth adjustable crossover, signed Auto Depth,
-Transient release, Stereo Link, and a fixed **25 ms reference latency** in a 50%–120% scalable editor.
+Transient release, Stereo Link, and **25 ms correction lookahead** in a
+50%–120% scalable editor, with **50 ms total reported latency**.
 The 840 × 490 default panel includes a vertical phase-field meter beside the controls.
 
 ![Xuan Phase native editor](Previews/xuan-phase.png)
 
-## Manual rotation and the 25 ms reference
+## Manual rotation and 50 ms total latency
 
 Low Phase and High Phase range from −180° to +180°. Crossover, from 80 Hz to
 4 kHz, smoothly blends the two phase settings; at the crossover the requested
@@ -15,13 +16,15 @@ angle is their average. Positive angles advance phase relative to the delayed
 reference, and negative angles retard it. Both channels share the manual
 response; Stereo Link controls their automatic corrections.
 
-A 20 Hz cycle lasts 50 ms, so 180° at 20 Hz corresponds to 25 ms. The plugin
-reports `round(sampleRate × 0.025)` samples to the host: 1,200 samples at 48 kHz.
-Its real FIR spans ±25 ms around that reference, making phase advances causal
-within the available lookahead. Neutral controls return only the reference
-delay, as does host/plugin bypass. Rotated transients can move or spread around
-the reference; reported latency remains fixed, rather than tracking every
-frequency's group delay.
+A 20 Hz cycle lasts 50 ms, so 180° at 20 Hz corresponds to 25 ms. The phase
+FIR retains its 25 ms center and ±25 ms support. A separate input delay gives
+the detector **25 ms lookahead before convolution**, so phase targets can settle
+before the transient enters the filter. The plugin reports
+`round(sampleRate × 0.05)` samples to the host: **2,400 samples at 48 kHz**.
+Neutral, Auto Off, and host/plugin bypass all retain that same 50 ms latency.
+The maximum audio tail is approximately 75 ms including lookahead. Rotated
+transients can move or spread around the compensated reference; host latency
+remains fixed rather than following each frequency's group delay.
 
 The desired positive-frequency response is unit magnitude with phase
 `low × w(f) + high × (1 − w(f))`, where `w(f) = 1 / (1 + (f / crossover)^4)`.
@@ -66,21 +69,27 @@ separation, especially at higher frequencies; maximum negative Link does not
 guarantee the largest peak spacing on every signal. Separation follows Transient release
 and absolute Auto Depth; at zero Depth or Auto Off it stops. Mono layouts use
 independent correction without an opposing shift. The fixed host latency stays
-25 ms, and the plugin now has unity output gain. Old Output state is ignored
+50 ms, and the plugin now has unity output gain. Old Output state is ignored
 when loading older sessions, which default to +100% Link.
 
 **Transient** sets the exponential target-strength release from 20 to 1,000 ms
 (default 200 ms): 36.8% of target strength remains after one time constant, counted in audio samples
-after the last detected onset. New onsets refresh the correction; it decays
+after the protected onset response has passed. New distinct onsets refresh
+the correction; it decays
 back toward the manual response between hits, and returns fully once below 0.1%.
 A saturated correction can remain at the ±180° boundary until its decaying
 target strength falls far enough for the requested phase to leave the cap.
 Release responses update at up to 50 Hz through the existing 5 ms kernel fades.
 Auto Off or Depth 0% stops automatic response updates; a visible meter retains
 lower-rate input analysis for manual use, which stops when the editor is hidden.
-The first part of a new onset must
-be observed before a target can be computed, so the improvement depends on the
-source and worker scheduling; the phase objective is a punch-oriented heuristic.
+Auto gathers 5 ms of context, then latches one correction per onset instead
+of retuning on each overlapping FFT frame. The target remains fixed through
+the lookahead and the entire finite FIR response, plus an 8 ms safety margin;
+release starts after this hold. A distinct onset more than 40 ms later can
+start a new collection. A response that misses the safe pre-onset handoff
+window waits until the protected hit has passed, avoiding a late crossfade
+through its attack. Closely spaced/overlapping transients and worker scheduling
+still limit what this punch-oriented heuristic can align.
 
 The audio thread performs a short SIMD FIR head and a partitioned FFT tail.
 The tail starts after the head, adding **no extra block latency**. A three-slot
@@ -102,7 +111,7 @@ remains unchanged, so genuine gaps in the input still appear dark.
 A small display hold makes short onsets visible without changing the audio detector.
 
 The **white left-channel** and **gold right-channel** curves in the 56 px track
-show applied rotation relative to the 25 ms reference, from −180° to +180°
+show applied rotation relative to the compensated 50 ms reference, from −180° to +180°
 across the track. They are measured from the corresponding active FIR,
 including manual rotation, Auto Depth, response crossfades, and bypass;
 they do not jump ahead to an unapplied worker target. Guides mark 0°, ±45°,
@@ -135,7 +144,8 @@ this is a Linux lifecycle test, not a run inside Logic Pro on macOS.
 
 The [Auto alignment performance report](Tests/Reports/AUTO_ALIGNMENT.md)
 includes a live three-hit Auto case, measured phase errors, positive/negative
-Depth, short/long release curves, Stereo Link comparisons, and matched-level
+Depth, lookahead/onset stability, short/long release curves, Stereo Link
+comparisons, and matched-level
 listening examples.
 The phase display rounds the curve with shape-preserving cubic interpolation
 and splits at ±180° wraps; Stereo Link sits at the far right beside Transient.
