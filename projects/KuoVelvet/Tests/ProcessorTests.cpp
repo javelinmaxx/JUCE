@@ -14,7 +14,6 @@ void referenceTests()
     {
         KuoVelvetProcessor p;
         set (p, "width", 85); set (p, "transientProtect", 100); set (p, "guardAttack", 0.7f);
-        set (p, "velvetLow", 175); set (p, "velvetMid", 65); set (p, "velvetHigh", 140);
         p.prepareToPlay (rate, 127);
         check (p.getLatencySamples() == juce::roundToInt (0.0015 * rate), "Kuo Velvet retains 1.5 ms lookahead");
         uint32_t state = 12345; juce::MidiBuffer midi; double error = 0;
@@ -40,9 +39,55 @@ void referenceTests()
                 error = std::max ({ error, std::abs (b.getSample (0, i) - left), std::abs (b.getSample (1, i) - right) });
             }
         }
-        check (error < 1.0e-6, "Velvet matches original Kuo Stereo with transient protection, automation and band trims");
+        check (error < 1.0e-6, "Velvet matches original Kuo Stereo at unity band levels with transient protection and automation");
         std::cout << "Pre-refactor parity at " << rate << " Hz: " << error << " maximum error\n";
     }
+}
+void legacyStateTests()
+{
+    KuoVelvetProcessor baseline, restored;
+    set (baseline, "width", 70); set (baseline, "transientProtect", 60);
+    set (baseline, "guardAttack", 2.5f); set (baseline, "output", 3);
+    auto legacy = baseline.parameters.copyState();
+    for (const auto* id : { "velvetLow", "velvetMid", "velvetHigh" })
+    {
+        check (restored.parameters.getParameter (id) == nullptr, "retired band controls are absent from host parameters");
+        juce::ValueTree child ("PARAM");
+        child.setProperty ("id", id, nullptr); child.setProperty ("value", 0.0f, nullptr);
+        legacy.appendChild (child, nullptr);
+    }
+    juce::MemoryBlock data;
+    if (auto xml = legacy.createXml()) juce::AudioProcessor::copyXmlToBinary (*xml, data);
+    restored.setStateInformation (data.getData(), static_cast<int> (data.getSize()));
+    for (const auto* id : { "width", "transientProtect", "guardAttack", "output", "bypass" })
+        check (std::abs (baseline.parameters.getRawParameterValue (id)->load()
+               - restored.parameters.getRawParameterValue (id)->load()) < 1.0e-5f,
+               "old presets retain all remaining parameter values");
+    juce::MemoryBlock saved; restored.getStateInformation (saved);
+    auto xml = juce::AudioProcessor::getXmlFromBinary (saved.getData(), static_cast<int> (saved.getSize()));
+    check (xml != nullptr && ! xml->toString().contains ("velvetLow")
+           && ! xml->toString().contains ("velvetMid") && ! xml->toString().contains ("velvetHigh"),
+           "new saved states discard retired band values");
+    baseline.prepareToPlay (48000, 128); restored.prepareToPlay (48000, 128);
+    juce::MidiBuffer midi; uint32_t random = 2468; double error = 0, sideEnergy = 0;
+    for (int base = 0; base < 8192; base += 128)
+    {
+        juce::AudioBuffer<float> a (2, 128), b;
+        for (int i = 0; i < 128; ++i)
+        {
+            random = random * 1664525u + 1013904223u;
+            const auto input = (static_cast<float> (random >> 8) / 8388608.0f - 1.0f) * 0.2f;
+            a.setSample (0, i, input); a.setSample (1, i, input);
+        }
+        b.makeCopyOf (a); baseline.processBlock (a, midi); restored.processBlock (b, midi);
+        for (int i = 0; i < 128; ++i)
+        {
+            for (int c = 0; c < 2; ++c)
+                error = std::max (error, static_cast<double> (std::abs (a.getSample (c, i) - b.getSample (c, i))));
+            const auto side = 0.5f * (b.getSample (0, i) - b.getSample (1, i)); sideEnergy += side * side;
+        }
+    }
+    check (error < 1.0e-6 && sideEnergy > 1.0, "old zero-band presets now widen the full-band signal at the recalled settings");
 }
 float impulseEnergy (float protect, float attack)
 {
@@ -62,12 +107,9 @@ float impulseEnergy (float protect, float attack)
 }
 void velvetTests()
 {
-    std::array<double, 4> modeSideEnergy {};
-    for (int mode = 0; mode < 4; ++mode)
+    for (int mode = 0; mode < 2; ++mode)
     {
         KuoVelvetProcessor p; set (p, "transientProtect", 0); set (p, "width", mode == 1 ? 0.0f : 100.0f);
-        if (mode == 2) { set (p, "velvetLow", 0); set (p, "velvetMid", 0); set (p, "velvetHigh", 0); }
-        if (mode == 3) { set (p, "velvetLow", 200); set (p, "velvetMid", 200); set (p, "velvetHigh", 200); }
         p.prepareToPlay (48000, 128);
         juce::MidiBuffer midi; std::vector<float> input; double error = 0, sideEnergy = 0;
         uint32_t random = 98765;
@@ -90,13 +132,10 @@ void velvetTests()
                 const auto side = 0.5f * (left-right); sideEnergy += side * side;
             }
         }
-        modeSideEnergy[static_cast<size_t> (mode)] = sideEnergy;
         check (error < 1.0e-6, "mono input's mid signal remains unchanged by Velvet");
-        if (mode == 0 || mode == 3) check (sideEnergy > 1.0, "Velvet widens mono audio with 100 and 200 percent band levels");
-        else check (sideEnergy < 1.0e-10, "zero width or all bands at zero produces no additional side energy");
+        if (mode == 0) check (sideEnergy > 1.0, "full-band Velvet widens mono audio");
+        else check (sideEnergy < 1.0e-10, "zero Width produces no additional side energy");
     }
-    check (std::abs (modeSideEnergy[3] / modeSideEnergy[0] - 4.0) < 1.0e-4,
-           "200 percent band levels double added side amplitude relative to 100 percent");
     const auto dryEnergy = impulseEnergy (0, 0), protectedEnergy = impulseEnergy (100, 0), slowEnergy = impulseEnergy (100, 5);
     check (dryEnergy > 0.1f && protectedEnergy < dryEnergy * 0.01f, "full transient protection removes the isolated impulse's convolution tail");
     check (slowEnergy > protectedEnergy && slowEnergy < dryEnergy, "Attack controls the amount of convolution admitted at an onset");
@@ -139,9 +178,9 @@ int main (int argc, char** argv)
     try
     {
         juce::ScopedJuceInitialiser_GUI gui;
-        stateTests<KuoVelvetProcessor> (8); referenceTests(); velvetTests();
+        stateTests<KuoVelvetProcessor> (5); referenceTests(); velvetTests(); legacyStateTests();
         blockSizeTests<KuoVelvetProcessor>();
-        if (argc > 2 && juce::String (argv[1]) == "--editor") editorTests<KuoVelvetProcessor> (juce::File (argv[2]), 561, 7);
+        if (argc > 2 && juce::String (argv[1]) == "--editor") editorTests<KuoVelvetProcessor> (juce::File (argv[2]), 260, 4, 444);
         std::cout << checks << " Kuo Velvet checks passed\n"; return 0;
     }
     catch (const std::exception& error) { std::cerr << "FAIL: " << error.what() << '\n'; return 1; }

@@ -1,23 +1,18 @@
 #pragma once
 #include "PluginProcessor.h"
 #include "../../StagePluginStyle.h"
-class KuoVelvetEditor final : public juce::AudioProcessorEditor, private juce::Timer
+class KuoVelvetEditor final : public juce::AudioProcessorEditor
 {
 public:
     explicit KuoVelvetEditor (KuoVelvetProcessor&);
-    ~KuoVelvetEditor() override { stopTimer(); setLookAndFeel (nullptr); }
+    ~KuoVelvetEditor() override { setLookAndFeel (nullptr); }
     void paint (juce::Graphics&) override;
     void resized() override;
 private:
-    static constexpr int designWidth = 548, designHeight = 561;
-    void timerCallback() override;
-    void paintScope (juce::Graphics&, int, juce::Rectangle<float>);
-    KuoVelvetProcessor& processor;
+    static constexpr int designWidth = 444, designHeight = 260;
     StageLookAndFeel look;
     juce::TooltipWindow tooltipWindow { this };
     StageBypassButton bypass;
-    std::array<juce::Slider, 3> bandSliders;
-    std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>, 3> bandAttachments;
     std::array<juce::Slider, 4> sliders;
     std::array<juce::Label, 4> labels;
     using State = juce::AudioProcessorValueTreeState;

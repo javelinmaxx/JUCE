@@ -28,21 +28,12 @@ public:
     void changeProgramName (int, const juce::String&) override {}
     void getStateInformation (juce::MemoryBlock&) override;
     void setStateInformation (const void*, int) override;
-    static constexpr int scopePoints = 96;
-    void readScope (int, std::array<juce::Point<float>, scopePoints>&) const noexcept;
     juce::AudioProcessorValueTreeState parameters;
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     kuo::VelvetStage velvet;
-    struct ScopePoint { std::atomic<float> left { 0 }, right { 0 }; };
-    std::array<std::array<ScopePoint, scopePoints>, 3> scope {};
-    std::atomic<int> scopeWrite { 0 };
-    std::array<float, 2> lowState {}, upperState {};
     std::array<std::vector<float>, 2> dryHistory;
     size_t writePosition = 0;
-    int scopeCounter = 0;
-    float lowCoefficient = 0, upperCoefficient = 0;
     void process (juce::AudioBuffer<float>&, bool hostBypass);
-    void pushScope (float left, float right) noexcept;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (KuoVelvetProcessor)
 };

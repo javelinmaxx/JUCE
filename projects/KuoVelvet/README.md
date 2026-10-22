@@ -1,26 +1,28 @@
 # Kuo Velvet
 
 Kuo Velvet isolates Kuo Stereo's Velvet widening stage as an independent J-SONIC
-plugin, with the same ebony and amber styling, one-sentence hover hints,
-three frequency-field meters, and 50–120% scalable editor.
+plugin, with ebony and amber styling, one-sentence hover hints, and a 50–120%
+scalable editor. Its compact 444 × 260 panel places Width, Transient, Attack,
+and Output in one row, matching Ren Transformer.
 
 ![Native editor with tooltip](Previews/kuo-velvet-tooltip.png)
 
 Kuo Stereo and Kuo Velvet now use the **same** `KuoStereo/Source/VelvetStage.h`.
 The shared stage retains its deterministic 16-tap sparse convolution, four-band
-spectral onset detector, Transient and Attack controls, and smoothed Width and
-band levels. Opposite additions to left and right preserve the input mid signal
-before Output gain. Width scales the added convolution side signal; it does not
-crossfade away the original audio. The three sliders set convolution input
-levels below 250 Hz, from 250 Hz to 2.5 kHz, and above 2.5 kHz, from 0–200%
-(default 100%). They do not EQ the dry signal.
+spectral onset detector, Transient and Attack controls, and smoothed Width.
+Opposite additions to left and right preserve the input mid signal before
+Output gain. Width scales the added convolution side signal; it does not
+crossfade away the original audio. The convolution receives the full-band mid
+signal at unity gain. The meters, meter updates, band-level controls, and
+three-band input filtering have been removed from Kuo Velvet.
 
 There is no Haas delay, FFT candidate search, or search worker in Kuo Velvet.
 The original 1.5 ms lookahead is retained and reported to the host (72 samples at
 48 kHz). The Bypass button and host bypass preserve that delay and the original
-input level. Eight parameters support automation and state restoration. Use a
+input level. Five parameters support automation and state restoration. Use a
 stereo instance; centered mono material on its two inputs gains stereo width.
-Output spans −12 to +12 dB.
+Output spans −12 to +12 dB. Older presets retain the remaining controls; their
+retired band-level values are ignored and removed when saving again.
 
 ## Build and test
 

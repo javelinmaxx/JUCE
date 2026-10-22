@@ -52,6 +52,8 @@ template <typename Processor> void editorTests (const juce::File& destination, i
     check (editor->getWidth() == width && editor->getHeight() == height, "native editor starts at its intended size");
     juce::TooltipWindow* tooltip = nullptr;
     juce::Slider* first = nullptr;
+    const auto isTransformer = p.parameters.getParameter ("drive") != nullptr;
+    const auto id = isTransformer ? "drive" : "width";
     int sliders = 0;
     for (auto* child : editor->getChildren())
     {
@@ -59,7 +61,7 @@ template <typename Processor> void editorTests (const juce::File& destination, i
         if (auto* slider = dynamic_cast<juce::Slider*> (child))
         {
             ++sliders; if (first == nullptr) first = slider;
-            const auto expected = p.parameters.getParameter (sliders == 1 ? (sliderCount == 4 ? "drive" : "width") : "bypass");
+            const auto expected = p.parameters.getParameter (sliders == 1 ? id : "bypass");
             if (sliders == 1) check (std::abs (slider->getValue() - expected->convertFrom0to1 (expected->getValue())) < 0.01,
                                      "initial control value matches host state");
         }
@@ -76,11 +78,10 @@ template <typename Processor> void editorTests (const juce::File& destination, i
     }
     check (tooltip != nullptr && first != nullptr && sliders == sliderCount, "stage controls and tooltip window exist");
     // Exercise UI-to-host and host-to-UI changes without an audio callback.
-    const auto id = sliderCount == 4 ? "drive" : "width";
-    first->setValue (sliderCount == 4 ? 12 : 75, juce::sendNotificationSync);
+    first->setValue (isTransformer ? 12 : 75, juce::sendNotificationSync);
     check (std::abs (p.parameters.getRawParameterValue (id)->load() - first->getValue()) < 0.01,
            "mouse control updates its host parameter");
-    set (p, id, sliderCount == 4 ? 6.0f : 35.0f);
+    set (p, id, isTransformer ? 6.0f : 35.0f);
     for (int tick = 0; tick < 3; ++tick) { juce::Thread::sleep (10); juce::Timer::callPendingTimersSynchronously(); }
     check (std::abs (first->getValue() - p.parameters.getRawParameterValue (id)->load()) < 0.01,
            "host automation updates its control");

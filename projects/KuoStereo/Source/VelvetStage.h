@@ -12,9 +12,10 @@ class VelvetStage
 {
 public:
     struct Result { float side; bool onset, instant; };
-    void prepare (float rate, std::array<float, 3> initialBands)
+    void prepare (float rate, std::array<float, 3> initialBands, bool enableBandLevels = true)
     {
         sampleRate = rate;
+        bandLevelsEnabled = enableBandLevels;
         lookaheadSamples = juce::roundToInt (0.0015f * sampleRate);
         velvetHistory.assign (static_cast<size_t> (std::ceil (sampleRate * 0.04f)) + 2052, 0.0f);
         writePosition = 0;
@@ -49,12 +50,15 @@ public:
     {
         widthTarget = width;
         protection = transient;
-        velvetBandTargets = bands;
-        bandGainCoefficient = 1.0f - std::exp (-1.0f / (0.010f * sampleRate));
-        velvetLowCoefficient = 1.0f - std::exp (
-            -juce::MathConstants<float>::twoPi * 250.0f / sampleRate);
-        velvetUpperCoefficient = 1.0f - std::exp (
-            -juce::MathConstants<float>::twoPi * 2500.0f / sampleRate);
+        if (bandLevelsEnabled)
+        {
+            velvetBandTargets = bands;
+            bandGainCoefficient = 1.0f - std::exp (-1.0f / (0.010f * sampleRate));
+            velvetLowCoefficient = 1.0f - std::exp (
+                -juce::MathConstants<float>::twoPi * 250.0f / sampleRate);
+            velvetUpperCoefficient = 1.0f - std::exp (
+                -juce::MathConstants<float>::twoPi * 2500.0f / sampleRate);
+        }
         tonalGuardAttackStep = 1.0f
             / (std::max (guardAttackMs, 0.5f) * 0.001f * sampleRate);
         transientGuardAttackStep = guardAttackMs <= 0.0f ? 1.0f
@@ -114,16 +118,22 @@ public:
             ? transientGuardAttackStep : tonalGuardAttackStep;
         velvetGuardEnvelope = onset ? std::min (1.0f, velvetGuardEnvelope + attackStep) : 0.0f;
         const auto velvetInput = mid * (1.0f - protection * velvetGuardEnvelope * onsetStrength);
-        velvetBandLowStates[0] += velvetLowCoefficient
-            * (velvetInput - velvetBandLowStates[0]);
-        velvetBandLowStates[1] += velvetUpperCoefficient
-            * (velvetInput - velvetBandLowStates[1]);
-        for (size_t band = 0; band < velvetBandGains.size(); ++band)
-            velvetBandGains[band] += bandGainCoefficient
-                * (velvetBandTargets[band] - velvetBandGains[band]);
-        const auto velvetBands = velvetBandGains[0] * velvetBandLowStates[0]
-            + velvetBandGains[1] * (velvetBandLowStates[1] - velvetBandLowStates[0])
-            + velvetBandGains[2] * (velvetInput - velvetBandLowStates[1]);
+        // Standalone Kuo Velvet feeds the full-band signal directly to the
+        // convolution; Kuo Stereo retains its adjustable three-band input.
+        auto velvetBands = velvetInput;
+        if (bandLevelsEnabled)
+        {
+            velvetBandLowStates[0] += velvetLowCoefficient
+                * (velvetInput - velvetBandLowStates[0]);
+            velvetBandLowStates[1] += velvetUpperCoefficient
+                * (velvetInput - velvetBandLowStates[1]);
+            for (size_t band = 0; band < velvetBandGains.size(); ++band)
+                velvetBandGains[band] += bandGainCoefficient
+                    * (velvetBandTargets[band] - velvetBandGains[band]);
+            velvetBands = velvetBandGains[0] * velvetBandLowStates[0]
+                + velvetBandGains[1] * (velvetBandLowStates[1] - velvetBandLowStates[0])
+                + velvetBandGains[2] * (velvetInput - velvetBandLowStates[1]);
+        }
         velvetHistory[static_cast<size_t> (writePosition)] = velvetBands;
         writePosition = (writePosition + 1) % static_cast<int> (velvetHistory.size());
         widthBlend += (widthTarget - widthBlend) * 0.001f;
@@ -157,7 +167,7 @@ private:
     float widthTarget = 0, protection = 0, bandGainCoefficient = 0;
     float velvetLowCoefficient = 0, velvetUpperCoefficient = 0;
     float tonalGuardAttackStep = 1, transientGuardAttackStep = 1;
-    bool onsetActive = false, instantTransientOnset = false;
+    bool onsetActive = false, instantTransientOnset = false, bandLevelsEnabled = true;
     std::array<float, 3> detectorLowStates {}, detectorCoefficients {}, velvetBandTargets {};
     std::array<float, 4> detectorFastEnvelopes {}, detectorSlowEnvelopes {};
     std::array<float, 2> velvetBandLowStates {};

@@ -86,7 +86,7 @@ series-diode crossover distortion, with an expected-output display
 and YinYang's optional transformer stage.
 [`Ren Transformer`](projects/RenTransformer/README.md) isolates YinYang's transformer
 and output controls, and [`Kuo Velvet`](projects/KuoVelvet/README.md) isolates
-Kuo Stereo's Velvet widening with spectral transient protection and band levels.
+Kuo Stereo's Velvet widening with spectral transient protection in a compact UI.
 All six projects share an analog visual style while keeping independent processors and
 build targets. You do not need another JUCE download. All build commands below
 run from the repository root.
