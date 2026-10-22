@@ -66,11 +66,11 @@ private:
     juce::Colour ring { 0xff38434e }, knobTop { 0xff46515e }, knobBottom { 0xff1b242d };
 };
 
-class CharacterCompressorEditor final : public juce::AudioProcessorEditor, private juce::Timer
+class YinyangCompressorEditor final : public juce::AudioProcessorEditor, private juce::Timer
 {
 public:
-    explicit CharacterCompressorEditor (CharacterCompressorProcessor&);
-    ~CharacterCompressorEditor() override { stopTimer(); setLookAndFeel (nullptr); }
+    explicit YinyangCompressorEditor (YinyangCompressorProcessor&);
+    ~YinyangCompressorEditor() override { stopTimer(); setLookAndFeel (nullptr); }
     void paint (juce::Graphics&) override;
     void resized() override;
 
@@ -79,7 +79,7 @@ private:
     void timerCallback() override;
     void paintMeter (juce::Graphics&);
     void applyTheme();
-    CharacterCompressorProcessor& processor;
+    YinyangCompressorProcessor& processor;
     CompressorLookAndFeel look;
     juce::TooltipWindow tooltipWindow { this };
     juce::ComboBox model;
@@ -99,5 +99,5 @@ private:
     bool lastUpwardMode = false;
     int lastModelIndex = -1;
     CompressorTheme theme;
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (CharacterCompressorEditor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (YinyangCompressorEditor)
 };

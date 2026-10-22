@@ -9,8 +9,8 @@ on:
     paths:
       - .github/workflows/character-compressor-windows.yml
       - build-windows-vst3.ps1
-      - projects/CharacterCompressor/Source/**
-      - projects/CharacterCompressor/CMakeLists.txt
+      - projects/YinyangCompressor/Source/**
+      - projects/YinyangCompressor/CMakeLists.txt
       - projects/ShunDeEss/Source/**
       - projects/ShunDeEss/CMakeLists.txt
 
@@ -38,7 +38,7 @@ jobs:
 
       - name: Check Windows bundle
         run: |
-          $bundle = 'build-character-win/CharacterCompressor_artefacts/Release/VST3/YinYang Compressor.vst3'
+          $bundle = 'build-yinyang-win/YinyangCompressor_artefacts/Release/VST3/YinYang Compressor.vst3'
           $binary = Join-Path $bundle 'Contents/x86_64-win/YinYang Compressor.vst3'
           if (-not (Test-Path -LiteralPath $binary -PathType Leaf)) {
             throw "Windows VST3 binary missing: $binary"
@@ -50,7 +50,7 @@ jobs:
         with:
           name: YinYang-Compressor-Windows-x64-VST3
           # Upload the parent directory to preserve the whole .vst3 bundle.
-          path: build-character-win/CharacterCompressor_artefacts/Release/VST3/
+          path: build-yinyang-win/YinyangCompressor_artefacts/Release/VST3/
           if-no-files-found: error
           retention-days: 30
 

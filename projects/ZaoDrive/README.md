@@ -44,7 +44,7 @@ starting at ±0.25 FS to keep passive diode behavior visible. Rendering runs on 
 circuit state or locks with the audio callback.
 
 The optional **Transformer Stage** directly includes YinYang's
-[`OversampledTransformer`](../CharacterCompressor/Source/OversampledTransformer.h)
+[`OversampledTransformer`](../YinyangCompressor/Source/OversampledTransformer.h)
 class. Core Drive and DC Bias have the same behavior, including hysteresis,
 frequency response, and filtering of generated distortion. The transformer
 stops processing once its Off fade finishes; re-enabling warms its delay before

@@ -41,7 +41,7 @@ current DSP and retain the 1× data under `../baseline/` for comparison.
 Reproduce from the repository root with C++17, Python, NumPy and Matplotlib:
 
 ```bash
-python3 projects/CharacterCompressor/Measurements/verify_transformer_phase.py
+python3 projects/YinyangCompressor/Measurements/verify_transformer_phase.py
 ```
 
 This command runs only the requested square-wave verification and regenerates

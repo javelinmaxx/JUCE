@@ -2,10 +2,10 @@ import dawdreamer as daw
 import numpy as np
 import soundfile as sf
 
-# Existing Linux build. On macOS, replace with a Mac-built .vst3 path.
+# macOS arm64 build from build-macos.sh; adjust for your platform and architecture.
 PLUGIN = (
-   "build-character-arm64/CharacterCompressor_artefacts/"
-    "Release/VST3/Character Compressor.vst3"
+   "build-yinyang-mac-arm64/YinyangCompressor_artefacts/"
+    "Release/VST3/YinYang Compressor.vst3"
 )
 
 audio, sample_rate = sf.read(

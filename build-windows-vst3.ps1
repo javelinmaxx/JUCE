@@ -10,7 +10,7 @@ Build the Windows x64 Multi-Compressor VST3 with Visual Studio 2022.
 param (
     [ValidateRange(1, 64)]
     [int]$Parallel = 4,
-    [string]$BuildDirectory = 'build-character-win'
+    [string]$BuildDirectory = 'build-yinyang-win'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -21,17 +21,17 @@ Get-Command cmake -ErrorAction Stop | Out-Null
 if (-not [System.IO.Path]::IsPathRooted($BuildDirectory)) {
     $BuildDirectory = Join-Path $PSScriptRoot $BuildDirectory
 }
-$source = Join-Path $PSScriptRoot 'projects/CharacterCompressor'
+$source = Join-Path $PSScriptRoot 'projects/YinyangCompressor'
 
 & cmake -S $source -B $BuildDirectory -G 'Visual Studio 17 2022' -A x64 `
-    '-DCHARACTER_BUILD_TESTS=OFF' `
+    '-DYINYANG_BUILD_TESTS=OFF' `
     '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded$<$<CONFIG:Debug>:Debug>'
 if ($LASTEXITCODE -ne 0) { throw "CMake configuration failed (exit $LASTEXITCODE)." }
 
-& cmake --build $BuildDirectory --config Release --target CharacterCompressor_VST3 --parallel $Parallel
+& cmake --build $BuildDirectory --config Release --target YinyangCompressor_VST3 --parallel $Parallel
 if ($LASTEXITCODE -ne 0) { throw "VST3 build failed (exit $LASTEXITCODE)." }
 
-$bundle = Join-Path $BuildDirectory 'CharacterCompressor_artefacts/Release/VST3/YinYang Compressor.vst3'
+$bundle = Join-Path $BuildDirectory 'YinyangCompressor_artefacts/Release/VST3/YinYang Compressor.vst3'
 $binary = Join-Path $bundle 'Contents/x86_64-win/YinYang Compressor.vst3'
 if (-not (Test-Path -LiteralPath $binary -PathType Leaf)) {
     throw "Windows VST3 binary missing: $binary"

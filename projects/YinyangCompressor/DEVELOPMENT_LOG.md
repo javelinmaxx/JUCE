@@ -18,7 +18,7 @@
 
 ## Implementation decisions
 
-- Project: `projects/CharacterCompressor`, JUCE 9.0.4, C++17, CMake.
+- Project: `projects/YinyangCompressor`, JUCE 9.0.4, C++17, CMake.
 - Four detectors run continuously; smoothed model weights avoid hard switching.
 - Stereo-linked gain, mono/stereo layouts, no lookahead, 64-sample reported latency
   after the 2× transformer update (original implementation: zero latency).
@@ -332,10 +332,10 @@ state recall, malformed-state rejection, actual processing, host bypass,
 64-sample latency, empty buffers, and optional editor construction/rendering.
 
 Build outputs and detailed test logs are outside the checkout under
-`/workspace/juce-env/character-build` and `/workspace/juce-env/character-*.log`.
+`/workspace/juce-env/yinyang-build` and `/workspace/juce-env/character-*.log`.
 The inspected UI screenshot is `/workspace/juce-env/character-editor.png`.
 Project source, documentation, and tests are versioned together under
-`projects/CharacterCompressor`; generated binaries and machine-specific logs
+`projects/YinyangCompressor`; generated binaries and machine-specific logs
 remain outside the repository.
 
 The user reports the preceding VST3/AU revision works on their Mac; cloud
@@ -728,3 +728,19 @@ implementation, not a production-release claim.
   scale and a +12 dB ceiling. Yang retains its downward 0–18 dB GR scale.
 - Swapped the internal Attack and Release time values in Yin while keeping the
   slider attachments, captions, and host automation assignments unchanged.
+
+### 2026-10-22 — YinyangCompressor project rename
+
+- Renamed the project directory, CMake/plugin targets, processor/editor classes,
+  test executables and test option to use Yinyang naming. Updated shared
+  transformer includes, build scripts, Windows workflow rename references,
+  and documentation. Earlier log entries retain their historical target names.
+- Kept the YinYang Compressor product name, bundle/manufacturer/plugin IDs,
+  parameter IDs, and `CharacterCompressorState` root for DAW session compatibility.
+- Existing generated `build-character-*` archives predate the rename; configure
+  a fresh build directory rather than reusing those CMake caches.
+- Validation: fresh Linux Debug VST3/Standalone builds; all three renamed
+  CTest suites and native editor checks passed. Ren Transformer and Zao Drive
+  rebuilt and passed their processor tests. Both macOS build scripts passed
+  mocked bundle/target checks; native macOS and Windows builds were not run.
+  Generated host product/plugin IDs match the previous compressor build.

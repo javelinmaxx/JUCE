@@ -25,8 +25,8 @@ macOS, and as an Audio Unit (AU) for macOS.
 
 The models are behavioral approximations for creative use, not calibrated
 recreations of specific hardware. The plug-in currently appears in hosts as
-**YinYang Compressor**, under **J-SONIC**. The build target names retain the
-internal `CharacterCompressor` identifier.
+**YinYang Compressor**, under **J-SONIC**. The project directory and build targets use
+`YinyangCompressor`.
 
 ## Compressor styles
 
@@ -75,7 +75,7 @@ through. Closely spaced notes can keep the slower recovery component engaged.
 ## Get the source and build scripts
 
 This repository includes the JUCE framework and six independent plug-in
-projects: [`projects/CharacterCompressor`](projects/CharacterCompressor),
+projects: [`projects/YinyangCompressor`](projects/YinyangCompressor),
 [`projects/ShunDeEss`](projects/ShunDeEss),
 [`projects/KuoStereo`](projects/KuoStereo),
 [`projects/ZaoDrive`](projects/ZaoDrive),
@@ -99,10 +99,10 @@ instructions. The `build-macos-all.sh` script builds all six projects as
 VST3 and AU; the individual platform scripts build YinYang Compressor. The Windows
 GitHub workflow builds YinYang Compressor and SHUN DE-ESS.
 
-Download the development branch with Git:
+Download the main development branch with Git:
 
 ```bash
-git clone --branch feature/character-compressor https://github.com/javelinmaxx/Multi-Compressor.git
+git clone --branch master https://github.com/javelinmaxx/Multi-Compressor.git
 cd Multi-Compressor
 ```
 
@@ -145,15 +145,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build-windows-vst3.ps1
 The equivalent direct CMake commands are:
 
 ```powershell
-cmake -S projects/CharacterCompressor -B build-character-win -G "Visual Studio 17 2022" -A x64 -DCHARACTER_BUILD_TESTS=OFF '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded$<$<CONFIG:Debug>:Debug>'
+cmake -S projects/YinyangCompressor -B build-yinyang-win -G "Visual Studio 17 2022" -A x64 -DYINYANG_BUILD_TESTS=OFF '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded$<$<CONFIG:Debug>:Debug>'
 
-cmake --build build-character-win --config Release --target CharacterCompressor_VST3 --parallel 4
+cmake --build build-yinyang-win --config Release --target YinyangCompressor_VST3 --parallel 4
 ```
 
 The complete Windows x64 plug-in bundle is:
 
 ```text
-build-character-win\CharacterCompressor_artefacts\Release\VST3\YinYang Compressor.vst3
+build-yinyang-win\YinyangCompressor_artefacts\Release\VST3\YinYang Compressor.vst3
 ```
 
 Copy the entire `.vst3` folder, including its contents, into:
@@ -227,13 +227,13 @@ for both architectures. Run `./build-macos.sh --help` for all options.
 To build manually instead:
 
 ```bash
-cmake -S projects/CharacterCompressor -B build-character-mac-arm64 -G Xcode \
+cmake -S projects/YinyangCompressor -B build-yinyang-mac-arm64 -G Xcode \
   -DCMAKE_OSX_ARCHITECTURES=arm64 \
   -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
-  -DCHARACTER_BUILD_TESTS=OFF
+  -DYINYANG_BUILD_TESTS=OFF
 
-cmake --build build-character-mac-arm64 --config Release \
-  --target CharacterCompressor_VST3 --parallel 4
+cmake --build build-yinyang-mac-arm64 --config Release \
+  --target YinyangCompressor_VST3 --parallel 4
 ```
 
 Install the complete bundle into your user plug-in folder:
@@ -241,8 +241,8 @@ Install the complete bundle into your user plug-in folder:
 ```bash
 mkdir -p "$HOME/Library/Audio/Plug-Ins/VST3"
 ditto \
-  "build-character-mac-arm64/CharacterCompressor_artefacts/Release/VST3/Character Compressor.vst3" \
-  "$HOME/Library/Audio/Plug-Ins/VST3/Character Compressor.vst3"
+  "build-yinyang-mac-arm64/YinyangCompressor_artefacts/Release/VST3/YinYang Compressor.vst3" \
+  "$HOME/Library/Audio/Plug-Ins/VST3/YinYang Compressor.vst3"
 ```
 
 Restart your VST3 host or rescan its plug-ins. For DawDreamer, provide the
@@ -250,7 +250,7 @@ absolute path to the `.vst3` bundle and use Python with the same architecture
 as the plug-in. Logic Pro uses the AU version described below.
 
 **Intel Mac:** substitute `x86_64` for `arm64`, use a separate directory such as
-`build-character-mac-intel`, and update the build/install paths accordingly.
+`build-yinyang-mac-intel`, and update the build/install paths accordingly.
 For a Catalina target, set `CMAKE_OSX_DEPLOYMENT_TARGET=10.15`; building directly
 on Catalina requires a compatible toolchain (JUCE documents Xcode 12.4 and
 macOS 10.15.4 as minimum build requirements). Verify on the target Mac.
@@ -278,13 +278,13 @@ To build and install **both AU and VST3** together, use:
 To build the AU manually instead:
 
 ```bash
-cmake -S projects/CharacterCompressor -B build-character-mac-arm64 -G Xcode \
+cmake -S projects/YinyangCompressor -B build-yinyang-mac-arm64 -G Xcode \
   -DCMAKE_OSX_ARCHITECTURES=arm64 \
   -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
-  -DCHARACTER_BUILD_TESTS=OFF
+  -DYINYANG_BUILD_TESTS=OFF
 
-cmake --build build-character-mac-arm64 --config Release \
-  --target CharacterCompressor_AU --parallel 4
+cmake --build build-yinyang-mac-arm64 --config Release \
+  --target YinyangCompressor_AU --parallel 4
 ```
 
 Install the complete `.component` bundle:
@@ -292,8 +292,8 @@ Install the complete `.component` bundle:
 ```bash
 mkdir -p "$HOME/Library/Audio/Plug-Ins/Components"
 ditto \
-  "build-character-mac-arm64/CharacterCompressor_artefacts/Release/AU/Character Compressor.component" \
-  "$HOME/Library/Audio/Plug-Ins/Components/Character Compressor.component"
+  "build-yinyang-mac-arm64/YinyangCompressor_artefacts/Release/AU/YinYang Compressor.component" \
+  "$HOME/Library/Audio/Plug-Ins/Components/YinYang Compressor.component"
 ```
 
 The Intel and universal architecture substitutions from the macOS VST3 section
@@ -310,9 +310,9 @@ auval -v aufx Chc1 Chra
 
 ---
 
-Further information: [plug-in documentation](projects/CharacterCompressor/README.md),
-[development log](projects/CharacterCompressor/DEVELOPMENT_LOG.md), and
-[distortion/sidechain measurements](projects/CharacterCompressor/Measurements/output_stage/README.md).
+Further information: [plug-in documentation](projects/YinyangCompressor/README.md),
+[development log](projects/YinyangCompressor/DEVELOPMENT_LOG.md), and
+[distortion/sidechain measurements](projects/YinyangCompressor/Measurements/output_stage/README.md).
 
 Built with [JUCE](https://juce.com/). JUCE modules are available under AGPLv3 or
 commercial terms; a commercial JUCE licence may be required for distribution.

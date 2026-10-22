@@ -2,7 +2,7 @@
 #include "Circuits.h"
 #include "SmartHarmonics.h"
 #include "GreyNoiseFilter.h"
-#include "../../CharacterCompressor/Source/OversampledTransformer.h"
+#include "../../YinyangCompressor/Source/OversampledTransformer.h"
 #include <juce_dsp/juce_dsp.h>
 #include <memory>
 

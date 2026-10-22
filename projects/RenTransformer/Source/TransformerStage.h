@@ -1,5 +1,5 @@
 #pragma once
-#include "../../CharacterCompressor/Source/OversampledTransformer.h"
+#include "../../YinyangCompressor/Source/OversampledTransformer.h"
 #include <juce_audio_basics/juce_audio_basics.h>
 
 namespace ren

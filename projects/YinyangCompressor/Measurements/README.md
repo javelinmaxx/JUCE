@@ -84,10 +84,10 @@ Linux requirements: C++17 compiler, Python, NumPy, Matplotlib. From the
 repository root:
 
 ```bash
-python3 projects/CharacterCompressor/Measurements/plot_characteristics.py
-python3 projects/CharacterCompressor/Measurements/plot_vari_transient.py
-python3 projects/CharacterCompressor/Measurements/plot_upward_compression.py
-python3 projects/CharacterCompressor/Measurements/plot_transformer_even_harmonics.py
+python3 projects/YinyangCompressor/Measurements/plot_characteristics.py
+python3 projects/YinyangCompressor/Measurements/plot_vari_transient.py
+python3 projects/YinyangCompressor/Measurements/plot_upward_compression.py
+python3 projects/YinyangCompressor/Measurements/plot_transformer_even_harmonics.py
 ```
 
 The bridge is compiled with `-O3` (without fast-math) into a temporary directory.

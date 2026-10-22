@@ -8,7 +8,7 @@ constexpr std::array<const char*, 20> ids { "model", "input", "threshold", "rati
     "release", "knee", "output", "mix", "sidechain", "drive", "transformer", "bypass", "highTilt", "upward", "stereoLink", "midSide", "evenHarmonics", "variTransient", "scHighTilt" };
 }
 
-juce::AudioProcessorValueTreeState::ParameterLayout CharacterCompressorProcessor::layout()
+juce::AudioProcessorValueTreeState::ParameterLayout YinyangCompressorProcessor::layout()
 {
     juce::AudioProcessorValueTreeState::ParameterLayout result;
     result.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { "model", 1 },
@@ -59,16 +59,17 @@ juce::AudioProcessorValueTreeState::ParameterLayout CharacterCompressorProcessor
     return result;
 }
 
-CharacterCompressorProcessor::CharacterCompressorProcessor()
+YinyangCompressorProcessor::YinyangCompressorProcessor()
     : AudioProcessor (BusesProperties().withInput ("Input", juce::AudioChannelSet::stereo(), true)
                                       .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
+      // Keep the legacy state identifier so existing host sessions remain compatible.
       parameters (*this, nullptr, "CharacterCompressorState", layout())
 {
     for (size_t i = 0; i < raw.size(); ++i)
         raw[i] = parameters.getRawParameterValue (ids[i]);
 }
 
-character::Parameters CharacterCompressorProcessor::readParameters() const noexcept
+character::Parameters YinyangCompressorProcessor::readParameters() const noexcept
 {
     const auto value = [&] (size_t i) { return raw[i]->load (std::memory_order_relaxed); };
     character::Parameters p;
@@ -92,7 +93,7 @@ character::Parameters CharacterCompressorProcessor::readParameters() const noexc
     return p;
 }
 
-void CharacterCompressorProcessor::prepareToPlay (double rate, int)
+void YinyangCompressorProcessor::prepareToPlay (double rate, int)
 {
     engine.prepare (rate);
     engine.setParameters (readParameters());
@@ -100,30 +101,30 @@ void CharacterCompressorProcessor::prepareToPlay (double rate, int)
     setLatencySamples (character::Compressor::latencySamples);
 }
 
-bool CharacterCompressorProcessor::isBusesLayoutSupported (const BusesLayout& buses) const
+bool YinyangCompressorProcessor::isBusesLayoutSupported (const BusesLayout& buses) const
 {
     const auto in = buses.getMainInputChannelSet();
     return in == buses.getMainOutputChannelSet()
         && (in == juce::AudioChannelSet::mono() || in == juce::AudioChannelSet::stereo());
 }
 
-void CharacterCompressorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
+void YinyangCompressorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
     process (buffer, false);
 }
 
-void CharacterCompressorProcessor::processBlockBypassed (juce::AudioBuffer<float>& buffer,
+void YinyangCompressorProcessor::processBlockBypassed (juce::AudioBuffer<float>& buffer,
                                                        juce::MidiBuffer&)
 {
     process (buffer, true);
 }
 
-juce::AudioProcessorParameter* CharacterCompressorProcessor::getBypassParameter() const
+juce::AudioProcessorParameter* YinyangCompressorProcessor::getBypassParameter() const
 {
     return parameters.getParameter ("bypass");
 }
 
-void CharacterCompressorProcessor::process (juce::AudioBuffer<float>& buffer, bool hostBypassed)
+void YinyangCompressorProcessor::process (juce::AudioBuffer<float>& buffer, bool hostBypassed)
 {
     juce::ScopedNoDenormals noDenormals;
     const auto channels = std::min ({ getTotalNumInputChannels(), buffer.getNumChannels(), 2 });
@@ -145,7 +146,7 @@ void CharacterCompressorProcessor::process (juce::AudioBuffer<float>& buffer, bo
     reduction.store (engine.reductionDb(), std::memory_order_relaxed);
 }
 
-void CharacterCompressorProcessor::getStateInformation (juce::MemoryBlock& data)
+void YinyangCompressorProcessor::getStateInformation (juce::MemoryBlock& data)
 {
     auto state = parameters.copyState();
     state.setProperty ("ratioMappingVersion", 2, nullptr);
@@ -153,7 +154,7 @@ void CharacterCompressorProcessor::getStateInformation (juce::MemoryBlock& data)
         copyXmlToBinary (*xml, data);
 }
 
-void CharacterCompressorProcessor::setStateInformation (const void* data, int size)
+void YinyangCompressorProcessor::setStateInformation (const void* data, int size)
 {
     if (auto xml = getXmlFromBinary (data, size))
         if (xml->hasTagName (parameters.state.getType()))
@@ -216,12 +217,12 @@ void CharacterCompressorProcessor::setStateInformation (const void* data, int si
         }
 }
 
-juce::AudioProcessorEditor* CharacterCompressorProcessor::createEditor()
+juce::AudioProcessorEditor* YinyangCompressorProcessor::createEditor()
 {
-    return new CharacterCompressorEditor (*this);
+    return new YinyangCompressorEditor (*this);
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
-    return new CharacterCompressorProcessor();
+    return new YinyangCompressorProcessor();
 }

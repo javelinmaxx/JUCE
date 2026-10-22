@@ -2,10 +2,10 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "CompressorDSP.h"
 
-class CharacterCompressorProcessor final : public juce::AudioProcessor
+class YinyangCompressorProcessor final : public juce::AudioProcessor
 {
 public:
-    CharacterCompressorProcessor();
+    YinyangCompressorProcessor();
     void prepareToPlay (double, int) override;
     void releaseResources() override { engine.reset(); }
     bool isBusesLayoutSupported (const BusesLayout&) const override;
@@ -39,5 +39,5 @@ private:
     character::Compressor engine;
     // Cache parameter pointers once; no string lookup/allocation in processBlock.
     std::array<std::atomic<float>*, 20> raw {};
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (CharacterCompressorProcessor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (YinyangCompressorProcessor)
 };

@@ -20,7 +20,7 @@ bool closeColour (juce::Colour a, juce::Colour b, int tolerance)
         && std::abs (static_cast<int> (a.getGreen()) - static_cast<int> (b.getGreen())) <= tolerance
         && std::abs (static_cast<int> (a.getBlue()) - static_cast<int> (b.getBlue())) <= tolerance;
 }
-void set (CharacterCompressorProcessor& p, const char* id, float value)
+void set (YinyangCompressorProcessor& p, const char* id, float value)
 {
     auto* parameter = p.parameters.getParameter (id);
     check (parameter != nullptr, "parameter exists");
@@ -31,7 +31,7 @@ void set (CharacterCompressorProcessor& p, const char* id, float value)
 int runTests (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI juce;
-    CharacterCompressorProcessor p;
+    YinyangCompressorProcessor p;
     check (p.getParameters().size() == 20, "all host parameters registered");
     check (std::abs (p.parameters.getParameter ("ratio")->getNormalisableRange().interval - 0.01f) < 1.0e-7f,
            "ratio parameter supports 0.01 increments");
@@ -51,7 +51,10 @@ int runTests (int argc, char** argv)
     set (p, "evenHarmonics", 37.5f); set (p, "variTransient", 200);
     juce::MemoryBlock saved;
     p.getStateInformation (saved);
-    CharacterCompressorProcessor restored;
+    const auto savedXml = p.getXmlFromBinary (saved.getData(), static_cast<int> (saved.getSize()));
+    check (savedXml != nullptr && savedXml->hasTagName ("CharacterCompressorState"),
+           "project rename preserves the legacy host state identifier");
+    YinyangCompressorProcessor restored;
     restored.setStateInformation (saved.getData(), static_cast<int> (saved.getSize()));
     for (auto* parameter : p.getParameters())
     {
@@ -65,7 +68,7 @@ int runTests (int argc, char** argv)
     check (static_cast<int> (restored.parameters.getRawParameterValue ("model")->load()) == 2,
            "malformed state leaves current parameters intact");
 
-    CharacterCompressorProcessor oldYin;
+    YinyangCompressorProcessor oldYin;
     auto oldYinState = oldYin.parameters.copyState();
     oldYinState.getChildWithProperty ("id", "upward").setProperty ("value", 1.0f, nullptr);
     oldYinState.getChildWithProperty ("id", "ratio").setProperty ("value", 1.5f, nullptr);
@@ -77,7 +80,7 @@ int runTests (int argc, char** argv)
            "legacy Yin state migrates its audible 1.5:1 ratio to the stable host position");
     juce::MemoryBlock migratedYinData;
     oldYin.getStateInformation (migratedYinData);
-    CharacterCompressorProcessor reopenedYin;
+    YinyangCompressorProcessor reopenedYin;
     reopenedYin.setStateInformation (migratedYinData.getData(), static_cast<int> (migratedYinData.getSize()));
     check (std::abs (reopenedYin.parameters.getRawParameterValue ("ratio")->load() - 10.5f) < 0.01f,
            "migrated Yin ratio survives another state save and load");
@@ -389,7 +392,7 @@ int runTests (int argc, char** argv)
         check (automatedRatioRetained, "host ratio automation is retained across a Yin mode change");
         juce::MemoryBlock flStudioState;
         restored.getStateInformation (flStudioState);
-        CharacterCompressorProcessor reopened;
+        YinyangCompressorProcessor reopened;
         reopened.setStateInformation (flStudioState.getData(), static_cast<int> (flStudioState.getSize()));
         std::unique_ptr<juce::AudioProcessorEditor> reopenedEditor (reopened.createEditor());
         juce::Slider* reopenedRatio = nullptr;
@@ -444,11 +447,11 @@ int runTests (int argc, char** argv)
 }
 
 // Focused checks for the new output option, runnable without repeating the
-// existing processor/DSP suites: CharacterProcessorTests --output-stage [png].
+// existing processor/DSP suites: YinyangProcessorTests --output-stage [png].
 int runOutputStageTests (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI juce;
-    CharacterCompressorProcessor p;
+    YinyangCompressorProcessor p;
     check (p.getParameters().size() == 20, "all compressor parameters registered");
     auto* tilt = p.parameters.getParameter ("highTilt");
     check (tilt && tilt == p.getParameters()[13]
@@ -473,7 +476,7 @@ int runOutputStageTests (int argc, char** argv)
     set (p, "ratio", 1); set (p, "highTilt", 1);
     juce::MemoryBlock saved;
     p.getStateInformation (saved);
-    CharacterCompressorProcessor restored;
+    YinyangCompressorProcessor restored;
     restored.setStateInformation (saved.getData(), static_cast<int> (saved.getSize()));
     check (exact (restored.parameters.getRawParameterValue ("highTilt")->load(), 1.0f),
            "high tilt restored from saved state");
@@ -564,7 +567,7 @@ int renderThemePreviews (const char* directory)
     juce::ScopedJuceInitialiser_GUI juce;
     juce::File destination (directory);
     check (destination.createDirectory(), "preview directory can be created");
-    CharacterCompressorProcessor processor;
+    YinyangCompressorProcessor processor;
     processor.prepareToPlay (48000, 256);
     set (processor, "model", 0);
     set (processor, "upward", 0);

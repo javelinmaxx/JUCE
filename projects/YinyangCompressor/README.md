@@ -139,11 +139,11 @@ From the JUCE repository root:
 
 ```bash
 . /workspace/juce-env/activate.sh
-cmake -S projects/CharacterCompressor -B /workspace/juce-env/character-build \
+cmake -S projects/YinyangCompressor -B /workspace/juce-env/yinyang-build \
     -G Ninja -DCMAKE_BUILD_TYPE=Debug
-cmake --build /workspace/juce-env/character-build \
-    --target CharacterCompressor_VST3 CharacterDSPTests CharacterProcessorTests --parallel 4
-ctest --test-dir /workspace/juce-env/character-build --output-on-failure
+cmake --build /workspace/juce-env/yinyang-build \
+    --target YinyangCompressor_VST3 YinyangDSPTests YinyangProcessorTests YinyangUpwardCompressionTests --parallel 4
+ctest --test-dir /workspace/juce-env/yinyang-build --output-on-failure
 ```
 
 The optional native editor check needs a display. In this workspace:
@@ -151,7 +151,7 @@ The optional native editor check needs a display. In this workspace:
 ```bash
 mkdir -p /workspace/juce-env/cache
 XDG_CACHE_HOME=/workspace/juce-env/cache xvfb-run -a \
-    /workspace/juce-env/character-build/CharacterProcessorTests --editor
+    /workspace/juce-env/yinyang-build/YinyangProcessorTests --editor
 ```
 
 The editor check also exercises switch clicks, automation, and history expiry.
@@ -163,12 +163,12 @@ VariTransient controls. To regenerate them after activating the local build
 environment, run from the repository root:
 
 ```bash
-xvfb-run -a /workspace/juce-env/character-build/CharacterProcessorTests \
-    --preview-modes "$PWD/projects/CharacterCompressor/Previews"
+xvfb-run -a /workspace/juce-env/yinyang-build/YinyangProcessorTests \
+    --preview-modes "$PWD/projects/YinyangCompressor/Previews"
 ```
 
 Linux artifact:
-`/workspace/juce-env/character-build/CharacterCompressor_artefacts/Debug/VST3/YinYang Compressor.vst3`.
+`/workspace/juce-env/yinyang-build/YinyangCompressor_artefacts/Debug/VST3/YinYang Compressor.vst3`.
 Linux VST3 binaries cannot load in Logic on macOS.
 
 ## Download a Windows VST3 using GitHub Actions
@@ -202,14 +202,14 @@ Use a current compatible Xcode installation and CMake 3.22 or newer. From the
 JUCE repository root, use a separate build directory from any Intel build:
 
 ```bash
-cmake -S projects/CharacterCompressor -B build-character-arm64 -G Xcode \
+cmake -S projects/YinyangCompressor -B build-yinyang-arm64 -G Xcode \
     -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
-    -DCHARACTER_BUILD_TESTS=OFF
-cmake --build build-character-arm64 --config Release \
-    --target CharacterCompressor_VST3 CharacterCompressor_AU --parallel 4
+    -DYINYANG_BUILD_TESTS=OFF
+cmake --build build-yinyang-arm64 --config Release \
+    --target YinyangCompressor_VST3 YinyangCompressor_AU --parallel 4
 ```
 
-Bundles appear in `build-character-arm64/CharacterCompressor_artefacts/Release/`
+Bundles appear in `build-yinyang-arm64/YinyangCompressor_artefacts/Release/`
 under `VST3/YinYang Compressor.vst3` and `AU/YinYang Compressor.component`.
 Replace your installed copies with these complete bundles and restart the host.
 DawDreamer requires an absolute bundle path and matching Python/plug-in architecture.
@@ -226,19 +226,19 @@ cannot be tested from this Linux workspace.
 From the JUCE repository root, with this project present:
 
 ```bash
-cmake -S projects/CharacterCompressor -B build-character-mac -G Xcode \
+cmake -S projects/YinyangCompressor -B build-yinyang-mac -G Xcode \
     -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15
-cmake --build build-character-mac --config Release \
-    --target CharacterCompressor_AU
+cmake --build build-yinyang-mac --config Release \
+    --target YinyangCompressor_AU
 ```
 
 The AU is at:
-`build-character-mac/CharacterCompressor_artefacts/Release/AU/YinYang Compressor.component`.
+`build-yinyang-mac/YinyangCompressor_artefacts/Release/AU/YinYang Compressor.component`.
 To install a new development build in your user plug-in folder:
 
 ```bash
 mkdir -p "$HOME/Library/Audio/Plug-Ins/Components"
-ditto "build-character-mac/CharacterCompressor_artefacts/Release/AU/YinYang Compressor.component" \
+ditto "build-yinyang-mac/YinyangCompressor_artefacts/Release/AU/YinYang Compressor.component" \
     "$HOME/Library/Audio/Plug-Ins/Components/YinYang Compressor.component"
 auval -v aufx Chc1 Chra
 ```
@@ -250,9 +250,11 @@ threshold while watching gain reduction. Confirm bypass, all four models,
 transformer, automation, session save/reopen, and mono/stereo playback.
 
 If building this folder separately, provide the JUCE checkout with
-`-DJUCE_SOURCE_DIR=/path/to/JUCE`. Provisional manufacturer `Chra`, plug-in
-code `Chc1`, and bundle ID `audio.character.compressor` should be finalized
-before distributing builds; changing them later can break session identity.
+`-DJUCE_SOURCE_DIR=/path/to/JUCE`. The project and build targets are named
+`YinyangCompressor`; the host-visible product remains **YinYang Compressor**.
+Manufacturer `Chra`, plug-in code `Chc1`, bundle ID `audio.character.compressor`,
+and the legacy `CharacterCompressorState` root are preserved so existing DAW
+sessions and automation remain compatible.
 
 ## Development records and licensing
 

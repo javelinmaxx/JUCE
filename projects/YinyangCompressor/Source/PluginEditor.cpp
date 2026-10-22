@@ -3,7 +3,7 @@
 #include "../../EditorTooltips.h"
 #include "RatioMapping.h"
 
-CharacterCompressorEditor::CharacterCompressorEditor (CharacterCompressorProcessor& p)
+YinyangCompressorEditor::YinyangCompressorEditor (YinyangCompressorProcessor& p)
     : AudioProcessorEditor (&p), processor (p)
 {
     setOpaque (true);
@@ -479,7 +479,7 @@ juce::Slider::SliderLayout CompressorLookAndFeel::getSliderLayout (juce::Slider&
     return layout;
 }
 
-void CharacterCompressorEditor::paint (juce::Graphics& g)
+void YinyangCompressorEditor::paint (juce::Graphics& g)
 {
     g.fillAll (theme.background);
     g.saveState();
@@ -527,7 +527,7 @@ void CharacterCompressorEditor::paint (juce::Graphics& g)
     g.restoreState();
 }
 
-void CharacterCompressorEditor::paintMeter (juce::Graphics& g)
+void YinyangCompressorEditor::paintMeter (juce::Graphics& g)
 {
     drawAnalogPanel (g, meterBounds.toFloat(), 10, theme.meterPanel, theme.grid);
     const auto yinMode = upward.getToggleState();
@@ -624,7 +624,7 @@ void CharacterCompressorEditor::paintMeter (juce::Graphics& g)
     g.drawText (valueText, 356, 542, 156, 32, juce::Justification::centred);
 }
 
-void CharacterCompressorEditor::resized()
+void YinyangCompressorEditor::resized()
 {
     const auto up = [] (int y) { return y - 30; };
     model.setBounds (24, up (98), 500, 32);
@@ -685,7 +685,7 @@ void CharacterCompressorEditor::resized()
         control->setTransform (scale);
 }
 
-void CharacterCompressorEditor::timerCallback()
+void YinyangCompressorEditor::timerCallback()
 {
     const auto now = juce::Time::getMillisecondCounterHiRes() * 0.001;
     const auto elapsed = static_cast<float> (std::max (0.0, now - lastTick));
@@ -717,7 +717,7 @@ void CharacterCompressorEditor::timerCallback()
                                         meterBounds.translated (0, -30)));
 }
 
-void CharacterCompressorEditor::applyTheme()
+void YinyangCompressorEditor::applyTheme()
 {
     look.setTheme (theme);
     look.setColour (juce::TooltipWindow::backgroundColourId, theme.card);

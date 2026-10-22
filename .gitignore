@@ -71,3 +71,4 @@ CMakeUserPresets.json
 .editorconfig
 
 /build-character-*/
+/build-yinyang-*/

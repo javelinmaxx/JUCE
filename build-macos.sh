@@ -73,37 +73,37 @@ done
 xcodebuild -version
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-build_dir="$repo_root/build-character-mac-$architecture"
+build_dir="$repo_root/build-yinyang-mac-$architecture"
 targets=()
-if [[ $format == vst3 || $format == all ]]; then targets+=(CharacterCompressor_VST3); fi
-if [[ $format == au || $format == all ]]; then targets+=(CharacterCompressor_AU); fi
+if [[ $format == vst3 || $format == all ]]; then targets+=(YinyangCompressor_VST3); fi
+if [[ $format == au || $format == all ]]; then targets+=(YinyangCompressor_AU); fi
 
-cmake -S "$repo_root/projects/CharacterCompressor" -B "$build_dir" -G Xcode \
+cmake -S "$repo_root/projects/YinyangCompressor" -B "$build_dir" -G Xcode \
     "-DCMAKE_OSX_ARCHITECTURES=$cmake_arch" \
     "-DCMAKE_OSX_DEPLOYMENT_TARGET=$deployment" \
-    -DCHARACTER_BUILD_TESTS=OFF
+    -DYINYANG_BUILD_TESTS=OFF
 cmake --build "$build_dir" --config Release --target "${targets[@]}" --parallel "$parallel"
 
-artifacts="$build_dir/CharacterCompressor_artefacts/Release"
+artifacts="$build_dir/YinyangCompressor_artefacts/Release"
 if [[ $format == vst3 || $format == all ]]; then
-    bundle="$artifacts/VST3/Character Compressor.vst3"
+    bundle="$artifacts/VST3/YinYang Compressor.vst3"
     [[ -d "$bundle" ]] || { printf 'Missing VST3 bundle: %s\n' "$bundle" >&2; exit 1; }
     printf 'Built: %s\n' "$bundle"
     if [[ $install_requested == true ]]; then
         destination="$HOME/Library/Audio/Plug-Ins/VST3"
         mkdir -p "$destination"
-        ditto "$bundle" "$destination/Character Compressor.vst3"
-        printf 'Installed: %s/Character Compressor.vst3\n' "$destination"
+        ditto "$bundle" "$destination/YinYang Compressor.vst3"
+        printf 'Installed: %s/YinYang Compressor.vst3\n' "$destination"
     fi
 fi
 if [[ $format == au || $format == all ]]; then
-    bundle="$artifacts/AU/Character Compressor.component"
+    bundle="$artifacts/AU/YinYang Compressor.component"
     [[ -d "$bundle" ]] || { printf 'Missing AU bundle: %s\n' "$bundle" >&2; exit 1; }
     printf 'Built: %s\n' "$bundle"
     if [[ $install_requested == true ]]; then
         destination="$HOME/Library/Audio/Plug-Ins/Components"
         mkdir -p "$destination"
-        ditto "$bundle" "$destination/Character Compressor.component"
-        printf 'Installed: %s/Character Compressor.component\n' "$destination"
+        ditto "$bundle" "$destination/YinYang Compressor.component"
+        printf 'Installed: %s/YinYang Compressor.component\n' "$destination"
     fi
 fi

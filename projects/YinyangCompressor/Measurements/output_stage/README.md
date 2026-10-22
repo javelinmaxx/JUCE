@@ -109,7 +109,7 @@ boost the transformer's output or generated harmonics directly.
 From the repository root, with C++17, Python, NumPy, and Matplotlib:
 
 ```bash
-python3 projects/CharacterCompressor/Measurements/verify_output_stage.py
+python3 projects/YinyangCompressor/Measurements/verify_output_stage.py
 ```
 
 This regenerates the plots, PDF, `metrics.json`, and the THD/harmonic/shelf CSVs.
