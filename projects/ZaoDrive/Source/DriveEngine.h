@@ -1,26 +1,19 @@
 #pragma once
 #include "Circuits.h"
+#include "SmartHarmonics.h"
 #include "../../CharacterCompressor/Source/OversampledTransformer.h"
 #include <juce_dsp/juce_dsp.h>
 #include <memory>
 
 namespace zao
 {
-struct Settings
-{
-    float inputDb = 0, driveDb = 12, toneHz = 10000, outputDb = -6, mix = 1;
-    float coreDriveDb = 6, dcBias = 0;
-    int model = 0;
-    bool transformer = false, bypass = false;
-    float bjtBias = 0, diodeKnee = 0.5f;
-};
-
 class DriveEngine
 {
 public:
-    void prepare (double rate, int maximumBlock)
+    void prepare (double rate, int maximumBlock, bool smartWorker = true)
     {
         sampleRate = rate;
+        smart.prepare (rate, smartWorker);
         blockSize = std::max (1, maximumBlock);
         oversampling = std::make_unique<juce::dsp::Oversampling<float>> (
             2, 2, juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR, true, true);
@@ -46,11 +39,16 @@ public:
         firstSettings = true; transformerRunning = false; warmSamples = 0;
     }
 
+    void release() { smart.release(); }
+    SmartHarmonics& getSmart() noexcept { return smart; }
+    const SmartHarmonics& getSmart() const noexcept { return smart; }
+
     int getLatency() const noexcept { return circuitLatency + character::OversampledTransformer::latencySamples; }
 
     void process (juce::AudioBuffer<float>& buffer, const Settings& settings)
     {
         setSettings (settings);
+        smart.beginBlock (settings);
         const auto channels = std::min (2, buffer.getNumChannels());
         for (int offset = 0; offset < buffer.getNumSamples(); offset += blockSize)
         {
@@ -96,6 +94,7 @@ public:
                     transformerBlend.setTargetValue (1.0f);
                 const auto transformerAmount = transformerBlend.getNextValue();
                 const auto bypassAmount = bypassBlend.getNextValue();
+                std::array<float, 2> drySamples {}, wetSamples {};
                 for (int ch = 0; ch < channels; ++ch)
                 {
                     const auto c = static_cast<size_t> (ch);
@@ -104,10 +103,22 @@ public:
                     const auto delayedDry = circuitLatency > 0 ? dryDelay[c][circuitPosition] : input;
                     if (circuitLatency > 0) dryDelay[c][circuitPosition] = input;
                     const auto sample = scratch.getSample (ch, i);
-                    const auto stateDelta = coefficient * (sample - toneState[c]);
+                    // Subtract the aligned clean branch before Tone and Smart;
+                    // only this driver-minus-input residual enters the wet branch.
+                    const auto residual = sample - delayedDry;
+                    const auto stateDelta = coefficient * (residual - toneState[c]);
                     const auto toned = toneState[c] + stateDelta;
                     toneState[c] = toned + stateDelta;
-                    const auto mixed = (delayedDry + mix * (toned - delayedDry)) * gain;
+                    drySamples[c] = delayedDry; wetSamples[c] = toned;
+                }
+                smart.process (drySamples, wetSamples);
+                for (int ch = 0; ch < channels; ++ch)
+                {
+                    const auto c = static_cast<size_t> (ch);
+                    const auto delayedDry = drySamples[c], residual = wetSamples[c];
+                    const auto original = buffer.getSample (ch, offset+i);
+                    const auto input = std::isfinite (original) ? std::clamp (original, -32.0f, 32.0f) : 0.0f;
+                    const auto mixed = (delayedDry + mix * residual) * gain;
                     const auto clean = cleanDelay[c][transformerPosition];
                     cleanDelay[c][transformerPosition] = mixed;
                     const auto coloured = transformerRunning ? transformers[c].process (mixed, core, asymmetry) : clean;
@@ -195,6 +206,7 @@ private:
         firstSettings = false;
     }
 
+    SmartHarmonics smart;
     double sampleRate = 48000;
     int blockSize = 256, circuitLatency = 0, warmSamples = 0;
     bool firstSettings = true, transformerRunning = false;

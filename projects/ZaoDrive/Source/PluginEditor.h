@@ -11,7 +11,7 @@ public:
 class ZaoBypassButton final : public juce::ToggleButton
 {
 public:
-    ZaoBypassButton() : ToggleButton ("BYPASS") {}
+    explicit ZaoBypassButton (const juce::String& caption = "BYPASS") : ToggleButton (caption) {}
     void paintButton (juce::Graphics&, bool, bool) override;
 };
 
@@ -40,7 +40,7 @@ private:
     ZaoDriveProcessor& processor;
     ZaoLookAndFeel look;
     juce::TooltipWindow tooltipWindow { this };
-    ZaoBypassButton bypass;
+    ZaoBypassButton bypass, smart { "SMART" };
     ZaoTransformerSwitch transformer;
     juce::Slider model;
     juce::Label modelLabel;
@@ -48,9 +48,10 @@ private:
     std::array<juce::Label, 7> labels;
     using State = juce::AudioProcessorValueTreeState;
     std::array<std::unique_ptr<State::SliderAttachment>, 7> attachments;
-    std::unique_ptr<State::ButtonAttachment> bypassAttachment, transformerAttachment;
-    std::array<float, 12> previousSettings {};
+    std::unique_ptr<State::ButtonAttachment> bypassAttachment, transformerAttachment, smartAttachment;
+    std::array<float, 13> previousSettings {};
     int inputControlCircuit = -1;
+    uint32_t previousSmartRevision = 0;
     bool previewReady = false;
     std::array<float, 96> expectedInput {}, expectedOutput {};
     float expectedPeak = 0;

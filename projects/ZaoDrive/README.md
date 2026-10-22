@@ -20,9 +20,18 @@ The first knob changes with the mode:
 | OPAMP FB | Input | Adjusts input level from −24 to +24 dB. |
 | DIODE SHUNT / CROSSOVER | Knee | Varies driver impedance, current limit and bandwidth from firm to soft. |
 
-Drive adds up to 36 dB of excitation, and Tone filters the circuit
-output from 1.2–18 kHz. Mix blends with the original input after latency alignment;
+Drive adds up to 36 dB of excitation. The circuit output minus the aligned
+input forms a separate wet residual, which Tone filters from 1.2–18 kHz. Mix
+adds that residual to the clean input;
 Output sets the level entering the optional transformer.
+
+**Smart**, beside the circuit header, compares the input and generated wet
+spectra using the supplied 12-TET dissonance curve. It suppresses clashing
+harmonic components directly while leaving the manual circuit settings intact.
+Analysis runs on a worker, filter changes crossfade over 50 ms, and Smart adds
+no latency. It defaults Off and saves CPU when Off. See [SMART.md](SMART.md)
+for the signal path and separation limits, the [measured report](Tests/Reports/smart-report.md),
+and the [Smart preview](Previews/zao-smart.png).
 
 The **Expected Output** display renders a −12 dBFS, 1 kHz reference through a
 separate instance of the actual audio engine. Gray is the delayed input and amber

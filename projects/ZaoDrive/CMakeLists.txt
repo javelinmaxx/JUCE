@@ -17,7 +17,7 @@ juce_add_plugin(ZaoDrive
     IS_SYNTH FALSE NEEDS_MIDI_INPUT FALSE NEEDS_MIDI_OUTPUT FALSE
     COPY_PLUGIN_AFTER_BUILD FALSE NEEDS_WEB_BROWSER FALSE NEEDS_CURL FALSE
     VST3_CATEGORIES Fx Distortion)
-target_sources(ZaoDrive PRIVATE Source/PluginProcessor.cpp Source/PluginEditor.cpp)
+target_sources(ZaoDrive PRIVATE Source/PluginProcessor.cpp Source/PluginEditor.cpp Source/SmartHarmonics.cpp)
 target_compile_features(ZaoDrive PUBLIC cxx_std_17)
 target_compile_definitions(ZaoDrive PUBLIC
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)

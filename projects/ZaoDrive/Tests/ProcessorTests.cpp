@@ -237,10 +237,138 @@ void shapeTests()
     }
 }
 
+zao::SmartAnalyser::Frame smartFrame (double third = 329.6276, bool antiphase = false)
+{
+    zao::SmartAnalyser::Frame f; f.settings.smart = true; f.generation = 2;
+    f.signature = zao::SmartAnalyser::signature (f.settings);
+    for (int i = 0; i < zao::SmartAnalyser::fftSize; ++i)
+    {
+        const auto t = i/48000.0;
+        double input = 0, wet = 0;
+        for (double hz : { 261.6256, third, 391.9954 })
+        {
+            input += .1*std::sin (2*zao::pi*hz*t);
+            for (int order = 2; order <= zao::SmartAnalyser::orders; ++order)
+                wet += (.08/order)*std::sin (2*zao::pi*hz*order*t);
+        }
+        const auto j = static_cast<size_t> (i);
+        f.left[j] = static_cast<float> (input); f.right[j] = antiphase ? -f.left[j] : f.left[j];
+        f.wetLeft[j] = static_cast<float> (wet); f.wetRight[j] = antiphase ? -f.wetLeft[j] : f.wetLeft[j];
+    }
+    return f;
+}
+
+void smartTests()
+{
+    using A = zao::SmartAnalyser;
+    for (double step : { 0., 3., 4., 5., 7., 9., 12. })
+    {
+        const auto hz = 440*std::pow (2.0, step/12);
+        check (A::intervalDissonance (440, hz) < A::intervalDissonance (440, 440*std::pow (2.0, (step+.65)/12)),
+               "12-TET consonant anchors are valleys in the dissonance graph");
+        check (std::abs (A::intervalDissonance (440, hz)-A::intervalDissonance (hz, 440)) < 1e-7f, "dissonance is symmetric");
+    }
+    A analyser; auto frame = smartFrame(); auto result = analyser.analyse (frame);
+    check (result.count > 0 && result.selectedCost < result.baselineCost && result.confidence > .5,
+           "measured generated harmonic orders receive content-dependent dissonance cuts");
+    for (int i = 0; i < result.count; ++i)
+    {
+        const auto& b = result.bands[static_cast<size_t> (i)];
+        check (b.order >= 2 && b.order <= 12 && b.gainDb >= -6.01f && b.gainDb < 0,
+               "Smart cuts only added orders with at most six dB reduction per target");
+        bool protectedInput = true;
+        for (double hz : { 261.6256, 329.6276, 391.9954 }) protectedInput &= std::abs (b.frequency-hz) > 4*b.bandwidth;
+        check (protectedInput, "Smart targets stay outside protected input peaks");
+    }
+    auto anti = analyser.analyse (smartFrame (329.6276, true));
+    check (anti.count == result.count && std::abs (anti.baselineCost-result.baselineCost) < 1e-4,
+           "anti-phase stereo retains the same harmonic analysis");
+    auto minor = analyser.analyse (smartFrame (311.127));
+    double change = 0;
+    for (int i = 0; i < std::min (minor.count, result.count); ++i)
+        change += std::abs (minor.bands[static_cast<size_t> (i)].frequency-result.bands[static_cast<size_t> (i)].frequency);
+    check (change > 10, "major-to-minor content changes the harmonic targets");
+    A::Frame silence; silence.settings.smart = true;
+    check (analyser.analyse (silence).count == 0, "silence produces no Smart cuts");
+    std::mt19937 random (72); std::normal_distribution<float> noise (0, .1f);
+    for (int i = 0; i < A::fftSize; ++i)
+    { auto j = static_cast<size_t> (i); silence.left[j] = silence.right[j] = noise (random); silence.wetLeft[j] = silence.wetRight[j] = silence.left[j]; }
+    check (analyser.analyse (silence).count == 0, "unpitched noise does not cause arbitrary harmonic cuts");
+    // Measure actual causal filtering, rather than just the predicted score.
+    zao::SmartHarmonics shaper; shaper.prepare (48000, false); shaper.setPreview (result);
+    std::vector<float> input, filtered, raw;
+    for (int i = 0; i < 48000; ++i)
+    {
+        double x = 0, wet = 0;
+        for (double hz : { 261.6256, 329.6276, 391.9954 })
+        {
+            x += .1*std::sin (2*zao::pi*hz*i/48000);
+            for (int order = 2; order <= A::orders; ++order) wet += (.08/order)*std::sin (2*zao::pi*hz*order*i/48000);
+        }
+        std::array<float, 2> in { static_cast<float> (x), static_cast<float> (x) }, out { static_cast<float> (wet), static_cast<float> (wet) };
+        shaper.process (in, out);
+        if (i >= 24000) { input.push_back (in[0]); filtered.push_back (in[0]+out[0]); raw.push_back (in[0]+static_cast<float> (wet)); }
+    }
+    for (double hz : { 261.6256, 329.6276, 391.9954 })
+        check (std::abs (20*std::log10 (amplitude (filtered, hz)/amplitude (raw, hz))) < .15,
+               "original chord tones stay within 0.15 dB under actual harmonic filtering");
+    const auto hz = result.bands[0].frequency;
+    check (amplitude (filtered, hz) < .95*amplitude (raw, hz), "actual audio loses dissonant generated harmonic energy");
+    // Real worker publication, Off scheduling, stale results and transition back.
+    zao::SmartHarmonics worker; worker.prepare (48000); worker.beginBlock (frame.settings);
+    for (int i = 0; i < A::fftSize; ++i)
+    {
+        auto j = static_cast<size_t> (i);
+        std::array<float, 2> in { frame.left[j], frame.right[j] }, wet { frame.wetLeft[j], frame.wetRight[j] };
+        worker.process (in, wet);
+    }
+    const auto deadline = juce::Time::getMillisecondCounter()+2000;
+    while (worker.readResult().count == 0 && juce::Time::getMillisecondCounter() < deadline) juce::Thread::sleep (5);
+    check (worker.getSubmittedJobs() == 1 && worker.readResult().count > 0, "worker publishes its first complete spectral frame");
+    worker.beginBlock (frame.settings);
+    double liveDifference = 0;
+    for (int i = 0; i < A::fftSize; ++i)
+    {
+        const auto j = static_cast<size_t> (i);
+        std::array<float, 2> in { frame.left[j], frame.right[j] }, wet { frame.wetLeft[j], frame.wetRight[j] };
+        worker.process (in, wet); liveDifference += std::abs (wet[0]-frame.wetLeft[j]);
+    }
+    check (liveDifference > .1, "published harmonic targets affect live audio through the crossfaded bank");
+    auto manual = frame.settings; manual.driveDb = 23; worker.beginBlock (manual);
+    check (worker.readResult().count == 0, "manual circuit changes invalidate stale harmonic targets");
+    manual.smart = false; worker.beginBlock (manual);
+    const auto jobs = worker.getSubmittedJobs(); bool exact = true;
+    for (int i = 0; i < 24000; ++i)
+    {
+        std::array<float, 2> in { .2f, -.2f }, out { .3f, -.3f };
+        worker.process (in, out); if (i >= 6000) exact &= std::abs (out[0]-.3f) < 1e-8f && std::abs (out[1]+.3f) < 1e-8f;
+    }
+    check (exact && worker.getSubmittedJobs() == jobs, "Off is exactly transparent and submits no spectral jobs");
+    ZaoDriveProcessor processor; processor.prepareToPlay (48000, 64); set (processor, "smart", 1);
+    const auto latency = processor.getLatencySamples();
+    juce::MemoryBlock state; processor.getStateInformation (state);
+    ZaoDriveProcessor restored; restored.setStateInformation (state.getData(), static_cast<int> (state.getSize()));
+    check (restored.getSettings().smart, "Smart button survives host state recall");
+    auto legacy = processor.parameters.copyState(); legacy.removeChild (legacy.getChildWithProperty ("id", "smart"), nullptr);
+    juce::AudioProcessor::copyXmlToBinary (*legacy.createXml(), state);
+    restored.setStateInformation (state.getData(), static_cast<int> (state.getSize()));
+    check (! restored.getSettings().smart, "older presets explicitly load Smart Off");
+    juce::MidiBuffer midi; juce::AudioBuffer<float> block (2, 128);
+    for (int i = 0; i < 4096; i += 128)
+    {
+        for (int j = 0; j < 128; ++j) { block.setSample (0, j, frame.left[static_cast<size_t> (i+j)]); block.setSample (1, j, frame.right[static_cast<size_t> (i+j)]); }
+        processor.processBlock (block, midi);
+    }
+    check (processor.getSmartSubmittedJobs() == 1 && processor.getLatencySamples() == latency,
+           "live circuit supplies paired input/output analysis without extra plugin latency");
+    check (std::abs (processor.getSettings().driveDb-12) < 1e-6f && std::abs (processor.getSettings().bjtBias) < 1e-6f && std::abs (processor.getSettings().diodeKnee-.5f) < 1e-6f,
+           "Smart never changes Drive, Bias, Knee or their host automation values");
+}
+
 void processorTests()
 {
     ZaoDriveProcessor processor;
-    check (processor.getName() == "Zao Drive" && processor.getParameters().size() == 13,
+    check (processor.getName() == "Zao Drive" && processor.getParameters().size() == 14,
            "all circuits register compatible legacy parameters plus independent Bias and Knee");
     processor.prepareToPlay (48000, 64);
     const auto latency = processor.getLatencySamples();
@@ -472,7 +600,67 @@ void writeReport (const juce::File& directory)
     std::cout << "Measurements written to " << directory.getFullPathName() << '\n';
 }
 
-void editorTests (const juce::File& destination, bool tooltip, int previewMode)
+void writeSmartReport (const juce::File& directory)
+{
+    directory.createDirectory();
+    std::ofstream audio (directory.getChildFile ("smart-audio.csv").getFullPathName().toStdString());
+    std::ofstream bands (directory.getChildFile ("smart-bands.csv").getFullPathName().toStdString());
+    std::ofstream summary (directory.getChildFile ("smart-scores.csv").getFullPathName().toStdString());
+    audio << "model,chord,sample,input,residual,smart_residual,output,smart_output\n";
+    bands << "model,chord,order,frequency,bandwidth,gain_db\n";
+    summary << "model,chord,confidence,bands,before_cost,predicted_cost\n";
+    for (int model = 0; model < 4; ++model)
+        for (int chord = 0; chord < 2; ++chord)
+        {
+            constexpr int count = 24000;
+            const std::array<double, 3> notes = chord == 0 ? std::array<double, 3> { 261.6256, 329.6276, 391.9954 }
+                                                          : std::array<double, 3> { 220., 261.6256, 329.6276 };
+            std::vector<float> input (count), output;
+            for (int i = 0; i < count; ++i)
+                for (auto hz : notes) input[static_cast<size_t> (i)] += static_cast<float> (.1*std::sin (2*zao::pi*hz*i/48000));
+            zao::DriveEngine engine; engine.prepare (48000, 128, false);
+            zao::Settings settings; settings.model = model; settings.driveDb = 24; settings.outputDb = 0; settings.toneHz = 18000;
+            juce::AudioBuffer<float> block (2, 128);
+            for (int i = 0; i < count; i += 128)
+            {
+                const auto n = std::min (128, count-i); block.setSize (2, n, false, false, true);
+                for (int j = 0; j < n; ++j) block.setSample (0, j, input[static_cast<size_t> (i+j)]);
+                block.copyFrom (1, 0, block, 0, 0, n); engine.process (block, settings);
+                for (int j = 0; j < n; ++j) output.push_back (block.getSample (0, j));
+            }
+            zao::SmartAnalyser::Frame frame; frame.settings = settings; frame.settings.smart = true;
+            for (int i = 0; i < zao::SmartAnalyser::fftSize; ++i)
+            {
+                const auto t = count-zao::SmartAnalyser::fftSize+i;
+                const auto j = static_cast<size_t> (i);
+                frame.left[j] = frame.right[j] = input[static_cast<size_t> (t-engine.getLatency())];
+                frame.wetLeft[j] = frame.wetRight[j] = output[static_cast<size_t> (t)]-frame.left[j];
+            }
+            zao::SmartAnalyser analyser; const auto result = analyser.analyse (frame);
+            check (result.count > 0, "all four physical circuits provide measurable added harmonics for Smart");
+            summary << model << ',' << chord << ',' << result.confidence << ',' << result.count << ',' << result.baselineCost << ',' << result.selectedCost << '\n';
+            for (int i = 0; i < result.count; ++i)
+            {
+                const auto& b = result.bands[static_cast<size_t> (i)];
+                bands << model << ',' << chord << ',' << b.order << ',' << b.frequency << ',' << b.bandwidth << ',' << b.gainDb << '\n';
+            }
+            zao::SmartHarmonics shaper; shaper.prepare (48000, false); shaper.setPreview (result);
+            for (int i = engine.getLatency(); i < count; ++i)
+            {
+                const auto dry = input[static_cast<size_t> (i-engine.getLatency())];
+                const auto wet = output[static_cast<size_t> (i)]-dry;
+                std::array<float, 2> in { dry, dry }, residual { wet, wet }; shaper.process (in, residual);
+                if (i >= count-8192)
+                    audio << model << ',' << chord << ',' << i << ',' << dry << ',' << wet << ',' << residual[0] << ',' << output[static_cast<size_t> (i)] << ',' << dry+residual[0] << '\n';
+            }
+        }
+    std::ofstream curve (directory.getChildFile ("smart-dissonance.csv").getFullPathName().toStdString());
+    curve << "semitones,cost\n";
+    for (int i = 0; i <= 1200; ++i)
+        curve << i*.01 << ',' << zao::SmartAnalyser::intervalDissonance (440, 440*std::pow (2.0, i/1200.0)) << '\n';
+}
+
+void editorTests (const juce::File& destination, bool tooltip, int previewMode, bool smartPreview)
 {
     ZaoDriveProcessor processor;
     std::unique_ptr<juce::AudioProcessorEditor> editor (processor.createEditor());
@@ -484,12 +672,14 @@ void editorTests (const juce::File& destination, bool tooltip, int previewMode)
     juce::Slider* model = nullptr;
     juce::Slider* contextual = nullptr;
     juce::Button* transformer = nullptr;
+    juce::Button* smart = nullptr;
     juce::TooltipWindow* window = nullptr;
     for (auto* child : editor->getChildren())
     {
         if (auto* slider = dynamic_cast<juce::Slider*> (child); slider && slider->getName() == "CIRCUIT") model = slider;
         if (auto* slider = dynamic_cast<juce::Slider*> (child); slider && slider->getName() == "BIAS") contextual = slider;
         if (auto* button = dynamic_cast<juce::Button*> (child); button && button->getButtonText() == "TRANSFORMER") transformer = button;
+        if (auto* button = dynamic_cast<juce::Button*> (child); button && button->getButtonText() == "SMART") smart = button;
         if (auto* tip = dynamic_cast<juce::TooltipWindow*> (child)) window = tip;
         if (dynamic_cast<juce::Slider*> (child) || dynamic_cast<juce::Button*> (child) || dynamic_cast<juce::Label*> (child))
         {
@@ -499,6 +689,11 @@ void editorTests (const juce::File& destination, bool tooltip, int previewMode)
                    "all Zao controls and captions have one-sentence hover hints");
         }
     }
+    check (smart && smart->getY() == 98 && smart->getX() == 205, "Smart button sits beside the circuit header");
+    smart->setToggleState (true, juce::sendNotificationSync);
+    check (processor.getSettings().smart, "Smart button updates its host parameter");
+    set (processor, "smart", 0);
+    check (! smart->getToggleState(), "Smart button follows host automation");
     check (model && contextual && transformer && window && model->getTextFromValue (0) == "BJT CE",
            "initial circuit caption displays the model name");
     model->setValue (1, juce::sendNotificationSync);
@@ -550,6 +745,24 @@ void editorTests (const juce::File& destination, bool tooltip, int previewMode)
         set (processor, "output", 0); set (processor, "transformer", previewMode == 1 ? 1.0f : 0.0f);
     }
     for (int i = 0; i < 12; ++i) { juce::Thread::sleep (20); juce::Timer::callPendingTimersSynchronously(); }
+    if (smartPreview)
+    {
+        processor.prepareToPlay (48000, 128); set (processor, "smart", 1);
+        juce::AudioBuffer<float> signal (2, 128); juce::MidiBuffer midi;
+        for (int offset = 0; offset < 16384; offset += 128)
+        {
+            for (int i = 0; i < 128; ++i)
+            {
+                const auto x = static_cast<float> (.1*(std::sin (2*zao::pi*261.6256*(offset+i)/48000)+std::sin (2*zao::pi*329.6276*(offset+i)/48000)+std::sin (2*zao::pi*391.9954*(offset+i)/48000)));
+                signal.setSample (0, i, x); signal.setSample (1, i, x);
+            }
+            processor.processBlock (signal, midi);
+            if (offset%4096 == 0) juce::Thread::sleep (20);
+        }
+        for (int i = 0; i < 12; ++i) { juce::Thread::sleep (20); juce::Timer::callPendingTimersSynchronously(); }
+        check (processor.getSmartAnalysis().count > 0, "Smart preview includes live circuit harmonic analysis");
+        window->displayTip (editor->localPointToGlobal (smart->getBounds().getCentre()), smart->getTooltip());
+    }
     if (tooltip)
     {
         window->displayTip (editor->localPointToGlobal (model->getBounds().getCentre()), model->getTooltip());
@@ -575,14 +788,15 @@ int main (int argc, char** argv)
     try
     {
         juce::ScopedJuceInitialiser_GUI gui;
-        circuitTests(); shapeTests(); processorTests();
+        circuitTests(); shapeTests(); processorTests(); smartTests();
         if (argc > 2 && juce::String (argv[1]) == "--editor")
         {
             const auto option = argc > 3 ? juce::String (argv[3]) : juce::String();
             const auto mode = option == "--opamp-preview" ? 1 : option == "--shunt-preview" ? 2
                             : option == "--crossover-preview" ? 3 : -1;
-            editorTests (juce::File (argv[2]), option == "--tooltip", mode);
+            editorTests (juce::File (argv[2]), option == "--tooltip", mode, option == "--smart-preview");
         }
+        if (argc > 2 && juce::String (argv[1]) == "--smart-report") writeSmartReport (juce::File (argv[2]));
         if (argc > 2 && juce::String (argv[1]) == "--report") writeReport (juce::File (argv[2]));
         std::cout << checks << " Zao Drive checks passed\n";
         return 0;

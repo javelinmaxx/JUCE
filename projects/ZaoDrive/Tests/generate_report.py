@@ -272,7 +272,8 @@ symmetry are tested independently of these DC checks.
 ![Circuit waveforms, spectra and transformer](circuit-report.png)
 
 The plots use a −12 dBFS 1 kHz input, Output 0 dB, Mix 100%, Tone 18 kHz and
-transformer Off unless labeled. The shape plots sweep BJT Bias and diode Knee
+transformer Off and Smart Off unless labeled. Tone filters the driver-minus-input
+wet residual, which is then added to the aligned clean branch. The shape plots sweep BJT Bias and diode Knee
 at Drive 12 dB. A 9 kHz op-amp input at Drive 24 dB has **{float(alias['reduction_db']):.1f} dB**
 less folded third harmonic with 4× circuit oversampling than at the host rate.
 YinYang's directly included transformer still matches the original class within
@@ -299,10 +300,10 @@ The shape, circuit and diode figures have matching PDF versions.
 ## Validation — 2026-10-22
 
 Linux Release VST3 and Standalone builds passed without compiler warnings.
-All 137 circuit/processor checks passed. Native editor validation passed 182
+All 200 circuit/processor/Smart checks passed. Native editor validation passed 249
 checks with the tooltip visible, including mode-specific control rebinding,
 independent host automation and recall, waveform updates and both resize limits.
-The per-mode preview runs each passed 181 checks. Windows workflows were not
+The per-mode native preview checks passed. Windows workflows were not
 changed or run.
 """
 (destination / "report.md").write_text(report)

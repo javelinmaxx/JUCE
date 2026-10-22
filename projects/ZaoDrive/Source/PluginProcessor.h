@@ -7,7 +7,7 @@ class ZaoDriveProcessor final : public juce::AudioProcessor
 public:
     ZaoDriveProcessor();
     void prepareToPlay (double, int) override;
-    void releaseResources() override {}
+    void releaseResources() override { engine.release(); }
     bool isBusesLayoutSupported (const BusesLayout&) const override;
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
     void processBlockBypassed (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
@@ -29,10 +29,12 @@ public:
     void getStateInformation (juce::MemoryBlock&) override;
     void setStateInformation (const void*, int) override;
     zao::Settings getSettings() const noexcept;
+    zao::SmartAnalyser::Result getSmartAnalysis() const noexcept { return engine.getSmart().readResult(); }
+    uint32_t getSmartSubmittedJobs() const noexcept { return engine.getSmart().getSubmittedJobs(); }
     juce::AudioProcessorValueTreeState parameters;
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
-    std::array<std::atomic<float>*, 13> raw {};
+    std::array<std::atomic<float>*, 14> raw {};
     zao::DriveEngine engine;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ZaoDriveProcessor)
 };

@@ -115,7 +115,7 @@ void ZaoBypassButton::paintButton (juce::Graphics& g, bool highlighted, bool dow
     g.drawRoundedRectangle (bounds, 6, 1.0f);
     g.setColour (active ? foreground : secondary);
     g.setFont (juce::FontOptions (10.0f).withStyle ("bold"));
-    g.drawText ("BYPASS", bounds.toNearestInt(), juce::Justification::centred);
+    g.drawText (getButtonText(), bounds.toNearestInt(), juce::Justification::centred);
 }
 
 void ZaoTransformerSwitch::paintButton (juce::Graphics& g, bool, bool)
@@ -161,7 +161,9 @@ ZaoDriveEditor::ZaoDriveEditor (ZaoDriveProcessor& p) : AudioProcessorEditor (&p
     look.setColour (juce::TooltipWindow::backgroundColourId, panel);
     look.setColour (juce::TooltipWindow::textColourId, foreground);
     look.setColour (juce::TooltipWindow::outlineColourId, grid);
-    addAndMakeVisible (bypass); addAndMakeVisible (transformer);
+    addAndMakeVisible (bypass); addAndMakeVisible (transformer); addAndMakeVisible (smart);
+    smart.setTooltip ("Saves CPU when Off; reduces generated harmonics that clash with the input spectrum.");
+    smartAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "smart", smart);
     bypass.setTooltip ("Bypasses the overdrive and transformer while preserving plugin latency.");
     transformer.setTooltip ("Saves CPU when Off; adds YinYang's transformer coloration when On.");
     bypassAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "bypass", bypass);
@@ -172,9 +174,9 @@ ZaoDriveEditor::ZaoDriveEditor (ZaoDriveProcessor& p) : AudioProcessorEditor (&p
     constexpr std::array<const char*, 7> hints {
         "Adjusts the level entering the selected overdrive circuit.",
         "Increases the signal driving the selected transistor, op-amp, or diode circuit.",
-        "Sets the low-pass cutoff after the overdrive circuit.",
+        "Sets the low-pass cutoff of the driver-minus-input wet signal.",
         "Adjusts gain after the wet and dry mix and before the output transformer.",
-        "Blends the overdriven signal with the latency-aligned original input.",
+        "Adds the driver-minus-input wet signal to the latency-aligned clean input.",
         "Increases saturation in the enabled output transformer.",
         "Adds transformer asymmetry to increase even harmonics."
     };
@@ -263,7 +265,12 @@ void ZaoDriveEditor::refreshPreview (const zao::Settings& settings)
     // This independent engine lives on the message thread; the display never
     // reads or advances the audio thread's nonlinear circuit states.
     zao::DriveEngine preview;
-    preview.prepare (48000, 128);
+    preview.prepare (48000, 128, false);
+    if (settings.smart && ! settings.bypass)
+    {
+        const auto analysis = processor.getSmartAnalysis();
+        if (analysis.signature == zao::SmartAnalyser::signature (settings)) preview.getSmart().setPreview (analysis);
+    }
     constexpr int warmup = 4096;
     const auto total = warmup + static_cast<int> (expectedOutput.size());
     juce::AudioBuffer<float> block (2, 128);
@@ -295,12 +302,13 @@ void ZaoDriveEditor::timerCallback()
     const auto s = processor.getSettings();
     updateInputControl (s.model);
     if (juce::roundToInt (model.getValue()) != s.model) model.setValue (s.model, juce::dontSendNotification);
-    const std::array<float, 12> current { s.inputDb, s.driveDb, s.toneHz, s.outputDb, s.mix,
-        s.coreDriveDb, s.dcBias, static_cast<float> (s.model), s.transformer ? 1.0f : 0.0f, s.bypass ? 1.0f : 0.0f, s.bjtBias, s.diodeKnee };
-    if (! previewReady || current != previousSettings)
+    const std::array<float, 13> current { s.inputDb, s.driveDb, s.toneHz, s.outputDb, s.mix,
+        s.coreDriveDb, s.dcBias, static_cast<float> (s.model), s.transformer ? 1.0f : 0.0f, s.bypass ? 1.0f : 0.0f, s.bjtBias, s.diodeKnee, s.smart ? 1.0f : 0.0f };
+    const auto smartRevision = s.smart ? processor.getSmartAnalysis().revision : 0;
+    if (! previewReady || current != previousSettings || smartRevision != previousSmartRevision)
     {
         refreshPreview (s);
-        previousSettings = current; previewReady = true;
+        previousSettings = current; previousSmartRevision = smartRevision; previewReady = true;
     }
     repaint();
 }
@@ -310,7 +318,7 @@ void ZaoDriveEditor::paintExpectedOutput (juce::Graphics& g)
     g.setColour (foreground); g.setFont (juce::FontOptions (12.0f).withStyle ("bold"));
     g.drawText ("EXPECTED OUTPUT", 38, 303, 240, 18, juce::Justification::centredLeft);
     g.setColour (secondary); g.setFont (juce::FontOptions (9.0f));
-    g.drawText ("1 kHz sine  /  -12 dBFS reference", 38, 324, 280, 16, juce::Justification::centredLeft);
+    g.drawText (processor.getSettings().smart ? "1 kHz reference / Smart follows live input" : "1 kHz sine  /  -12 dBFS reference", 38, 324, 280, 16, juce::Justification::centredLeft);
     const auto scale = std::max (0.25f, std::ceil (expectedPeak * 8.0f) * 0.125f);
     g.drawText ("SCALE +/-" + juce::String (scale, 3) + " FS", 350, 324, 154, 16, juce::Justification::centredRight);
     const auto plot = juce::Rectangle<float> (44, 352, 460, 106);
@@ -359,7 +367,7 @@ void ZaoDriveEditor::paint (juce::Graphics& g)
                               juce::Rectangle<float> (24, 514, 300, 152),
                               juce::Rectangle<float> (340, 514, 184, 152) }) drawPanel (g, bounds);
     g.setColour (foreground); g.setFont (juce::FontOptions (12.0f).withStyle ("bold"));
-    g.drawText ("OVERDRIVE CIRCUIT", 38, 101, 250, 18, juce::Justification::centredLeft);
+    g.drawText ("OVERDRIVE CIRCUIT", 38, 101, 160, 18, juce::Justification::centredLeft);
     g.drawText ("TRANSFORMER STAGE", 38, 526, 270, 18, juce::Justification::centredLeft);
     g.drawText ("OUTPUT", 354, 526, 150, 18, juce::Justification::centredLeft);
     paintExpectedOutput (g);
@@ -367,6 +375,7 @@ void ZaoDriveEditor::paint (juce::Graphics& g)
 
 void ZaoDriveEditor::resized()
 {
+    smart.setBounds (205, 98, 64, 24);
     bypass.setBounds (450, 33, 74, 28);
     const auto place = [this] (size_t index, int x, int y, int width, int height)
     {
@@ -385,7 +394,7 @@ void ZaoDriveEditor::resized()
     place (3, 350, 553, 80, 85);
     place (4, 438, 553, 80, 85);
     const auto scale = editorScaling::transform (*this, designWidth, designHeight);
-    bypass.setTransform (scale); transformer.setTransform (scale);
+    bypass.setTransform (scale); transformer.setTransform (scale); smart.setTransform (scale);
     model.setTransform (scale); modelLabel.setTransform (scale);
     for (auto& slider : sliders) slider.setTransform (scale);
     for (auto& label : labels) label.setTransform (scale);
