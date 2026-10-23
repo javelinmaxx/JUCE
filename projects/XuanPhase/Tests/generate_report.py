@@ -216,7 +216,7 @@ fig,axes=plt.subplots(2,1,figsize=(10,5),constrained_layout=True,sharex=True)
 t=piano['sample']/48
 axes[0].plot(t,piano['reference'],label='50 ms delayed input',alpha=.7)
 axes[0].plot(t,piano['automatic'],label='Auto: missed attack deadline',alpha=.7)
-axes[0].set(ylabel='Amplitude',title='Simulated electric piano: late correction skips the sustained note')
+axes[0].set(ylabel='Amplitude',title='Simulated electric piano: stable attack, followed by late correction')
 axes[1].plot(t,piano['automatic']-piano['reference'])
 axes[1].set(xlabel='Stream time (ms)',ylabel='Output minus reference')
 for ax in axes: ax.grid(alpha=.25)
@@ -234,17 +234,16 @@ Auto gathers 5 ms of context and latches the detected target once per onset.
 Repeated detections from overlapping FFT frames do not repeatedly redesign it.
 Target strength holds through the lookahead and full FIR response plus an
 8 ms safety margin; Transient release starts after that hold. An onset more
-than 40 ms later can begin a new collection. Responses arriving too late for
-the pre-onset 5 ms crossfade are discarded for that event, including subsequent
-release revisions, so they cannot fade into a still-loud piano sustain.
+than 20 ms later can begin a new collection. Responses arriving too late for
+the pre-onset 5 ms crossfade wait until the protected response has passed.
+The whole-note discard rule has been reverted; late detections remain eligible.
 
 The test streams a dispersed hit through the real worker with Transient at
 its fastest 20 ms setting. It records changes to the actual applied complex
 FIR response, and requires it to stay fixed through an interval containing
 the delayed transient peak. A second run deliberately pauses the worker until
 its safe pre-onset deadline has passed: the hit must retain the previous,
-neutral response for the entire note; a later release revision must not revive
-the discarded correction.
+neutral response during the protected onset, then recover its correction afterward.
 No audio callback waits for the worker.
 
 | Worker | Largest filter change in checked onset interval |
@@ -253,7 +252,7 @@ No audio callback waits for the worker.
 
 The zero changes demonstrate removal of kernel modulation in this constructed
 onset interval; static phase rotation can still reshape or ring on a transient.
-A late hit may receive less correction instead of a warbling crossfade.
+A late hit may receive less attack correction, followed by phase rotation of its sustain.
 Closely spaced transients, manual automation, and arbitrary recordings are not
 promised to match this isolated synthetic case. Additional checks cover exact
 50 ms neutral/bypass latency at 8/44.1/48/96/192 kHz, the entire reported tail,
@@ -264,11 +263,12 @@ Data: [lookahead.csv](lookahead.csv).
 
 A second fixture uses a simulated C3 electric-piano note with a 2 ms hammer
 attack, nine decaying harmonics, an inharmonic bell partial, and a long sustain.
-With a deliberately late worker, it must generate spectral targets yet retain
-the delayed input throughout the note, with maximum sample error below 0.00001.
-The previous handoff could start a 5 ms fade about 83 ms after the onset, while
-the note was still loud. The new handoff discards that missed event instead.
-This checks late-attack modulation, not every source of warble in a real piano.
+With a deliberately late worker, it must generate spectral targets, keep its
+applied response fixed through the protected attack, and apply a correction
+later. The waveform difference after the attack is expected phase processing;
+this regression no longer requires the whole sustained note to remain dry.
+Late correction can still modulate sustained material. These tests protect the
+onset and restore eligibility; they do not promise to remove every piano warble.
 Data: [electric-piano.csv](electric-piano.csv).
 
 """
@@ -314,6 +314,14 @@ relationship and may change the mono sum; it is a widening effect rather than
 a promise of maximum separation for every transient source.
 """
 (root/'REPORT.md').write_text('''# Xuan Phase test report
+
+## Adaptive onset detection
+
+[Measured quiet, masked, rapid, noise, vibrato and slow-pad tests](onset-detection.md).
+The real-time detector uses adaptive spectral peak growth and a slow spectral
+baseline; it no longer requires full-window crest above 2. Frozen single-frame
+phase-design probes below retain the original reference analysis to isolate
+phase-response accuracy from the stateful onset decision.
 
 ## Manual controls and latency
 

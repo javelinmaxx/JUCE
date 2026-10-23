@@ -42,8 +42,8 @@ bool PhaseEngine::transitionAllowed (int64_t streamSample, int64_t onsetSample, 
     const auto aheadSamples = juce::roundToInt (rate*.05)-reference;
     const auto safety = juce::roundToInt (rate*.008);
     // Finish the fade before delayed input reaches the FIR, and keep its entire
-    // finite response stable. New late events are discarded by the audio handoff; releases of
-    // an already accepted event wait until the protected hit has passed.
+    // finite response stable. A late response waits until the protected hit has
+    // passed, retaining event eligibility instead of discarding the whole note.
     const auto first = attackDeadline (onsetSample, rate);
     const auto last = onsetSample+aheadSamples+2*reference+safety;
     return streamSample < first || streamSample >= last;
@@ -162,9 +162,11 @@ double PhaseEngine::meterFrequency (int row, double rate) noexcept
 {
     return 20*std::pow (std::min (20000.0, rate*.45)/20, static_cast<double> (row)/(meterBins-1));
 }
-Analysis PhaseEngine::analyse (const std::vector<float>& input, double rate, std::vector<float>& previous, double& previousEnergy, SpectrumFrame* meter)
+Analysis PhaseEngine::analyse (const std::vector<float>& input, double rate, std::vector<float>& previous, double& previousEnergy, SpectrumFrame* meter, OnsetState* onsetState, int64_t frameSample)
 {
     const auto n = static_cast<int> (input.size());
+    if (onsetState != nullptr && frameSample >= 0 && onsetState->lastFrame >= 0
+        && frameSample-onsetState->lastFrame > rate*.25) *onsetState = {};
     juce::dsp::FFT analyser (orderFor (n));
     std::vector<Complex> time (input.size()), spectrum (input.size());
     double energy = 0; float peak = 0; int anchor = 0;
@@ -196,32 +198,150 @@ Analysis PhaseEngine::analyse (const std::vector<float>& input, double rate, std
     }
     if (previous.size() != static_cast<size_t> (n/2+1)) previous.assign (static_cast<size_t> (n/2+1), 0);
     double flux = 0, total = 0; float largest = 0;
+    for (int k = 1; k < n/2; ++k) largest = std::max (largest, std::abs (spectrum[static_cast<size_t> (k)]));
+    std::vector<float> novel (static_cast<size_t> (n/2+1));
+    double novelty = 0, emerging = 0, activeWeight = 0;
+    const auto floor = std::max (n*1e-5f, largest*.001f);
+    if (onsetState != nullptr && onsetState->spectralBaseline.size() != novel.size())
+        onsetState->spectralBaseline.assign (novel.size(),0);
     for (int k = 1; k < n/2; ++k)
     {
-        const auto m = std::abs (spectrum[static_cast<size_t> (k)]);
-        flux += std::max (0.f, m-previous[static_cast<size_t> (k)]); total += m;
-        previous[static_cast<size_t> (k)] = m; largest = std::max (largest, m);
+        const auto index = static_cast<size_t> (k);
+        const auto m = std::abs (spectrum[index]);
+        flux += std::max (0.f, m-previous[index]); total += m;
+        // A maximum over neighbouring previous bins rejects spectral motion
+        // from vibrato, while log compression lets soft new partials contribute.
+        const auto reference = std::max ({previous[index-1], previous[index], previous[index+1]});
+        novel[index] = m > largest*.01f ? std::max (0.f,m-reference*1.25f-floor*.5f) : 0.f;
+        if (rate*k/n >= 60 && rate*k/n <= std::min (20000., rate*.45)
+            && m > 4*floor && m >= std::abs (spectrum[index-1]) && m > std::abs (spectrum[index+1]))
+        {
+            // Score significant local peaks, not fluctuating low-level FFT
+            // sidelobes; require growth beyond vibrato's neighbouring-bin max.
+            ++activeWeight;
+            if (novel[index] > 0)
+            {
+                const auto growth = std::clamp (std::log1p (m/floor)-std::log1p (reference/floor),0.f,1.f);
+                novelty += growth;
+                const auto baseline = onsetState != nullptr ? std::max ({onsetState->spectralBaseline[index-1],
+                    onsetState->spectralBaseline[index],onsetState->spectralBaseline[index+1]}) : reference;
+                if (m > 3*baseline+floor) emerging += growth;
+            }
+        }
     }
     energy /= n;
     Analysis result; result.anchor = anchor/rate; result.flux = static_cast<float> (flux/std::max (1e-12, total));
     result.crest = static_cast<float> (peak/std::sqrt (std::max (1e-12, energy)));
-    const auto onset = energy > 1e-7 && result.crest > 2
+    const auto legacyOnset = energy > 1e-7 && result.crest > 2
         && ((energy > previousEnergy*1.5 && result.flux > .15f) || (result.flux > .4f && result.crest > 3));
+    bool onset = legacyOnset;
+    result.novelty = static_cast<float> (novelty/std::max (1.,activeWeight));
+    float anchorValue = input[static_cast<size_t> (anchor)];
+    if (onsetState != nullptr)
+    {
+        auto& state = *onsetState;
+        if (frameSample < 0) frameSample = state.lastFrame < 0 ? n : state.lastFrame+128;
+        const auto backgroundBlend = state.lastFrame < 0 ? 1.f
+            : static_cast<float> (1-std::exp (-std::max (int64_t (1),frameSample-state.lastFrame)/(rate*.06)));
+        for (int k = 1; k < n/2; ++k)
+        {
+            auto& baseline = state.spectralBaseline[static_cast<size_t> (k)];
+            baseline += backgroundBlend*(std::abs (spectrum[static_cast<size_t> (k)])-baseline);
+            if (baseline < 1e-12f) baseline = 0; // Avoid subnormal tails during silence.
+        }
+        auto values = state.history;
+        const auto median = [&] (auto& data)
+        {
+            if (state.count == 0) return 0.f;
+            auto middle = data.begin()+state.count/2;
+            std::nth_element (data.begin(),middle,data.begin()+state.count); return *middle;
+        };
+        const auto centre = median (values);
+        for (int i = 0; i < state.count; ++i) values[static_cast<size_t> (i)] = std::abs (state.history[static_cast<size_t> (i)]-centre);
+        double mean = 0, squared = 0;
+        for (int i = 0; i < state.count; ++i)
+        {
+            const auto value = state.history[static_cast<size_t> (i)]; mean += value; squared += value*value;
+        }
+        mean /= std::max (1,state.count); squared /= std::max (1,state.count);
+        const auto deviation = std::sqrt (std::max (0.,squared-mean*mean));
+        const auto threshold = std::max ({.125f,centre+4*std::max (.003f,median (values)),static_cast<float> (mean+3.5*deviation)});
+        const auto shortSize = std::min (n/4,std::max (1,juce::roundToInt (rate*.004)));
+        double recent = 0, earlier = 0;
+        for (int i = 0; i < shortSize; ++i)
+        {
+            const auto x = input[static_cast<size_t> (n-1-i)], old = input[static_cast<size_t> (n-1-shortSize-i)];
+            recent += x*x; earlier += old*old;
+        }
+        if (recent > earlier*1.5) state.lastRise = frameSample;
+        if (energy < previousEnergy*.999) state.released = true;
+        // Replace the global crest veto with adaptive spectral novelty plus
+        // local attack evidence; a loud sustained note must not mask a soft hit.
+        if (state.lastFrame >= 0)
+            onset = energy > 1e-9 && result.novelty > threshold
+                && ((state.lastRise >= 0 && frameSample-state.lastRise <= rate*.012 && energy > previousEnergy*1.005)
+                    || emerging/std::max (1.,activeWeight) > threshold)
+                && (state.released || state.lastOnset < 0 || emerging/std::max (1.,activeWeight) > threshold)
+                && (state.lastOnset < 0 || frameSample-state.lastOnset >= rate*.02);
+        if (state.lastOnset < 0 || frameSample-state.lastOnset > rate*.006)
+        {
+            state.history[static_cast<size_t> (state.position)] = std::min (.5f,result.novelty);
+            state.position = (state.position+1)%static_cast<int> (state.history.size());
+            state.count = std::min (static_cast<int> (state.history.size()),state.count+1);
+        }
+        state.lastFrame = frameSample;
+        result.onset = onset;
+        if (onset)
+        {
+            state.lastOnset = frameSample; state.released = false; state.eventNovelty = novel;
+        }
+        else if (state.lastOnset >= 0 && frameSample-state.lastOnset <= rate*.006)
+            onset = true; // Finish collecting this event's phase context once.
+        if (onset && state.eventNovelty.size() == novel.size())
+            for (size_t i = 0; i < novel.size(); ++i)
+            {
+                state.eventNovelty[i] = std::max (state.eventNovelty[i],novel[i]);
+                novel[i] = state.eventNovelty[i];
+            }
+        if (onset)
+        {
+            // Locate the new attack in the positive spectral residual, rather
+            // than anchoring to an older, louder peak in the same FFT window.
+            std::vector<Complex> residual (input.size()), impulse (input.size());
+            for (int k = 1; k < n/2; ++k)
+            {
+                const auto index = static_cast<size_t> (k);
+                residual[index] = spectrum[index]*(novel[index]/std::max (1e-12f,std::abs (spectrum[index])));
+                residual[static_cast<size_t> (n-k)] = std::conj (residual[index]);
+            }
+            analyser.perform (residual.data(),impulse.data(),true);
+            float largestNew = 0;
+            for (int i = 0; i < n; ++i)
+                if (std::abs (impulse[static_cast<size_t> (i)].real()) > largestNew)
+                { largestNew = std::abs (impulse[static_cast<size_t> (i)].real()); anchor = i; }
+            result.anchor = anchor/rate; anchorValue = impulse[static_cast<size_t> (anchor)].real();
+        }
+    }
+    if (onsetState == nullptr) result.onset = onset;
+    for (int k = 1; k < n/2; ++k) previous[static_cast<size_t> (k)] = std::abs (spectrum[static_cast<size_t> (k)]);
     previousEnergy = energy;
-    if (meter != nullptr && onset) (*meter)[meterTransient] = std::clamp ((result.crest-2)/4, 0.f, 1.f);
+    if (meter != nullptr && onset) (*meter)[meterTransient] = onsetState != nullptr
+        ? std::clamp (.25f+result.novelty,0.f,1.f) : std::clamp ((result.crest-2)/4,0.f,1.f);
     if (! onset) return result;
-    const auto sign = input[static_cast<size_t> (anchor)] < 0 ? pi : 0;
+    const auto sign = anchorValue < 0 ? pi : 0;
     // Reserve a strongest peak per logarithmic region before filling remaining
     // slots by magnitude: a low-to-high first-24 scan starves the upper bands.
     struct Candidate { Target target; float magnitude; bool selected = false; };
     std::vector<Candidate> candidates;
     const auto ceiling = std::min (20000.0, rate*.45);
+    const auto& ranking = onsetState != nullptr ? novel : previous;
+    const auto rankingPeak = *std::max_element (ranking.begin(),ranking.end());
     for (int k = 2; k < n/2-1; ++k)
     {
         const auto frequency = rate*k/n;
         if (frequency < 60 || frequency > ceiling) continue;
-        const auto m = previous[static_cast<size_t> (k)];
-        if (m < largest*.08f || m <= previous[static_cast<size_t> (k-1)] || m < previous[static_cast<size_t> (k+1)]) continue;
+        const auto m = ranking[static_cast<size_t> (k)];
+        if (m < rankingPeak*.08f || m <= ranking[static_cast<size_t> (k-1)] || m < ranking[static_cast<size_t> (k+1)]) continue;
         const auto angle = std::remainder (sign-2*pi*k*anchor/n-std::arg (spectrum[static_cast<size_t> (k)]), 2*pi);
         // Remove the anchor's time origin before unwrapping the local slope;
         // otherwise a late transient aliases its group delay by half a frame.
@@ -402,31 +522,6 @@ void PhaseEngine::finishHop()
         for (int i = 0; i < 3; ++i)
             if (slots[static_cast<size_t> (i)].state.load (std::memory_order_acquire) == 2
                 && (newest < 0 || slots[static_cast<size_t> (i)].version > slots[static_cast<size_t> (newest)].version)) newest = i;
-        if (newest >= 0 && ! slots[static_cast<size_t> (newest)].parameterChange)
-        {
-            const auto& candidate = slots[static_cast<size_t> (newest)];
-            bool missedAttack = false;
-            for (size_t event = 0; event < candidate.onsets.size(); ++event)
-            {
-                const auto onset = candidate.onsets[event];
-                if (onset >= 0 && onset != slots[static_cast<size_t> (active)].onsets[event]
-                    && static_cast<int64_t> (processedSamples) >= attackDeadline (onset, sampleRate))
-                {
-                    missedAttack = true;
-                }
-            }
-            // A new target is useful only before its note. Applying it after
-            // the protected FIR response still bends a piano's loud sustain.
-            // Reject every later revision of that missed event too; accepted
-            // events may continue their normal release toward the manual curve.
-            if (missedAttack)
-            {
-                for (auto& slot : slots)
-                    if (slot.state.load (std::memory_order_acquire) == 2)
-                        slot.state.store (0, std::memory_order_release);
-                newest = -1;
-            }
-        }
         if (newest >= 0 && std::all_of (slots[static_cast<size_t> (newest)].onsets.begin(),
                                         slots[static_cast<size_t> (newest)].onsets.end(),
                                         [&] (int64_t onset) { return transitionAllowed (static_cast<int64_t> (processedSamples), onset, sampleRate); }))
@@ -533,6 +628,7 @@ void PhaseEngine::run()
     std::array<std::vector<float>, 2> channelPrevious;
     std::array<double, 2> channelEnergy {};
     double previousEnergy = 0, displayEnergy = 0;
+    OnsetState sharedOnsets, displayOnsets; std::array<OnsetState,2> channelOnsets;
     float transientHold = 0; double lastMeter = juce::Time::getMillisecondCounterHiRes();
     while (! threadShouldExit())
     {
@@ -546,7 +642,8 @@ void PhaseEngine::run()
             // history or generate responses while Auto is inactive/bypassed.
             const auto correcting = s.automatic && ! juce::exactlyEqual (s.depth, 0.f) && autoActive.load (std::memory_order_relaxed);
             const auto result = analyse (analysisJob, sampleRate, correcting ? previous : displayPrevious,
-                                         correcting ? previousEnergy : displayEnergy, visible ? &spectrum : nullptr);
+                                         correcting ? previousEnergy : displayEnergy, visible ? &spectrum : nullptr,
+                                         correcting ? &sharedOnsets : &displayOnsets, static_cast<int64_t> (jobSample));
             if (visible && meterVisible.load (std::memory_order_relaxed))
             {
                 const auto now = juce::Time::getMillisecondCounterHiRes();
@@ -570,7 +667,7 @@ void PhaseEngine::run()
                     // The same onset is visible in many overlapping FFT frames.
                     // Collect 5 ms of context, then latch once instead of retuning
                     // the filter for every frame of that same transient.
-                    if (eventOnsets[index] < 0 || anchor-eventOnsets[index] > juce::roundToInt (sampleRate*.04))
+                    if (eventOnsets[index] < 0 || anchor-eventOnsets[index] > juce::roundToInt (sampleRate*.02))
                     {
                         collecting[index] = true; collected[index] = next; eventOnsets[index] = anchor;
                         collectUntil[index] = jobSample+static_cast<uint64_t> (juce::roundToInt (sampleRate*.005));
@@ -602,7 +699,7 @@ void PhaseEngine::run()
             if (correcting && (s.link < 100 || ! targets.stereo))
                 for (size_t ch = 0; ch < 2; ++ch)
                 {
-                    const auto channelResult = analyse (channelJobs[ch], sampleRate, channelPrevious[ch], channelEnergy[ch]);
+                    const auto channelResult = analyse (channelJobs[ch], sampleRate, channelPrevious[ch], channelEnergy[ch], nullptr, &channelOnsets[ch], static_cast<int64_t> (jobSample));
                     update (targets.channel[ch], channelResult, ch+1);
                 }
             else if (correcting)
@@ -640,7 +737,6 @@ void PhaseEngine::run()
             // Only detectors contributing to this response constrain its handoff.
             if (s.link <= 0 || ! targets.stereo) slot.onsets[0] = -1;
             else if (s.link >= 100) slot.onsets[1] = slot.onsets[2] = -1;
-            slot.parameterChange = ! (s == last);
             slot.valid = false; slot.version = ++serial;
             slot.state.store (2, std::memory_order_release);
             const auto independentCount = std::max (targets.channel[0].count, targets.channel[1].count);

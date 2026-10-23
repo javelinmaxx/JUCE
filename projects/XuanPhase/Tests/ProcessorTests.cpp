@@ -283,9 +283,10 @@ void lookaheadTests (const juce::File& directory, const std::vector<float>& hit)
         paused.store (false);
         std::cout << "Lookahead late=" << late << " protected filter change=" << protectedChange << " protected phase=" << protectedAngle << " later phase=" << laterAngle << '\n';
         check (frames > 8 && protectedChange < 1e-6f, "the applied phase response stays fixed throughout the protected onset and output peak");
-        if (late) check (protectedAngle < 1e-5f && laterAngle < 1e-5f,
-                         "a missed attack skips the whole event instead of retuning its early sustain");
-        else check (protectedAngle > .01f, "a timely worker applies the correction before the onset");
+        if (late) check (protectedAngle < 1e-5f && laterAngle > .01f,
+                         "a late event remains eligible and applies only after the protected onset");
+        else check (protectedAngle > .01f || laterAngle > .01f,
+                    "an unpaused worker remains eligible before the onset or after its protected response");
     }
 }
 
@@ -313,19 +314,33 @@ void electricPianoTests (const juce::File& directory)
         while (paused.load() && juce::Thread::getCurrentThreadId() != mainThread) juce::Thread::sleep (1);
         return settings;
     });
+    engine.setMeterVisible (true);
     juce::AudioBuffer<float> audio (2, 128);
     std::ofstream trace (directory.getChildFile ("electric-piano.csv").getFullPathName().toStdString());
     trace << "sample,reference,automatic\n";
-    float error = 0; int targets = 0;
+    float error = 0, protectedChange = 0, laterPhase = 0; int targets = 0;
+    xuan::RotationFrame previous {}, frame {}; uint32_t version = 0; engine.readRotation (previous,version);
     for (int at = 0; at < count; at += 128)
     {
-        // Deliberately miss the attack deadline; the old implementation handed
-        // off its correction ~83 ms later, while this note was still loud.
+        // Deliberately miss the attack deadline: the response must stay fixed
+        // through the protected attack, then remain eligible during the sustain.
         if (at >= noteAt+960) paused.store (false);
         for (int i = 0; i < 128; ++i)
             for (int ch = 0; ch < 2; ++ch) audio.setSample (ch, i, piano[static_cast<size_t> (at+i)]);
         engine.process (audio, settings); juce::Thread::sleep (3);
         targets = std::max (targets, engine.targetCount());
+        if (engine.readRotation (frame,version))
+        {
+            for (int row = 0; row < xuan::meterBins; ++row)
+            {
+                const auto index = static_cast<size_t> (row);
+                const auto now = std::complex<float> (frame[index],frame[index+xuan::meterBins]);
+                const auto before = std::complex<float> (previous[index],previous[index+xuan::meterBins]);
+                if (at >= noteAt+1440 && at < noteAt+2880) protectedChange = std::max (protectedChange,std::abs (now-before));
+                if (at > noteAt+6000) laterPhase = std::max (laterPhase,std::abs (std::arg (now)));
+            }
+            previous = frame;
+        }
         for (int i = 0; i < 128; ++i)
         {
             const auto index = at+i-engine.latency();
@@ -335,9 +350,85 @@ void electricPianoTests (const juce::File& directory)
         }
     }
     paused.store (false);
-    std::cout << "Electric piano: detected targets=" << targets << " missed-attack error=" << error << '\n';
+    std::cout << "Electric piano: detected targets=" << targets << " protected change=" << protectedChange << " later phase=" << laterPhase << " reference difference=" << error << '\n';
     check (targets > 0, "the sustained electric-piano fixture exercises automatic target generation");
-    check (error < 1e-5f, "a late correction never fades into the electric piano's attack or sustain");
+    check (protectedChange < 1e-6f, "a late electric-piano correction preserves the protected attack");
+    check (laterPhase > .01f, "a detected electric-piano note is no longer silently discarded for arriving late");
+}
+
+void onsetAccuracyTests (const juce::File& directory)
+{
+    constexpr int rate = 48000, size = 2048, hop = 128, count = 72000;
+    std::ofstream trace (directory.getChildFile ("onset-accuracy.csv").getFullPathName().toStdString());
+    trace << "case,sample,expected_start,legacy,new,novelty,crest\n";
+    int missed = 0, noImprovement = 0, falseCases = 0;
+    for (const auto* name : {"masked", "quiet", "rapid", "noise", "vibrato", "slow-pad"})
+    {
+        const auto masked = juce::String (name) == "masked", quiet = juce::String (name) == "quiet";
+        const auto rapid = juce::String (name) == "rapid", noiseCase = juce::String (name) == "noise";
+        const auto vibrato = juce::String (name) == "vibrato", pad = juce::String (name) == "slow-pad";
+        std::vector<float> input (count), frame (size); std::vector<int> expected;
+        if (masked || quiet || rapid)
+            for (int start = 12000; start < 60000; start += rapid ? 3840 : 12000) expected.push_back (start);
+        std::mt19937 random (1234); std::uniform_real_distribution<float> noise (-1,1);
+        double phase = 0;
+        for (int i = 0; i < count; ++i)
+        {
+            const auto t = i/static_cast<double> (rate);
+            if (masked) input[static_cast<size_t> (i)] = static_cast<float> (.25*std::sin (2*3.141592653589793*220*t)+.10*std::sin (2*3.141592653589793*330*t));
+            if (noiseCase) input[static_cast<size_t> (i)] = .06f*noise (random);
+            if (vibrato)
+            {
+                phase += 2*3.141592653589793*440*std::pow (2., .15*std::sin (2*3.141592653589793*5*t)/12)/rate;
+                input[static_cast<size_t> (i)] = static_cast<float> (.25*std::sin (phase));
+            }
+            if (pad)
+            {
+                const auto gain = std::clamp ((t-.25)/.4,0.,1.);
+                input[static_cast<size_t> (i)] = static_cast<float> (.2*gain*(std::sin (2*3.141592653589793*261.63*t)+.5*std::sin (2*3.141592653589793*329.63*t)));
+            }
+            for (size_t hit = 0; hit < expected.size(); ++hit)
+            {
+                const auto age = (i-expected[hit])/static_cast<double> (rate);
+                if (age < 0 || age > .12) continue;
+                const auto amplitude = quiet ? .0008 : masked ? .035 : hit%2 == 0 ? .15 : .035;
+                const auto envelope = (1-std::exp (-age/.0015))*std::exp (-age/.022);
+                input[static_cast<size_t> (i)] += static_cast<float> (amplitude*envelope*(std::cos (2*3.141592653589793*2437.5*age)+.4*std::cos (2*3.141592653589793*6750*age)));
+            }
+        }
+        std::vector<float> oldSpectrum, newSpectrum; double oldEnergy = 0, newEnergy = 0;
+        xuan::OnsetState detector; std::vector<int> oldDetections, newDetections;
+        for (int at = hop; at <= count; at += hop)
+        {
+            for (int i = 0; i < size; ++i) frame[static_cast<size_t> (i)] = at-size+i >= 0 ? input[static_cast<size_t> (at-size+i)] : 0;
+            const auto old = xuan::PhaseEngine::analyse (frame,rate,oldSpectrum,oldEnergy);
+            const auto improved = xuan::PhaseEngine::analyse (frame,rate,newSpectrum,newEnergy,nullptr,&detector,at);
+            if (at > 9600 && old.count > 0) oldDetections.push_back (at);
+            if (at > 9600 && improved.onset && improved.count > 0) newDetections.push_back (at);
+            int expectedStart = -1;
+            for (int start : expected) if (at >= start && at-start < hop) expectedStart = start;
+            trace << name << ',' << at << ',' << expectedStart << ',' << (old.count > 0) << ',' << (improved.onset && improved.count > 0) << ',' << improved.novelty << ',' << improved.crest << '\n';
+        }
+        const auto matched = [&] (const std::vector<int>& detections)
+        {
+            int hits = 0;
+            for (int start : expected)
+                hits += std::any_of (detections.begin(),detections.end(),[&] (int at) { return at >= start && at-start < 1440; }) ? 1 : 0;
+            return hits;
+        };
+        const auto oldHits = matched (oldDetections), newHits = matched (newDetections);
+        std::cout << "Onsets " << name << " expected=" << expected.size() << " old=" << oldHits << " new=" << newHits << " detections=" << newDetections.size() << '\n';
+        if (! expected.empty())
+        {
+            missed += newHits != static_cast<int> (expected.size()) ? 1 : 0;
+            falseCases += newDetections.size() > expected.size() ? 1 : 0;
+            if (masked || quiet) noImprovement += newHits <= oldHits ? 1 : 0;
+        }
+        else falseCases += newDetections.size() > (pad ? 1u : 0u) ? 1 : 0;
+    }
+    check (missed == 0, "adaptive detector catches every quiet, masked and rapid synthetic attack within 30 ms");
+    check (noImprovement == 0, "adaptive spectral detection improves recall over the full-window crest gate");
+    check (falseCases == 0, "stationary noise and vibrato stay quiet and a slow pad does not repeatedly retrigger");
 }
 
 void phaseDisplayTests()
@@ -521,6 +612,7 @@ void dspTests (const juce::File& directory)
     const auto targets = xuan::PhaseEngine::analyse (hit, 48000, previous, energy);
     lookaheadTests (directory, hit);
     electricPianoTests (directory);
+    onsetAccuracyTests (directory);
     check (targets.count >= 3, "transient spectrogram phase produces multiple narrow-band alignment targets");
     for (int i = 0; i < targets.count; ++i)
         check (std::abs (targets.targets[static_cast<size_t> (i)].delay) <= .025, "automatic group-delay targets stay inside the lookahead budget");
@@ -716,9 +808,9 @@ void hostedEditorTests()
     for (int stall = 0; stall < 2; ++stall)
     {
         pump (30, false, .25f);
-        // Let JUCE's timer thread observe the resumed message thread before
-        // checking pixels (its countdown update runs on that other thread).
-        for (int resume = 0; resume < 3; ++resume)
+        // Allow one complete 30 Hz refresh after the host resumes; synchronous
+        // timer dispatch alone does not advance the separate timer thread's clock.
+        for (int resume = 0; resume < 10; ++resume)
         {
             juce::Timer::callPendingTimersSynchronously(); juce::Thread::sleep (4);
         }
@@ -889,6 +981,11 @@ int main (int argc, char** argv)
         if (argc > 1 && juce::String (argv[1]) == "--hosted-editor")
         {
             hostedEditorTests(); std::cout << checks << " hosted editor checks passed\n"; return 0;
+        }
+        if (argc > 2 && juce::String (argv[1]) == "--onset-report")
+        {
+            const juce::File directory (argv[2]); directory.createDirectory();
+            onsetAccuracyTests (directory); std::cout << checks << " onset accuracy checks passed\n"; return 0;
         }
         stateTests<XuanPhaseProcessor> (8);
         dspTests (argc > 2 && juce::String (argv[1]) == "--report" ? juce::File (argv[2]) : juce::File ("/tmp/xuan-report"));

@@ -1,5 +1,13 @@
 # Xuan Phase test report
 
+## Adaptive onset detection
+
+[Measured quiet, masked, rapid, noise, vibrato and slow-pad tests](onset-detection.md).
+The real-time detector uses adaptive spectral peak growth and a slow spectral
+baseline; it no longer requires full-window crest above 2. Frozen single-frame
+phase-design probes below retain the original reference analysis to isolate
+phase-response accuracy from the stateful onset decision.
+
 ## Manual controls and latency
 
 ![Measured phase and magnitude](manual-phase.png)
@@ -122,9 +130,9 @@ existing 5 ms response crossfade; the plotted envelope includes that stepping.
 
 | Transient | Largest applied rotation during test | Rotation at end of 1.25 s stream |
 | --- | ---: | ---: |
-| 40 ms | 146.018° | 0.000000° |
-| 200 ms | 146.018° | 0.783377° |
-| 800 ms | 146.018° | 39.492200° |
+| 40 ms | 149.545° | 0.000000° |
+| 200 ms | 149.545° | 0.804683° |
+| 800 ms | 149.545° | 40.566300° |
 
 The short release must return below 1°; the long release must retain more
 correction than the medium release. Other checks cover zero Depth, host bypass,
@@ -173,17 +181,16 @@ Auto gathers 5 ms of context and latches the detected target once per onset.
 Repeated detections from overlapping FFT frames do not repeatedly redesign it.
 Target strength holds through the lookahead and full FIR response plus an
 8 ms safety margin; Transient release starts after that hold. An onset more
-than 40 ms later can begin a new collection. Responses arriving too late for
-the pre-onset 5 ms crossfade are discarded for that event, including subsequent
-release revisions, so they cannot fade into a still-loud piano sustain.
+than 20 ms later can begin a new collection. Responses arriving too late for
+the pre-onset 5 ms crossfade wait until the protected response has passed.
+The whole-note discard rule has been reverted; late detections remain eligible.
 
 The test streams a dispersed hit through the real worker with Transient at
 its fastest 20 ms setting. It records changes to the actual applied complex
 FIR response, and requires it to stay fixed through an interval containing
 the delayed transient peak. A second run deliberately pauses the worker until
 its safe pre-onset deadline has passed: the hit must retain the previous,
-neutral response for the entire note; a later release revision must not revive
-the discarded correction.
+neutral response during the protected onset, then recover its correction afterward.
 No audio callback waits for the worker.
 
 | Worker | Largest filter change in checked onset interval |
@@ -193,7 +200,7 @@ No audio callback waits for the worker.
 
 The zero changes demonstrate removal of kernel modulation in this constructed
 onset interval; static phase rotation can still reshape or ring on a transient.
-A late hit may receive less correction instead of a warbling crossfade.
+A late hit may receive less attack correction, followed by phase rotation of its sustain.
 Closely spaced transients, manual automation, and arbitrary recordings are not
 promised to match this isolated synthetic case. Additional checks cover exact
 50 ms neutral/bypass latency at 8/44.1/48/96/192 kHz, the entire reported tail,
@@ -204,11 +211,12 @@ Data: [lookahead.csv](lookahead.csv).
 
 A second fixture uses a simulated C3 electric-piano note with a 2 ms hammer
 attack, nine decaying harmonics, an inharmonic bell partial, and a long sustain.
-With a deliberately late worker, it must generate spectral targets yet retain
-the delayed input throughout the note, with maximum sample error below 0.00001.
-The previous handoff could start a 5 ms fade about 83 ms after the onset, while
-the note was still loud. The new handoff discards that missed event instead.
-This checks late-attack modulation, not every source of warble in a real piano.
+With a deliberately late worker, it must generate spectral targets, keep its
+applied response fixed through the protected attack, and apply a correction
+later. The waveform difference after the attack is expected phase processing;
+this regression no longer requires the whole sustained note to remain dry.
+Late correction can still modulate sustained material. These tests protect the
+onset and restore eligibility; they do not promise to remove every piano warble.
 Data: [electric-piano.csv](electric-piano.csv).
 
 ## Stereo Link: shared, independent, and separating correction

@@ -41,13 +41,18 @@ must be real; they cannot carry an arbitrary quadrature rotation. See the
 ## Transient alignment
 
 Auto analyzes overlapping input spectrogram frames on a separate worker.
-Positive spectral flux, an energy rise, and transient crest distinguish clear
-onsets from stationary noise. Local spectral peaks define up to 24 phase-band anchors. Neighboring local
+Streaming detection uses log spectral growth at meaningful peaks, a 60 ms
+spectral baseline, and an adaptive 64-frame novelty threshold. Comparing
+neighbouring previous FFT bins rejects vibrato; local attack evidence and
+newly emerging frequencies detect soft hits without a full-window crest veto.
+Quiet, masked, and alternating-strength attacks are checked against steady
+noise, vibrato, and a slow pad in the [onset accuracy report](Tests/Reports/onset-detection.md).
+A 20 ms re-arm interval and short event follow-up avoid duplicate onsets. Local spectral peaks define up to 24 phase-band anchors. Neighboring local
 phase/delay curves join with smoothstep interpolation, with angles unwrapped
 across ±180°; only the outer edges taper to neutral. Peak selection reserves
 coverage across logarithmic regions up to 20 kHz (or 45% of sample rate), then
 fills spare slots with the strongest remaining peaks to avoid low-frequency bias. Their complex phase and locally unwrapped phase slopes
-estimate how wave packets can meet the strongest transient sample. Relative
+estimate how wave packets can meet the new transient's strongest spectral-residual sample. Relative
 band-delay targets are limited to ±25 ms. The final combined manual, Auto,
 and Stereo Link phase is saturated to ±150° before FIR design; values beyond
 the limit stop at that boundary rather than wrapping into another turn.
@@ -89,11 +94,13 @@ lower-rate input analysis for manual use, which stops when the editor is hidden.
 Auto gathers 5 ms of context, then latches one correction per onset instead
 of retuning on each overlapping FFT frame. The target remains fixed through
 the lookahead and the entire finite FIR response, plus an 8 ms safety margin;
-release starts after this hold. A distinct onset more than 40 ms later can
+release starts after this hold. A distinct onset more than 20 ms later can
 start a new collection. A response that misses the safe pre-onset handoff
-window is discarded for that note, including later release revisions of that
-missed event, avoiding a late crossfade through a still-loud sustain. Closely spaced/overlapping transients and worker scheduling
-still limit what this punch-oriented heuristic can align.
+window waits until the protected response has passed; it is no longer discarded
+for the entire note. This restores correction eligibility while preserving the
+protected attack. A late handoff can still rotate sustained audio, so this does
+not guarantee removal of all sustain modulation. Closely spaced/overlapping
+transients and worker scheduling limit what this heuristic can align.
 
 The audio thread performs a short SIMD FIR head and a partitioned FFT tail.
 The tail starts after the head, adding **no extra block latency**. A three-slot

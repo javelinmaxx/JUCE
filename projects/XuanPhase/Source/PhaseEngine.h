@@ -18,11 +18,20 @@ struct Settings
           && juce::exactlyEqual (transient, b.transient); }
 };
 struct Target { float frequency = 0, width = 0, angle = 0, delay = 0; };
+struct OnsetState
+{
+    std::array<float, 64> history {};
+    int count = 0, position = 0;
+    int64_t lastFrame = -1, lastOnset = -1, lastRise = -1;
+    bool released = true;
+    std::vector<float> eventNovelty, spectralBaseline;
+};
 struct Analysis
 {
     std::array<Target, 24> targets {};
     int count = 0;
-    float flux = 0, crest = 0, strength = 1;
+    float flux = 0, crest = 0, strength = 1, novelty = 0;
+    bool onset = false; // a new event, excluding short analysis follow-up frames
     double anchor = 0; // analyse returns frame-relative seconds; the worker stores absolute audio time
 };
 struct StereoAnalysis { Analysis shared; std::array<Analysis, 2> channel {}; bool stereo = true; };
@@ -77,7 +86,7 @@ public:
     static float releaseStrength (float current, double samples, double rate, float milliseconds);
     static double bandValue (double frequency, const Analysis&, bool timing);
     static float phaseAt (double frequency, const Settings&, const Analysis&);
-    static Analysis analyse (const std::vector<float>&, double rate, std::vector<float>& previousMagnitude, double& previousEnergy, SpectrumFrame* = nullptr);
+    static Analysis analyse (const std::vector<float>&, double rate, std::vector<float>& previousMagnitude, double& previousEnergy, SpectrumFrame* = nullptr, OnsetState* = nullptr, int64_t frameSample = -1);
     static float stereoPhaseAt (double frequency, const Settings&, const StereoAnalysis&, int channel);
     static std::vector<float> stereoImpulse (double rate, const Settings&, const StereoAnalysis&, int channel);
     static std::vector<float> impulse (double rate, const Settings&, const Analysis& = {});
@@ -103,7 +112,7 @@ private:
         std::array<int64_t, 3> onsets {{-1, -1, -1}};
         std::array<std::array<std::complex<float>, meterBins>, 2> response {};
         std::array<std::array<float, hop>, 2> tail {}, overlap {};
-        bool valid = false, parameterChange = false;
+        bool valid = false;
     };
     void run() override;
     void finishHop();
