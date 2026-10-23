@@ -566,7 +566,9 @@ void PhaseEngine::process (juce::AudioBuffer<float>& buffer, const Settings& s, 
     juce::ScopedNoDenormals noDenormals;
     const auto channels = std::min (2, buffer.getNumChannels());
     if (dry[0].empty()) return;
-    autoActive.store (s.automatic && ! juce::exactlyEqual (s.depth, 0.f) && ! s.bypass && ! hostBypass, std::memory_order_relaxed);
+    // Bypass changes only the output blend; keep the selected correction
+    // detector hot so its envelope and targets are current when returning wet.
+    autoActive.store (s.automatic && ! juce::exactlyEqual (s.depth, 0.f), std::memory_order_relaxed);
     channelCount = channels;
     bypassBlend.setTargetValue (s.bypass || hostBypass ? 1.f : 0.f);
     for (int i = 0; i < buffer.getNumSamples(); ++i)
@@ -639,7 +641,7 @@ void PhaseEngine::run()
             SpectrumFrame spectrum;
             const auto visible = meterVisible.load (std::memory_order_relaxed);
             // Display-only frames must not change the correction detector's
-            // history or generate responses while Auto is inactive/bypassed.
+            // history or generate responses while Auto is inactive.
             const auto correcting = s.automatic && ! juce::exactlyEqual (s.depth, 0.f) && autoActive.load (std::memory_order_relaxed);
             const auto result = analyse (analysisJob, sampleRate, correcting ? previous : displayPrevious,
                                          correcting ? previousEnergy : displayEnergy, visible ? &spectrum : nullptr,

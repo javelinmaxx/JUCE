@@ -107,6 +107,25 @@ float impulseEnergy (float protect, float attack)
 }
 void velvetTests()
 {
+    for (float rate : { 44100.f, 48000.f, 96000.f })
+    {
+        kuo::VelvetStage stage; stage.prepare (rate, { 1, 1, 1 }, false);
+        stage.setParameters (0, 1, 0, { 1, 1, 1 });
+        bool onset = false;
+        for (int i = 0; i < 4096; ++i) onset |= stage.process (i >= 4000 ? 1.f : 0.f).onset;
+        check (! stage.isConvolving() && onset, "zero Width skips convolution while keeping the shared Haas onset detector hot");
+        stage.setParameters (1, 0, 0, { 1, 1, 1 });
+        double energy = 0;
+        for (int i = 0; i < 8192; ++i)
+        {
+            const auto side = stage.process (.2f*std::sin (i*.17f)).side;
+            energy += side*side;
+        }
+        check (stage.isConvolving() && energy > .01, "raising Width immediately reactivates widening from live history");
+        stage.setParameters (0, 0, 0, { 1, 1, 1 });
+        for (int i = 0; i < 16000; ++i) stage.process (.2f*std::sin (i*.17f));
+        check (! stage.isConvolving() && stage.process (.1f).side == 0.f, "Width fade reaches exact silence and suspends tap reads");
+    }
     for (int mode = 0; mode < 2; ++mode)
     {
         KuoVelvetProcessor p; set (p, "transientProtect", 0); set (p, "width", mode == 1 ? 0.0f : 100.0f);

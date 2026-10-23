@@ -22,6 +22,9 @@ public:
     void process (juce::AudioBuffer<float>& buffer, float driveDb, float dcBias,
                   float outputDb, float amount, bool enabled, bool bypassed) noexcept
     {
+        // The nonlinear stage cannot contribute at zero Mix.
+        // Existing fade-out and warm-up handling also applies to these states.
+        enabled = enabled && amount > 0.0f;
         const auto set = [this] (auto& smoother, float target)
         {
             if (first) smoother.setCurrentAndTargetValue (target);

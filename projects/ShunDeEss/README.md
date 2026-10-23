@@ -1,5 +1,11 @@
 # SHUN DE-ESS
 
+Only the selected attenuator runs: Wideband uses the shelf, Split-band uses
+the bell, and Brilliant/Smooth use the shelf plus detail bands. Detector Listen
+suspends the unused attenuators and detail FFT. The input analysis history stays
+current and awakened filters are primed from the previous input. Bypass keeps
+the selected path hot; detector envelope histories remain live across modes.
+
 SHUN DE-ESS is a J-SONIC de-esser plug-in project in the Multi-Compressor
 repository. It shares the analog panel, rotary control, switch, and meter styling
 of YinYang Compressor while keeping its processor, host parameters, and bundle

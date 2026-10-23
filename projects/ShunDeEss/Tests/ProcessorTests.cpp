@@ -8,6 +8,16 @@
 #include <stdexcept>
 #include <vector>
 
+struct ShunProcessingTestAccess
+{
+    static std::array<float, 4> state (const ShunDeEssProcessor& p, int path)
+    {
+        const auto& s = path == 0 ? p.shelfState[0] : path == 1 ? p.bellState[0] : p.sparkleStates[0][0];
+        return { s.x1, s.x2, s.y1, s.y2 };
+    }
+    static const auto& spectrum (const ShunDeEssProcessor& p) { return p.meanSpectrum; }
+};
+
 namespace
 {
 int checks = 0;
@@ -834,11 +844,47 @@ void generateAnalysisReport (const juce::File& destination)
 }
 }
 
+void inactivePathTests()
+{
+    for (bool bypass : { false, true })
+    {
+        ShunDeEssProcessor p; p.prepareToPlay (48000, 128);
+        for (int mode : { 0, 1, 2, 3, 4, 0 })
+        {
+            set (p, "mode", mode == 1 || mode == 3 ? 1.f : 0.f);
+            set (p, "smart", mode >= 2 ? 1.f : 0.f);
+            set (p, "listen", mode == 4 ? 1.f : 0.f);
+            set (p, "bypass", bypass ? 1.f : 0.f);
+            juce::AudioBuffer<float> block (2, 128); juce::MidiBuffer midi;
+            int sample = 0;
+            const auto process = [&]
+            {
+                for (int i = 0; i < 128; ++i, ++sample)
+                    for (int ch = 0; ch < 2; ++ch)
+                        block.setSample (ch, i, .2f*std::sin (sample*.31f)+.1f*std::cos (sample*.17f));
+                p.processBlock (block, midi);
+            };
+            for (int i = 0; i < 10; ++i) process();
+            std::array<std::array<float, 4>, 3> before;
+            for (int path = 0; path < 3; ++path) before[static_cast<size_t> (path)] = ShunProcessingTestAccess::state (p, path);
+            const auto spectrum = ShunProcessingTestAccess::spectrum (p);
+            for (int i = 0; i < 8; ++i) process();
+            const std::array<bool, 3> active { mode == 0 || mode == 2 || mode == 3, mode == 1, mode == 2 || mode == 3 };
+            for (int path = 0; path < 3; ++path)
+                check ((before[static_cast<size_t> (path)] != ShunProcessingTestAccess::state (p, path)) == active[static_cast<size_t> (path)],
+                       "SHUN updates only selected attenuator filters, keeping that path hot in bypass");
+            check ((spectrum != ShunProcessingTestAccess::spectrum (p)) == active[2],
+                   "SHUN spectral analysis runs only for audible spectral modes, including during bypass");
+        }
+    }
+}
+
 int main (int argc, char** argv)
 {
     try
     {
         juce::ScopedJuceInitialiser_GUI gui;
+        inactivePathTests();
         if (argc > 2 && juce::String (argv[1]) == "--response-previews")
         {
             generateResponsePreviews (juce::File (argv[2]));

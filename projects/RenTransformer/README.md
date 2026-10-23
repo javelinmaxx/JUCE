@@ -13,6 +13,9 @@ There is no compressor or sidechain detector. Core Drive spans 0–18 dB and DC
 Bias spans 0–100%. The transformer starts enabled. Its legacy enable parameter
 remains available to host automation and saved states, with no switch in the
 compact interface; disabling it still stops transformer processing after a fade.
+Mix at 0% also suspends the transformer after its fade; raising Mix warms its
+latency buffer before fading coloration back in. Bypass keeps the selected
+transformer processing hot.
 
 Output spans −24 to +24 dB and applies **before** the transformer, following
 YinYang's signal order, so it also affects saturation. Mix blends the colored

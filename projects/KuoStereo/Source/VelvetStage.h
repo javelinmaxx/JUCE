@@ -45,6 +45,7 @@ public:
         }
     }
     int getLatency() const noexcept { return lookaheadSamples; }
+    bool isConvolving() const noexcept { return widthBlend > 0.0f; }
     void setParameters (float width, float transient, float guardAttackMs,
                         std::array<float, 3> bands) noexcept
     {
@@ -137,6 +138,10 @@ public:
         velvetHistory[static_cast<size_t> (writePosition)] = velvetBands;
         writePosition = (writePosition + 1) % static_cast<int> (velvetHistory.size());
         widthBlend += (widthTarget - widthBlend) * 0.001f;
+        // Keep the shared onset detector and convolution history warm for Haas
+        // and instant reactivation, but skip all tap reads at settled zero Width.
+        if (widthTarget <= 0.0f && widthBlend < 1.0e-6f) widthBlend = 0.0f;
+        if (! isConvolving()) return { 0.0f, onset, instantTransientOnset };
         float velvetLeft = 0, velvetRight = 0;
         for (int tap = 0; tap < velvetTaps; ++tap)
         {

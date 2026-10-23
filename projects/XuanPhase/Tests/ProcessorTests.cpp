@@ -2,6 +2,13 @@
 #include "../../StagePluginTests.h"
 #include <complex>
 #include <random>
+namespace xuan
+{
+struct PhaseEngineTestAccess
+{
+    static bool correcting (const PhaseEngine& engine) { return engine.autoActive.load(); }
+};
+}
 using namespace stageTests;
 namespace
 {
@@ -978,6 +985,21 @@ int main (int argc, char** argv)
     juce::ScopedJuceInitialiser_GUI gui;
     try
     {
+        {
+            xuan::Settings s;
+            xuan::PhaseEngine engine; engine.prepare (48000, [&s] { return s; }, false);
+            juce::AudioBuffer<float> block (2, 32); block.clear();
+            for (bool automatic : { false, true })
+                for (float depth : { 0.f, 100.f })
+                    for (bool bypass : { false, true })
+                        for (bool hostBypass : { false, true })
+                        {
+                            s.automatic = automatic; s.depth = depth; s.bypass = bypass;
+                            engine.process (block, s, hostBypass);
+                            check (xuan::PhaseEngineTestAccess::correcting (engine) == (automatic && depth > 0),
+                                   "Xuan keeps selected Auto correction hot in both bypass paths, and stops it for Auto Off or zero Depth");
+                        }
+        }
         if (argc > 1 && juce::String (argv[1]) == "--hosted-editor")
         {
             hostedEditorTests(); std::cout << checks << " hosted editor checks passed\n"; return 0;

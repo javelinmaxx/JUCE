@@ -15,6 +15,10 @@ Output gain. Width scales the added convolution side signal; it does not
 crossfade away the original audio. The convolution receives the full-band mid
 signal at unity gain. The meters, meter updates, band-level controls, and
 three-band input filtering have been removed from Kuo Velvet.
+At zero Width, the shared stage skips convolution tap reads once the Width
+fade reaches silence. The onset detector and input history remain live, so
+Haas protection in Kuo Stereo and reactivation retain current signal history.
+Bypass does not suspend the selected processing path.
 
 There is no Haas delay, FFT candidate search, or search worker in Kuo Velvet.
 The original 1.5 ms lookahead is retained and reported to the host (72 samples at

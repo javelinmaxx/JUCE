@@ -22,6 +22,10 @@ the detector **25 ms lookahead before convolution**, so phase targets can settle
 before the transient enters the filter. The plugin reports
 `round(sampleRate × 0.05)` samples to the host: **2,400 samples at 48 kHz**.
 Neutral, Auto Off, and host/plugin bypass all retain that same 50 ms latency.
+Host/plugin bypass keeps the selected phase processing and Auto detector hot,
+so current correction targets are ready when the wet signal returns. Auto Off
+and zero Depth still suspend automatic correction analysis; a visible meter can
+request its own display analysis.
 The maximum audio tail is approximately 75 ms including lookahead. Rotated
 transients can move or spread around the compensated reference; host latency
 remains fixed rather than following each frequency's group delay.

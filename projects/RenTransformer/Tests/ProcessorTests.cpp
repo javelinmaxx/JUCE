@@ -58,6 +58,12 @@ void transformerTests()
     check (! stage.isRunning(), "transformer DSP stops after the Off fade");
     stage.process (b, 6, 0, 0, 1, true, false);
     check (stage.isRunning(), "transformer restarts after warming its latency buffer");
+    stage.process (b, 6, 0, 0, 1, true, true);
+    check (stage.isRunning(), "selected transformer stays hot during bypass");
+    stage.process (b, 6, 0, 0, 0, true, false);
+    check (! stage.isRunning(), "zero Mix suspends the inaudible transformer after its fade");
+    stage.process (b, 6, 0, 0, 1, true, false);
+    check (stage.isRunning(), "raising Mix warms and reactivates the transformer");
     RenTransformerProcessor mono;
     auto buses = mono.getBusesLayout(); buses.inputBuses.set (0, juce::AudioChannelSet::mono());
     buses.outputBuses.set (0, juce::AudioChannelSet::mono());

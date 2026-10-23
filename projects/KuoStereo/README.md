@@ -1,5 +1,9 @@
 # Kuo Stereo
 
+Zero Width suspends the shared Velvet convolution tap reads after its Width
+fade reaches silence, while its onset detector and input history stay live for
+Haas protection and reactivation. Bypass keeps both Haas search and Velvet hot.
+
 Kuo Stereo is J-SONIC's stereo widener plug-in. It is a separate JUCE project
 alongside YinYang Compressor and SHUN DE-ESS, with the same dark analog panel,
 rotary controls, and amber accents. The [editor preview](Previews/kuo-stereo.png)

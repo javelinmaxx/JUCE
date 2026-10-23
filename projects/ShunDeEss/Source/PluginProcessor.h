@@ -45,6 +45,7 @@ public:
     bool readResponseFrame (ResponseFrame&, uint32_t&) const noexcept;
 
 private:
+    friend struct ShunProcessingTestAccess;
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     void process (juce::AudioBuffer<float>&, bool hostBypassed);
     void updateFilterCoefficients (float detectorFrequency, float detectorQ,
@@ -76,6 +77,7 @@ private:
     std::atomic<uint32_t> responseVersion { 0 };
     float spectralFlatness = 0, spectralAttenuation = 0;
     bool spectralMode = false;
+    bool shelfRunning = false, bellRunning = false, detailRunning = false;
     float sampleRate = 44100;
     float lastDetectorFrequency = -1, lastDetectorQ = -1;
     float lastAttenuationFrequency = -1, lastAttenuationQ = -1, lastDepth = -1;

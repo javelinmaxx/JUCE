@@ -94,6 +94,7 @@ public:
     void setOffline (const Settings&, const Analysis& = {});
     void setStereoOffline (const Settings&, const StereoAnalysis&);
 private:
+    friend struct PhaseEngineTestAccess;
     using Complex = std::complex<float>;
     static constexpr int hop = 128, fftSize = 2*hop;
     struct Kernel

@@ -58,6 +58,7 @@ void ShunDeEssProcessor::prepareToPlay (double rate, int)
     displaySampleRate.store (sampleRate, std::memory_order_relaxed);
     sparkleFrequencies = {};
     detectorState = {};
+    shelfRunning = bellRunning = detailRunning = false;
     shelfState = {};
     bellState = {};
     envelopes = {};
@@ -157,6 +158,7 @@ void ShunDeEssProcessor::analyseSpectralDetail (float detectorFrequency, float d
 
 void ShunDeEssProcessor::releaseResources()
 {
+    shelfRunning = bellRunning = detailRunning = false;
     detectorState = {};
     shelfState = {};
     bellState = {};
@@ -337,6 +339,21 @@ void ShunDeEssProcessor::process (juce::AudioBuffer<float>& buffer, bool hostByp
     const auto relative = value (14) >= 0.5f;
     const auto listen = ! relative && value (12) >= 0.5f;
     const auto smoothMode = spectralMode && splitBand;
+    const auto useShelf = ! listen && (spectralMode || ! splitBand);
+    const auto useBell = ! listen && ! spectralMode && splitBand;
+    const auto useDetail = ! listen && spectralMode;
+    // Prime newly awakened filters at the previous input's DC operating point
+    // rather than resuming old delay elements after an inactive interval.
+    for (int ch = 0; ch < channels; ++ch)
+    {
+        const auto c = static_cast<size_t> (ch);
+        const auto previous = detectorState[c].x1;
+        if (useShelf && ! shelfRunning) shelfState[c] = { previous, previous, previous, previous };
+        if (useBell && ! bellRunning) bellState[c] = { previous, previous, previous, previous };
+        if (useDetail && ! detailRunning)
+            for (auto& state : sparkleStates[c]) state = { previous, previous, 0, 0 };
+    }
+    shelfRunning = useShelf; bellRunning = useBell; detailRunning = useDetail;
     if (std::abs (detectorFrequency - lastDetectorFrequency) > 0.1f
         || std::abs (detectorQ - lastDetectorQ) > 0.001f
         || std::abs (attenuationFrequency - lastAttenuationFrequency) > 0.1f
@@ -357,10 +374,10 @@ void ShunDeEssProcessor::process (juce::AudioBuffer<float>& buffer, bool hostByp
             dry[c] = std::isfinite (input) ? input : 0.0f;
             // Share one spectral analysis across both channels while keeping each
             // channel's detector envelope and audio path independent.
-            if (spectralMode && ch == 0)
+            if (ch == 0)
             {
                 analysisRing[static_cast<size_t> (analysisPosition)] = dry[c];
-                if (++hopCounter >= 256)
+                if (useDetail && ++hopCounter >= 256)
                 {
                     hopCounter = 0;
                     analyseSpectralDetail (detectorFrequency, detectorQ, attenuationQ);
@@ -396,11 +413,11 @@ void ShunDeEssProcessor::process (juce::AudioBuffer<float>& buffer, bool hostByp
             const auto reductionDb = std::clamp (level - threshold, 0.0f, depth);
             blockReduction = std::max (blockReduction, reductionDb);
             const auto amount = depth > 0.0f ? reductionDb / depth : 0.0f;
-            const auto shelfOutput = filterSample (dry[c], shelfState[c], shelfFilter);
-            const auto bellOutput = filterSample (dry[c], bellState[c], bellFilter);
+            const auto shelfOutput = useShelf ? filterSample (dry[c], shelfState[c], shelfFilter) : dry[c];
+            const auto bellOutput = useBell ? filterSample (dry[c], bellState[c], bellFilter) : dry[c];
             const auto shaped = splitBand ? bellOutput : shelfOutput;
             auto wet = listen ? detected[c] : dry[c] + amount * (shaped - dry[c]);
-            if (spectralMode && ! listen)
+            if (useDetail)
             {
                 // Both spectral modes use the same broad cut. Brilliant restores
                 // selected detail; Smooth reverses that term to suppress peaks.
