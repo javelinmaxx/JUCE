@@ -132,7 +132,10 @@ topologies, device parameters, integration method, and model limits.
 
 All four circuits keep independent left/right states. Parameters are smoothed;
 changing circuit crossfades over 10 ms, and inactive circuits then stop
-processing. No allocation, mutex, file I/O, or preview rendering occurs in the
+processing. Only active circuits receive per-sample parameter updates and enter
+the processing loop; the preview and Auto renderer use the same engine. A mode
+that wakes again resets its stored circuit state before fading in. No allocation,
+mutex, file I/O, or preview rendering occurs in the
 audio callback.
 
 Existing two-mode sessions and normalized `model` automation remain compatible:

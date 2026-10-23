@@ -4,6 +4,30 @@
 #include <random>
 #include <stdexcept>
 
+namespace zao
+{
+// Read physical state without adding counters to the audio sample loop.
+struct DriveEngineTestAccess
+{
+    static std::array<double, 8> state (const DriveEngine& engine, size_t mode, size_t ch)
+    {
+        if (mode == 0)
+        {
+            const auto& circuit = engine.bjt[ch];
+            const auto nodes = circuit.getNodes();
+            return { nodes[0], nodes[1], nodes[2], nodes[3], circuit.getResidual(), circuit.getBiasVoltage() };
+        }
+        if (mode == 1)
+        {
+            const auto& circuit = engine.opamp[ch];
+            return { circuit.getOutputVolts(), circuit.getInternalVolts(), circuit.getFeedbackVoltage(), circuit.getResidual() };
+        }
+        if (mode == 2) return { engine.shunt[ch].getOutputVolts(), engine.shunt[ch].getResidual() };
+        return { engine.crossover[ch].getOutputVolts(), engine.crossover[ch].getDiodeVoltage(), engine.crossover[ch].getResidual() };
+    }
+};
+}
+
 namespace
 {
 int checks = 0;
@@ -69,6 +93,50 @@ std::vector<float> render (zao::Settings s, int count = 9600, double hz = 1000, 
         for (int i = 0; i < n; ++i) result.push_back (block.getSample (0, i));
     }
     return result;
+}
+
+void inactiveCircuitTests()
+{
+    for (double rate : { 44100., 48000., 96000. })
+        for (int blockSize : { 17, 128, 1024 })
+        {
+            zao::DriveEngine engine; engine.prepare (rate, blockSize, false);
+            zao::Settings settings;
+            juce::AudioBuffer<float> block (2, blockSize);
+            int position = 0;
+            const auto process = [&]
+            {
+                for (int i = 0; i < blockSize; ++i, ++position)
+                    for (int ch = 0; ch < 2; ++ch)
+                        block.setSample (ch, i, static_cast<float> (.3*std::sin (2*zao::pi*(317+ch*71)*position/rate)));
+                engine.process (block, settings);
+                check (finite (block), "circuit switches remain finite across sample rates and host block sizes");
+            };
+            for (int selected : { 0, 1, 2, 3, 0, 3, 2, 1 })
+            {
+                settings.model = selected;
+                // Complete the 10 ms transition before checking sleeping state.
+                for (int n = 0; n < static_cast<int> (.012*rate)+blockSize; n += blockSize) process();
+                std::array<std::array<std::array<double, 8>, 2>, zao::circuitCount> before {};
+                for (size_t mode = 0; mode < zao::circuitCount; ++mode)
+                    for (size_t ch = 0; ch < 2; ++ch)
+                        before[mode][ch] = zao::DriveEngineTestAccess::state (engine, mode, ch);
+                settings.bjtBias = settings.bjtBias > 0 ? -.7f : .7f;
+                settings.diodeKnee = 1.f-settings.diodeKnee*.8f;
+                for (int n = 0; n < 4; ++n) process();
+                for (size_t mode = 0; mode < zao::circuitCount; ++mode)
+                    for (size_t ch = 0; ch < 2; ++ch)
+                        check ((before[mode][ch] != zao::DriveEngineTestAccess::state (engine, mode, ch))
+                                   == (mode == static_cast<size_t> (selected)),
+                               "only the selected circuit advances its physical state after the switching fade");
+            }
+            // Retarget during a fade, then ensure all outgoing models sleep.
+            for (int selected : { 0, 2, 1, 3 }) { settings.model = selected; process(); }
+            for (int n = 0; n < static_cast<int> (.012*rate)+blockSize; n += blockSize) process();
+            const auto before = zao::DriveEngineTestAccess::state (engine, 0, 0);
+            process();
+            check (before == zao::DriveEngineTestAccess::state (engine, 0, 0), "rapid mode automation leaves outgoing BJT asleep");
+        }
 }
 
 void optimizationTests()
@@ -1376,7 +1444,7 @@ int main (int argc, char** argv)
     try
     {
         juce::ScopedJuceInitialiser_GUI gui;
-        circuitTests(); shapeTests(); processorTests(); smartTests(); clearTests(); greyNoiseTests(); optimizationTests(); autoCompensatorTests();
+        circuitTests(); shapeTests(); processorTests(); smartTests(); clearTests(); greyNoiseTests(); optimizationTests(); inactiveCircuitTests(); autoCompensatorTests();
         if (argc > 2 && juce::String (argv[1]) == "--editor")
         {
             const auto option = argc > 3 ? juce::String (argv[3]) : juce::String();

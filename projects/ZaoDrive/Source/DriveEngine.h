@@ -102,21 +102,42 @@ public:
             }
             auto hostBlock = juce::dsp::AudioBlock<float> (scratch).getSubBlock (0, static_cast<size_t> (count));
             auto highRate = oversampling->processSamplesUp (hostBlock);
+            // Only the selected circuit and any outgoing fade participate.
+            // Rebuild per chunk so completed fades leave the dispatch loop.
+            std::array<size_t, circuitCount> activeModes {};
+            size_t activeCount = 0;
+            bool needsBjt = false, needsDriver = false;
+            for (size_t mode = 0; mode < circuitCount; ++mode)
+                if (modelWeights[mode].getCurrentValue() > 0.0f || modelWeights[mode].getTargetValue() > 0.0f)
+                {
+                    activeModes[activeCount++] = mode;
+                    needsBjt = needsBjt || mode == 0;
+                    needsDriver = needsDriver || mode >= 2;
+                }
+            const auto highCount = static_cast<int> (highRate.getNumSamples());
+            // Keep automation time advancing without updating sleeping models.
+            if (! needsBjt) bjtBias.skip (highCount);
+            if (! needsDriver)
+            {
+                driverResistance.skip (highCount); driverCurrent.skip (highCount); driverCoefficient.skip (highCount);
+            }
             for (size_t i = 0; i < highRate.getNumSamples(); ++i)
             {
-                const auto biasVolts = static_cast<double> (bjtBias.getNextValue());
-                const DriverParameters driver { driverResistance.getNextValue(), driverCurrent.getNextValue(), driverCoefficient.getNextValue() };
-                std::array<float, circuitCount> weights;
-                for (size_t mode = 0; mode < circuitCount; ++mode) weights[mode] = modelWeights[mode].getNextValue();
+                const auto biasVolts = needsBjt ? static_cast<double> (bjtBias.getNextValue()) : 0.0;
+                const DriverParameters driver = needsDriver
+                    ? DriverParameters { driverResistance.getNextValue(), driverCurrent.getNextValue(), driverCoefficient.getNextValue() }
+                    : DriverParameters {};
+                std::array<float, circuitCount> weights {};
+                for (size_t active = 0; active < activeCount; ++active)
+                    weights[active] = modelWeights[activeModes[active]].getNextValue();
                 for (int ch = 0; ch < channels; ++ch)
                 {
                     const auto c = static_cast<size_t> (ch);
-                    bjt[c].setBiasVolts (biasVolts);
-                    shunt[c].setDriverParameters (driver); crossover[c].setDriverParameters (driver);
                     const auto input = static_cast<double> (highRate.getSample (c, i));
                     double output = 0;
-                    for (size_t mode = 0; mode < circuitCount; ++mode)
-                        if (weights[mode] > 0.0f) output += weights[mode] * processCircuit (mode, c, input);
+                    for (size_t active = 0; active < activeCount; ++active)
+                        if (weights[active] > 0.0f)
+                            output += weights[active] * processCircuit (activeModes[active], c, input, biasVolts, driver);
                     highRate.setSample (c, i, static_cast<float> (output));
                 }
             }
@@ -200,16 +221,17 @@ public:
     }
 
 private:
-    double processCircuit (size_t mode, size_t channel, double input) noexcept
+    friend struct DriveEngineTestAccess;
+    double processCircuit (size_t mode, size_t channel, double input, double biasVolts, DriverParameters driver) noexcept
     {
         switch (mode)
         {
-            case 0: return bjt[channel].process (input);
+            case 0: bjt[channel].setBiasVolts (biasVolts); return bjt[channel].process (input);
             case 1: return opamp[channel].process (input);
             // Passive networks have no amplifier gain of their own. A fixed
             // input-conditioning gain lets the default Drive reach conduction.
-            case 2: return shunt[channel].process (input * 4.0);
-            default: return crossover[channel].process (input * 4.0);
+            case 2: shunt[channel].setDriverParameters (driver); return shunt[channel].process (input * 4.0);
+            default: crossover[channel].setDriverParameters (driver); return crossover[channel].process (input * 4.0);
         }
     }
     void resetCircuit (size_t mode) noexcept
