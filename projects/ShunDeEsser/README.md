@@ -1,4 +1,4 @@
-# SHUN DE-ESS
+# Shun De-Esser
 
 Only the selected attenuator runs: Wideband uses the shelf, Split-band uses
 the bell, and Brilliant/Smooth use the shelf plus detail bands. Detector Listen
@@ -6,9 +6,9 @@ suspends the unused attenuators and detail FFT. The input analysis history stays
 current and awakened filters are primed from the previous input. Bypass keeps
 the selected path hot; detector envelope histories remain live across modes.
 
-SHUN DE-ESS is a J-SONIC de-esser plug-in project in the Multi-Compressor
+Shun De-Esser is a J-SONIC de-esser plug-in project in the Multi-Compressor
 repository. It shares the analog panel, rotary control, switch, and meter styling
-of YinYang Compressor while keeping its processor, host parameters, and bundle
+of Yinyang Compressor while keeping its processor, host parameters, and bundle
 identity independent.
 
 The first build provides:
@@ -37,7 +37,7 @@ while Attenuator Q controls the width of the narrow detail bands. The FFT update
 in overlapping windows and drives the zero-latency filterbank. Existing sessions
 retain their Wideband, Split-band, or former Smart (now Brilliant) setting.
 
-Editor previews show [Absolute](Previews/shun-de-ess.png) and [Relative](Previews/shun-relative.png) detector modes.
+Editor previews show [Absolute](Previews/shun-de-esser.png) and [Relative](Previews/shun-relative.png) detector modes.
 The editor resizes from 50% to 120% with a fixed aspect ratio.
 Six examples show the live response plot with different detector/attenuator
 settings: [Wideband default](Previews/ResponseExamples/wideband-default.png),
@@ -80,7 +80,7 @@ the spectrum without smart detail shading.
 Regenerate the live mode previews and quiet-signal example with:
 
 ```bash
-build-shun-deess/ShunDeEssTests --spectrum-previews projects/ShunDeEss/Previews/ResponseExamples
+build-shun-deess/ShunDeEsserTests --spectrum-previews projects/ShunDeEsser/Previews/ResponseExamples
 ```
 
 ## Build
@@ -88,22 +88,22 @@ build-shun-deess/ShunDeEssTests --spectrum-previews projects/ShunDeEss/Previews/
 From the repository root, configure and build the VST3:
 
 ```bash
-cmake -S projects/ShunDeEss -B build-shun-deess -DSHUN_BUILD_TESTS=OFF
-cmake --build build-shun-deess --target ShunDeEss_VST3 --parallel 4
+cmake -S projects/ShunDeEsser -B build-shun-deess -DSHUN_DE_ESSER_BUILD_TESTS=OFF
+cmake --build build-shun-deess --target ShunDeEsser_VST3 --parallel 4
 ```
 
 To include the processor checks, leave tests enabled (the default) and run:
 
 ```bash
-cmake -S projects/ShunDeEss -B build-shun-deess
-cmake --build build-shun-deess --target ShunDeEssTests --parallel 4
+cmake -S projects/ShunDeEsser -B build-shun-deess
+cmake --build build-shun-deess --target ShunDeEsserTests --parallel 4
 ctest --test-dir build-shun-deess --output-on-failure
 ```
 
 Regenerate the response examples without running the processor checks:
 
 ```bash
-build-shun-deess/ShunDeEssTests --response-previews projects/ShunDeEss/Previews/ResponseExamples
+build-shun-deess/ShunDeEsserTests --response-previews projects/ShunDeEsser/Previews/ResponseExamples
 ```
 
 Run the deterministic detector/attenuator mock-signal test and write its
@@ -113,7 +113,7 @@ signal includes gated high-pass noise pulses to mimic sibilant consonants and
 compares pulse attenuation with the quiet baseline:
 
 ```bash
-build-shun-deess/ShunDeEssTests --analysis-report projects/ShunDeEss/Tests/Reports/detector-attenuator-mock-report.md
+build-shun-deess/ShunDeEsserTests --analysis-report projects/ShunDeEsser/Tests/Reports/detector-attenuator-mock-report.md
 ```
 
 The committed example report is at
@@ -123,7 +123,7 @@ and [PDF](Tests/Reports/detector-attenuator-mock-report.pdf). Regenerate both fr
 the report and measured spectrum data with:
 
 ```bash
-python3 projects/ShunDeEss/Tests/generate_analysis_report.py
+python3 projects/ShunDeEsser/Tests/generate_analysis_report.py
 ```
 
 The generator also writes `Tests/Reports/wide-split-pulse-test-report.png` and

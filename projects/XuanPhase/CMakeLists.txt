@@ -23,8 +23,8 @@ target_compile_definitions(XuanPhase PUBLIC
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
 target_link_libraries(XuanPhase PRIVATE juce::juce_audio_utils juce::juce_dsp
     PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
-option(XUAN_BUILD_TESTS "Build Xuan Phase tests" ON)
-if(XUAN_BUILD_TESTS)
+option(XUAN_PHASE_BUILD_TESTS "Build Xuan Phase tests" ON)
+if(XUAN_PHASE_BUILD_TESTS)
     enable_testing()
     add_executable(XuanPhaseTests Tests/ProcessorTests.cpp)
     target_include_directories(XuanPhaseTests PRIVATE "${JUCE_SOURCE_DIR}/modules")

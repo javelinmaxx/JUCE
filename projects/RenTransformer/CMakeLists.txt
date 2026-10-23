@@ -23,8 +23,8 @@ target_compile_definitions(RenTransformer PUBLIC
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
 target_link_libraries(RenTransformer PRIVATE juce::juce_audio_utils juce::juce_dsp
     PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
-option(REN_BUILD_TESTS "Build Ren Transformer tests" ON)
-if(REN_BUILD_TESTS)
+option(REN_TRANSFORMER_BUILD_TESTS "Build Ren Transformer tests" ON)
+if(REN_TRANSFORMER_BUILD_TESTS)
     enable_testing()
     add_executable(RenTransformerTests Tests/ProcessorTests.cpp)
     target_include_directories(RenTransformerTests PRIVATE "${JUCE_SOURCE_DIR}/modules")

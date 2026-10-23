@@ -10,12 +10,12 @@
 
 struct ShunProcessingTestAccess
 {
-    static std::array<float, 4> state (const ShunDeEssProcessor& p, int path)
+    static std::array<float, 4> state (const ShunDeEsserProcessor& p, int path)
     {
         const auto& s = path == 0 ? p.shelfState[0] : path == 1 ? p.bellState[0] : p.sparkleStates[0][0];
         return { s.x1, s.x2, s.y1, s.y2 };
     }
-    static const auto& spectrum (const ShunDeEssProcessor& p) { return p.meanSpectrum; }
+    static const auto& spectrum (const ShunDeEsserProcessor& p) { return p.meanSpectrum; }
 };
 
 namespace
@@ -27,7 +27,7 @@ void check (bool condition, const char* message)
     if (! condition) throw std::runtime_error (message);
 }
 
-void set (ShunDeEssProcessor& processor, const char* id, float value)
+void set (ShunDeEsserProcessor& processor, const char* id, float value)
 {
     auto* parameter = processor.parameters.getParameter (id);
     check (parameter != nullptr, "parameter exists");
@@ -59,7 +59,7 @@ float measureToneAmplitude (const juce::AudioBuffer<float>& buffer, float freque
     return static_cast<float> (2.0 * std::hypot (sine, cosine) / 4096.0);
 }
 
-void renderSine (ShunDeEssProcessor& processor, juce::AudioBuffer<float>& buffer, float frequency, float amplitude)
+void renderSine (ShunDeEsserProcessor& processor, juce::AudioBuffer<float>& buffer, float frequency, float amplitude)
 {
     juce::MidiBuffer midi;
     constexpr double pi = 3.14159265358979323846;
@@ -77,7 +77,7 @@ void spectrumTests()
 {
     for (int mode = 0; mode < 4; ++mode)
     {
-        ShunDeEssProcessor visible, hidden;
+        ShunDeEsserProcessor visible, hidden;
         if (mode == 0)
             for (const auto* id : {"q", "attenuationQ"})
                 check (std::abs (visible.parameters.getParameter (id)->convertFrom0to1 (1)-4.f) < 1e-6f,
@@ -89,13 +89,13 @@ void spectrumTests()
             set (*processor, "threshold", -45); set (*processor, "attenuationQ", 2.8f);
             processor->prepareToPlay (48000, 256);
         }
-        std::array<ShunDeEssProcessor::SpectrumSample, 1024> samples {};
+        std::array<ShunDeEsserProcessor::SpectrumSample, 1024> samples {};
         check (visible.readSpectrumSamples (samples.data(), 1024) == 0, "closed-editor spectrum queue starts empty");
         visible.setSpectrumVisible (true);
         juce::AudioBuffer<float> a (2, 256), b (2, 256); juce::MidiBuffer midi;
         std::mt19937 random (72); std::uniform_real_distribution<float> noise (-.06f, .06f);
         float error = 0, antiPhaseError = 0; bool selected = false, captured = false;
-        uint32_t version = 0; ShunDeEssProcessor::ResponseFrame frame {};
+        uint32_t version = 0; ShunDeEsserProcessor::ResponseFrame frame {};
         for (int block = 0; block < 96; ++block)
         {
             for (int i = 0; i < 256; ++i)
@@ -142,14 +142,14 @@ void detailBandTests (const juce::File& directory)
         double previousWidth = rate;
         for (float q : {.5f, 1.2f, 2.8f, 4.f})
         {
-            ShunDeEssProcessor processor;
+            ShunDeEsserProcessor processor;
             const auto frequency = static_cast<float> (std::min (6500., rate*.3));
             set (processor, "smart", 1); set (processor, "threshold", -45);
             set (processor, "frequency", frequency); set (processor, "attenuationQ", q);
             processor.prepareToPlay (rate, 256); processor.setSpectrumVisible (true);
             juce::AudioBuffer<float> audio (2, 256); juce::MidiBuffer midi;
             std::mt19937 random (72); std::uniform_real_distribution<float> noise (-.03f,.03f);
-            ShunDeEssProcessor::ResponseFrame frame {}; uint32_t version = 0; int band = -1;
+            ShunDeEsserProcessor::ResponseFrame frame {}; uint32_t version = 0; int band = -1;
             for (int block = 0; block < 32 && band < 0; ++block)
             {
                 for (int i = 0; i < 256; ++i)
@@ -167,7 +167,7 @@ void detailBandTests (const juce::File& directory)
             }
             check (band >= 0, "bandwidth measurements use a detail filter actually selected by the processor");
             const auto centre = static_cast<double> (frame[static_cast<size_t> (band)]);
-            const auto power = [&] (double hz) { return ShunDeEssProcessor::detailBandPower (frame, static_cast<size_t> (band), hz); };
+            const auto power = [&] (double hz) { return ShunDeEsserProcessor::detailBandPower (frame, static_cast<size_t> (band), hz); };
             // Independently render the actual published biquad's impulse, then
             // measure its DFT to verify the display follows the audio filter.
             for (double hz : {centre*.5, centre, std::min (rate*.49,centre*1.4)})
@@ -213,7 +213,7 @@ void detailBandTests (const juce::File& directory)
 
 void quietSpectrumPreview (const juce::File& directory)
 {
-    ShunDeEssProcessor processor; processor.prepareToPlay (48000,256);
+    ShunDeEsserProcessor processor; processor.prepareToPlay (48000,256);
     std::unique_ptr<juce::AudioProcessorEditor> editor (processor.createEditor());
     editor->addToDesktop (0); editor->setVisible (true);
     const auto tick = []
@@ -248,7 +248,7 @@ void generateSpectrumPreviews (const juce::File& directory)
     const std::array<const char*, 4> names {"wideband-spectrum.png", "split-spectrum.png", "brilliant-spectrum.png", "smooth-spectrum.png"};
     for (int mode = 0; mode < 4; ++mode)
     {
-        ShunDeEssProcessor processor;
+        ShunDeEsserProcessor processor;
         set (processor, "mode", static_cast<float> (mode%2)); set (processor, "smart", mode >= 2 ? 1.f : 0.f);
         set (processor, "threshold", -45); set (processor, "attenuationQ", 2.8f);
         processor.prepareToPlay (48000, 256);
@@ -261,7 +261,7 @@ void generateSpectrumPreviews (const juce::File& directory)
         tick(); const auto empty = editor->createComponentSnapshot (editor->getLocalBounds());
         juce::AudioBuffer<float> audio (2, 256); juce::MidiBuffer midi;
         std::mt19937 random (72); std::uniform_real_distribution<float> noise (-.06f, .06f);
-        bool selected = false; uint32_t version = 0; ShunDeEssProcessor::ResponseFrame frame {};
+        bool selected = false; uint32_t version = 0; ShunDeEsserProcessor::ResponseFrame frame {};
         for (int block = 0; block < 96; ++block)
         {
             for (int i = 0; i < 256; ++i)
@@ -337,7 +337,7 @@ void generateResponsePreviews (const juce::File& directory)
 
     for (const auto& example : examples)
     {
-        ShunDeEssProcessor processor;
+        ShunDeEsserProcessor processor;
         const auto setParameter = [&] (const char* id, float value)
         {
             auto* parameter = processor.parameters.getParameter (id);
@@ -377,7 +377,7 @@ struct ModeReport
 
 ModeReport runMockMode (int mode, bool smartMode, float attenuationQ = 2.8f)
 {
-    ShunDeEssProcessor processor;
+    ShunDeEsserProcessor processor;
     processor.prepareToPlay (48000, 256);
     set (processor, "mode", static_cast<float> (mode));
     set (processor, "smart", smartMode ? 1.0f : 0.0f);
@@ -515,7 +515,7 @@ RollingMeasurements writeRollingModeSpectrogram (const juce::File& destination, 
 {
     constexpr int fftSize = 2048, hop = 512, totalSamples = 48000 * 4;
     constexpr double pi = 3.14159265358979323846;
-    ShunDeEssProcessor processor;
+    ShunDeEsserProcessor processor;
     processor.prepareToPlay (48000, hop);
     set (processor, "mode", static_cast<float> (mode));
     set (processor, "smart", smartMode ? 1.0f : 0.0f);
@@ -643,7 +643,7 @@ void generateAnalysisReport (const juce::File& destination)
     std::array<ModeReport, smartQValues.size()> qReports;
     for (size_t i = 0; i < smartQValues.size(); ++i)
         qReports[i] = runMockMode (0, true, smartQValues[i]);
-    ShunDeEssProcessor detector;
+    ShunDeEsserProcessor detector;
     detector.prepareToPlay (48000, 256);
     set (detector, "frequency", 7800.0f);
     set (detector, "q", 2.2f);
@@ -662,8 +662,8 @@ void generateAnalysisReport (const juce::File& destination)
     const auto lowDetectorTone = measureToneAmplitude (detectorInput, 500.0f);
     const auto inBandDetectorTone = measureToneAmplitude (detectorInput, 7800.0f);
     const auto detectorRejectionDb = 20.0f * std::log10 (inBandDetectorTone / std::max (lowDetectorTone, 1.0e-9f));
-    auto report = juce::String ("# SHUN DE-ESS detector and attenuator mock-signal report\n\n")
-        + "Generated by `ShunDeEssTests --analysis-report`. Input is deterministic seeded broadband noise, "
+    auto report = juce::String ("# Shun De-Esser detector and attenuator mock-signal report\n\n")
+        + "Generated by `ShunDeEsserTests --analysis-report`. Input is deterministic seeded broadband noise, "
           "a 500 Hz body tone, and a 7.8 kHz detail tone introduced after the detector has settled. "
           "All processing uses 48 kHz stereo blocks of 256 samples.\n\n"
         + "The detector Listen path was also measured with equal-level 500 Hz and 7.8 kHz tones; at the "
@@ -848,7 +848,7 @@ void inactivePathTests()
 {
     for (bool bypass : { false, true })
     {
-        ShunDeEssProcessor p; p.prepareToPlay (48000, 128);
+        ShunDeEsserProcessor p; p.prepareToPlay (48000, 128);
         for (int mode : { 0, 1, 2, 3, 4, 0 })
         {
             set (p, "mode", mode == 1 || mode == 3 ? 1.f : 0.f);
@@ -894,7 +894,7 @@ int main (int argc, char** argv)
         if (argc > 2 && juce::String (argv[1]) == "--analysis-report")
         {
             generateAnalysisReport (juce::File (argv[2]));
-            std::cout << "SHUN DE-ESS detector/attenuator report generated: " << argv[2] << '\n';
+            std::cout << "Shun De-Esser detector/attenuator report generated: " << argv[2] << '\n';
             return 0;
         }
         if (argc > 2 && juce::String (argv[1]) == "--spectrum-previews")
@@ -904,17 +904,17 @@ int main (int argc, char** argv)
             std::cout << checks << " spectrum checks passed\n"; return 0;
         }
         spectrumTests(); detailBandTests (juce::File ("/tmp/shun-detail-tests"));
-        ShunDeEssProcessor processor;
+        ShunDeEsserProcessor processor;
         check (processor.getParameters().size() == 15, "all de-esser parameters are registered");
-        check (processor.getName() == "SHUN DE-ESS", "plug-in identity is SHUN DE-ESS");
+        check (processor.getName() == "Shun De-Esser", "plug-in identity is Shun De-Esser");
         for (int mode = 0; mode < 4; ++mode)
         {
-            ShunDeEssProcessor saved;
+            ShunDeEsserProcessor saved;
             set (saved, "mode", static_cast<float> (mode % 2));
             set (saved, "smart", mode >= 2 ? 1.0f : 0.0f);
             juce::MemoryBlock state;
             saved.getStateInformation (state);
-            ShunDeEssProcessor restored;
+            ShunDeEsserProcessor restored;
             restored.setStateInformation (state.getData(), static_cast<int> (state.getSize()));
             check ((restored.parameters.getRawParameterValue ("mode")->load() >= 0.5f) == (mode % 2 == 1)
                    && (restored.parameters.getRawParameterValue ("smart")->load() >= 0.5f) == (mode >= 2),
@@ -930,7 +930,7 @@ int main (int argc, char** argv)
         check (measureRms (highTone) < 0.20f, "wideband mode reduces sustained sibilance");
         check (processor.reduction.load() > 8.0f, "gain-reduction meter reports de-essing amount");
 
-        ShunDeEssProcessor shelf;
+        ShunDeEsserProcessor shelf;
         shelf.prepareToPlay (48000, 256);
         set (shelf, "threshold", -42);
         set (shelf, "depth", 12);
@@ -952,7 +952,7 @@ int main (int argc, char** argv)
         check (measureToneAmplitude (twoTones, 10000) < 0.20f,
                "wideband high-shelf attenuation reduces frequencies above the shelf");
 
-        ShunDeEssProcessor lowQShelf;
+        ShunDeEsserProcessor lowQShelf;
         lowQShelf.prepareToPlay (48000, 256);
         set (lowQShelf, "frequency", 3400.0f);
         set (lowQShelf, "attenuationFrequency", 7200.0f);
@@ -966,7 +966,7 @@ int main (int argc, char** argv)
         check (measureToneAmplitude (lowQSine, 3400.0f) <= 0.252f,
                "low-Q wideband attenuation shelf does not create passband gain");
 
-        ShunDeEssProcessor split;
+        ShunDeEsserProcessor split;
         split.prepareToPlay (48000, 256);
         set (split, "mode", 1);
         set (split, "threshold", -42);
@@ -978,7 +978,7 @@ int main (int argc, char** argv)
         check (std::abs (measureRms (lowTone) - 0.35355f) < 0.015f,
                "split-band mode preserves low-frequency audio");
 
-        ShunDeEssProcessor listen;
+        ShunDeEsserProcessor listen;
         listen.prepareToPlay (48000, 256);
         set (listen, "listen", 1);
         juce::AudioBuffer<float> lowListen (2, 8192);
@@ -987,7 +987,7 @@ int main (int argc, char** argv)
 
         const auto detectorReduction = [pi] (bool relativeMode, float body, float sibilance)
         {
-            ShunDeEssProcessor measured;
+            ShunDeEsserProcessor measured;
             measured.prepareToPlay (48000, 256);
             set (measured, "relative", relativeMode ? 1.0f : 0.0f);
             set (measured, "threshold", -12.0f);
@@ -1018,16 +1018,16 @@ int main (int argc, char** argv)
                "Relative detection responds to sibilance independently of overall input level");
         check (relativeBody < 0.5f && relativeQuiet > absoluteQuiet + 1.0f,
                "Relative detection compares band energy with full-signal energy rather than an absolute threshold");
-        ShunDeEssProcessor savedRelative;
+        ShunDeEsserProcessor savedRelative;
         set (savedRelative, "relative", 1.0f);
         juce::MemoryBlock relativeState;
         savedRelative.getStateInformation (relativeState);
-        ShunDeEssProcessor restoredRelative;
+        ShunDeEsserProcessor restoredRelative;
         restoredRelative.setStateInformation (relativeState.getData(), static_cast<int> (relativeState.getSize()));
         check (restoredRelative.parameters.getRawParameterValue ("relative")->load() >= 0.5f,
                "Relative detector setting survives a session state round trip");
 
-        ShunDeEssProcessor bypass;
+        ShunDeEsserProcessor bypass;
         bypass.prepareToPlay (48000, 256);
         set (bypass, "bypass", 1);
         juce::AudioBuffer<float> bypassed (2, 512);
@@ -1045,7 +1045,7 @@ int main (int argc, char** argv)
                 static_cast<size_t> (bypassed.getNumSamples()) * sizeof (float)) == 0;
         check (identical, "bypass preserves the input samples");
 
-        ShunDeEssProcessor smart;
+        ShunDeEsserProcessor smart;
         smart.prepareToPlay (48000, 256);
         set (smart, "smart", 1);
         set (smart, "threshold", -48);
@@ -1079,11 +1079,11 @@ int main (int argc, char** argv)
 
         if (argc > 1 && juce::String (argv[1]) == "--editor")
         {
-            ShunDeEssProcessor editorProcessor;
+            ShunDeEsserProcessor editorProcessor;
             std::unique_ptr<juce::AudioProcessorEditor> editor (editorProcessor.createEditor());
             editor->setVisible (true);
             check (editor && editor->getWidth() == 548 && editor->getHeight() == 741,
-                   "editor matches the YinYang compressor layout dimensions");
+                   "editor matches the Yinyang compressor layout dimensions");
             check (editor->getNumChildComponents() >= 20, "editor contains all de-esser controls");
             int tooltipWindows = 0, hintedControls = 0;
             for (auto* child : editor->getChildren())
@@ -1248,7 +1248,8 @@ int main (int argc, char** argv)
             if (argc > 2)
             {
                 auto stream = juce::File (argv[2]).createOutputStream();
-                check (stream != nullptr, "editor preview destination opens");
+                check (stream != nullptr && stream->setPosition (0) && stream->truncate().wasOk(),
+                       "editor preview destination opens and replaces an earlier capture");
                 check (juce::PNGImageFormat().writeImageToStream (image, *stream), "editor preview writes");
             }
             const auto originalModeWidth = editor->getLocalArea (modeKnob, modeKnob->getLocalBounds()).getWidth();
@@ -1271,7 +1272,7 @@ int main (int argc, char** argv)
                        "Shun renders at both resize limits");
             }
         }
-        std::cout << checks << " SHUN DE-ESS processor checks passed\n";
+        std::cout << checks << " Shun De-Esser processor checks passed\n";
         return 0;
     }
     catch (const std::exception& error)

@@ -15,7 +15,7 @@ reports were also regenerated from the current source.
 - [Transformer character](plots/03_transformer.png): waveforms, harmonics, small-signal response, and aliasing.
 - [Upward compression](plots/04_upward_compression.png): measured transfer and gain curves for all four models with upward mode enabled.
 - [Transformer Even harmonics](plots/05_transformer_even_harmonics.png): waveform asymmetry and even-order harmonics as simulated DC current increases.
-- [Three-page PDF](plots/character_compressor_report.pdf); SVG versions are also in `plots/`.
+- [Three-page PDF](plots/yinyang_compressor_report.pdf); SVG versions are also in `plots/`.
 
 ## Conditions and interpretation
 

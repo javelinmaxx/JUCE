@@ -1,6 +1,6 @@
-# YinYang Compressor hover hints
+# Yinyang Compressor hover hints
 
-![YinYang Compressor with the Output transformer hint visible](Previews/yinyang-tooltip.png)
+![Yinyang Compressor with the Output transformer hint visible](Previews/yinyang-tooltip.png)
 
 | Control | Hover hint |
 | --- | --- |

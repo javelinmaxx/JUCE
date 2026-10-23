@@ -52,8 +52,8 @@ int runTests (int argc, char** argv)
     juce::MemoryBlock saved;
     p.getStateInformation (saved);
     const auto savedXml = p.getXmlFromBinary (saved.getData(), static_cast<int> (saved.getSize()));
-    check (savedXml != nullptr && savedXml->hasTagName ("CharacterCompressorState"),
-           "project rename preserves the legacy host state identifier");
+    check (savedXml != nullptr && savedXml->hasTagName ("YinyangCompressorState"),
+           "saved state uses the canonical YinyangCompressor project name");
     YinyangCompressorProcessor restored;
     restored.setStateInformation (saved.getData(), static_cast<int> (saved.getSize()));
     for (auto* parameter : p.getParameters())
@@ -183,14 +183,14 @@ int runTests (int argc, char** argv)
             const auto hint = client != nullptr ? client->getTooltip() : juce::String();
             check (hint.isNotEmpty() && hint.endsWithChar ('.')
                    && hint.dropLastCharacters (1).indexOfChar ('.') < 0,
-                   "each YinYang control has a one-sentence hover hint");
+                   "each Yinyang control has a one-sentence hover hint");
             if (auto* slider = dynamic_cast<juce::Slider*> (child))
                 for (auto* nested : slider->getChildren())
                     if (auto* readout = dynamic_cast<juce::Label*> (nested))
-                        check (readout->getTooltip() == hint, "YinYang readout shares its control hint");
+                        check (readout->getTooltip() == hint, "Yinyang readout shares its control hint");
         }
         check (tooltipWindows == 1 && hintedControls == 33,
-               "YinYang has one tooltip window and hints for every control and caption");
+               "Yinyang has one tooltip window and hints for every control and caption");
         juce::Slider *threshold = nullptr, *knee = nullptr, *ratio = nullptr;
         juce::Slider *attack = nullptr, *release = nullptr, *output = nullptr, *mix = nullptr;
         AnimatedSwitch *transformer = nullptr, *upward = nullptr;
@@ -409,12 +409,12 @@ int runTests (int argc, char** argv)
             juce::TooltipWindow* tooltip = nullptr;
             for (auto* child : editor->getChildren())
                 if (auto* window = dynamic_cast<juce::TooltipWindow*> (child)) tooltip = window;
-            check (tooltip != nullptr && transformer != nullptr, "YinYang tooltip preview has its components");
+            check (tooltip != nullptr && transformer != nullptr, "Yinyang tooltip preview has its components");
             if (tooltip != nullptr && transformer != nullptr)
             {
                 const auto point = editor->getLocalArea (transformer, transformer->getLocalBounds()).getCentre();
                 tooltip->displayTip (editor->localPointToGlobal (point), transformer->getTooltip());
-                check (tooltip->isVisible(), "YinYang tooltip is visible in the preview");
+                check (tooltip->isVisible(), "Yinyang tooltip is visible in the preview");
             }
         }
         // Exercise actual component rendering, not only construction.
@@ -423,7 +423,8 @@ int runTests (int argc, char** argv)
         if (argc > 2)
         {
             auto stream = juce::File (argv[2]).createOutputStream();
-            check (stream != nullptr, "editor screenshot destination opens");
+            check (stream != nullptr && stream->setPosition (0) && stream->truncate().wasOk(),
+                   "editor screenshot destination opens and replaces an earlier capture");
             check (juce::PNGImageFormat().writeImageToStream (image, *stream), "editor screenshot writes");
         }
         const auto originalThresholdWidth = editor->getLocalArea (threshold, threshold->getLocalBounds()).getWidth();
@@ -434,12 +435,12 @@ int runTests (int argc, char** argv)
             check (editor->getLocalBounds().contains (control)
                    && (size.x < 548 ? control.getWidth() < originalThresholdWidth
                                     : control.getWidth() > originalThresholdWidth),
-                   "YinYang controls scale and remain inside the editor");
+                   "Yinyang controls scale and remain inside the editor");
             auto* hit = editor->getComponentAt (control.getCentre());
             check (hit == threshold || threshold->isParentOf (hit),
-                   "YinYang scaled controls remain clickable");
+                   "Yinyang scaled controls remain clickable");
             check (editor->createComponentSnapshot (editor->getLocalBounds()).isValid(),
-                   "YinYang renders at both resize limits");
+                   "Yinyang renders at both resize limits");
         }
     }
     std::cout << checks << " processor checks passed\n";
@@ -447,7 +448,7 @@ int runTests (int argc, char** argv)
 }
 
 // Focused checks for the new output option, runnable without repeating the
-// existing processor/DSP suites: YinyangProcessorTests --output-stage [png].
+// existing processor/DSP suites: YinyangCompressorTests --output-stage [png].
 int runOutputStageTests (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI juce;

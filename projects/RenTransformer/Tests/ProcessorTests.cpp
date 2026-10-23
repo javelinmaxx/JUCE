@@ -10,7 +10,7 @@ void transformerTests()
         {
             RenTransformerProcessor p; set (p, "drive", coreDb); set (p, "evenHarmonics", 35); set (p, "output", 3);
             p.prepareToPlay (rate, 127);
-            check (p.getLatencySamples() == 64, "Ren reports YinYang's 64 sample transformer latency");
+            check (p.getLatencySamples() == 64, "Ren reports Yinyang's 64 sample transformer latency");
             character::OversampledTransformer reference; reference.prepare (rate);
             juce::MidiBuffer midi;
             double error = 0;
@@ -29,7 +29,7 @@ void transformerTests()
                 for (int i = 0; i < 127; ++i)
                     error = std::max (error, static_cast<double> (std::abs (b.getSample (0, i) - expected[static_cast<size_t> (i)])));
             }
-            check (error < 1.0e-6, "Ren matches the original YinYang transformer at three rates and drive levels");
+            check (error < 1.0e-6, "Ren matches the original Yinyang transformer at three rates and drive levels");
         }
     for (int mode = 0; mode < 4; ++mode)
     {

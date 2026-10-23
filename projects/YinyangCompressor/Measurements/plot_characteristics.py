@@ -207,7 +207,7 @@ a.set(title='10 kHz at −6 dBFS peak, 18 dB drive', xlabel='Frequency (kHz)', y
 a.annotate('18 kHz alias bin', xy=(18,max(-115,alias_spectrum[18000])), xytext=(11,-14), fontsize=9,
            arrowprops={'arrowstyle':'->','color':'#526173'})
 finish(fig, '03_transformer', 'Spectra: final 1 s of coherent 2 s tones. 4× oversampling reduces aliasing; residual products remain possible. Fixed delay removed.')
-with PdfPages(OUT / 'character_compressor_report.pdf') as pdf:
+with PdfPages(OUT / 'yinyang_compressor_report.pdf') as pdf:
     for fig in figures:
         pdf.savefig(fig)
 for fig in figures:

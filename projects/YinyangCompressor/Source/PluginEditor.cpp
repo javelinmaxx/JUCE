@@ -505,7 +505,7 @@ void YinyangCompressorEditor::paint (juce::Graphics& g)
     g.drawText ("J-SONIC  /  DYNAMICS", 24, 48, 500, 20, juce::Justification::centredLeft);
     g.setColour (theme.text);
     g.setFont (juce::FontOptions (29.0f));
-    g.drawText ("YIN/YANG COMP", 24, 60, 420, 38, juce::Justification::centredLeft);
+    g.drawText ("YINYANG COMPRESSOR", 24, 60, 420, 38, juce::Justification::centredLeft);
     drawBrushedMetalPanel (g, { 24, 140, 300, 342 }, 10, theme.card, theme.grid);
     drawAnalogPanel (g, { 24, 494, 300, 116 }, 10, theme.card, theme.grid);
     drawAnalogPanel (g, { 24, 622, 300, 116 }, 10, theme.card, theme.grid);

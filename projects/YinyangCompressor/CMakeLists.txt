@@ -16,11 +16,11 @@ if(APPLE)
 endif()
 juce_add_plugin(YinyangCompressor
     COMPANY_NAME "J-SONIC"
-    BUNDLE_ID "audio.character.compressor"
+    BUNDLE_ID "audio.jsonic.yinyangcompressor"
     PLUGIN_MANUFACTURER_CODE Chra
     PLUGIN_CODE Chc1
     FORMATS ${plugin_formats}
-    PRODUCT_NAME "YinYang Compressor"
+    PRODUCT_NAME "Yinyang Compressor"
     DESCRIPTION "Four-model dynamics processor"
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
@@ -38,19 +38,19 @@ target_compile_definitions(YinyangCompressor PUBLIC
 target_link_libraries(YinyangCompressor PRIVATE juce::juce_audio_utils
     PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
 
-option(YINYANG_BUILD_TESTS "Build DSP and plug-in integration tests" ON)
-if(YINYANG_BUILD_TESTS)
+option(YINYANG_COMPRESSOR_BUILD_TESTS "Build DSP and plug-in integration tests" ON)
+if(YINYANG_COMPRESSOR_BUILD_TESTS)
     enable_testing()
-    add_executable(YinyangDSPTests Tests/DSPTests.cpp)
-    target_compile_features(YinyangDSPTests PRIVATE cxx_std_17)
-    add_test(NAME YinyangDSP COMMAND YinyangDSPTests)
-    add_executable(YinyangProcessorTests Tests/ProcessorTests.cpp)
-    target_include_directories(YinyangProcessorTests PRIVATE "${JUCE_SOURCE_DIR}/modules")
-    target_compile_definitions(YinyangProcessorTests PRIVATE
+    add_executable(YinyangCompressorDSPTests Tests/DSPTests.cpp)
+    target_compile_features(YinyangCompressorDSPTests PRIVATE cxx_std_17)
+    add_test(NAME YinyangCompressorDSP COMMAND YinyangCompressorDSPTests)
+    add_executable(YinyangCompressorTests Tests/ProcessorTests.cpp)
+    target_include_directories(YinyangCompressorTests PRIVATE "${JUCE_SOURCE_DIR}/modules")
+    target_compile_definitions(YinyangCompressorTests PRIVATE
         JUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1)
-    target_link_libraries(YinyangProcessorTests PRIVATE YinyangCompressor)
-    add_test(NAME YinyangProcessor COMMAND YinyangProcessorTests)
-    add_executable(YinyangUpwardCompressionTests Tests/UpwardCompressionTests.cpp)
-    target_compile_features(YinyangUpwardCompressionTests PRIVATE cxx_std_17)
-    add_test(NAME YinyangUpwardCompression COMMAND YinyangUpwardCompressionTests)
+    target_link_libraries(YinyangCompressorTests PRIVATE YinyangCompressor)
+    add_test(NAME YinyangCompressorProcessor COMMAND YinyangCompressorTests)
+    add_executable(YinyangCompressorUpwardCompressionTests Tests/UpwardCompressionTests.cpp)
+    target_compile_features(YinyangCompressorUpwardCompressionTests PRIVATE cxx_std_17)
+    add_test(NAME YinyangCompressorUpwardCompression COMMAND YinyangCompressorUpwardCompressionTests)
 endif()

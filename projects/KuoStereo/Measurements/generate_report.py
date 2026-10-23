@@ -604,7 +604,7 @@ def main(raw_dir, report_dir):
         "## Reproduce",
         "",
         "From the repository root, after configuring `projects/KuoStereo` with",
-        "`-DKUO_BUILD_TESTS=ON`:",
+        "`-DKUO_STEREO_BUILD_TESTS=ON`:",
         "",
         "```bash",
         "cmake --build build-kuo-stereo --target KuoStereoFeatureMeasurements --parallel 4",

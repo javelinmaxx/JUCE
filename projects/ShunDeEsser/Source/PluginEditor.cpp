@@ -449,7 +449,7 @@ juce::Slider::SliderLayout CompressorLookAndFeel::getSliderLayout (juce::Slider&
     return layout;
 }
 
-ShunDeEssEditor::ShunDeEssEditor (ShunDeEssProcessor& p)
+ShunDeEsserEditor::ShunDeEsserEditor (ShunDeEsserProcessor& p)
     : AudioProcessorEditor (&p), processor (p),
       theme (ebonyTheme())
 {
@@ -571,7 +571,7 @@ ShunDeEssEditor::ShunDeEssEditor (ShunDeEssProcessor& p)
     startTimerHz (30);
 }
 
-void ShunDeEssEditor::paint (juce::Graphics& g)
+void ShunDeEsserEditor::paint (juce::Graphics& g)
 {
     g.fillAll (theme.background);
     g.saveState();
@@ -584,7 +584,7 @@ void ShunDeEssEditor::paint (juce::Graphics& g)
     g.drawText ("J-SONIC / DYNAMICS", 24, 20, 240, 18, juce::Justification::centredLeft);
     g.setColour (theme.text);
     g.setFont (juce::FontOptions (27.0f));
-    g.drawText ("SHUN DE-ESS", 24, 38, 410, 38, juce::Justification::centredLeft);
+    g.drawText ("SHUN DE-ESSER", 24, 38, 410, 38, juce::Justification::centredLeft);
     g.saveState();
     g.addTransform (juce::AffineTransform::translation (0.0f, -50.0f));
     drawBrushedMetalPanel (g, { 24, 140, 300, 252 }, 10, theme.card, theme.grid);
@@ -603,7 +603,7 @@ void ShunDeEssEditor::paint (juce::Graphics& g)
     g.restoreState();
 }
 
-void ShunDeEssEditor::updateSpectrum (float elapsed)
+void ShunDeEsserEditor::updateSpectrum (float elapsed)
 {
     const auto rate = processor.spectrumSampleRate();
     if (! juce::exactlyEqual (rate, spectrumRate))
@@ -674,7 +674,7 @@ void ShunDeEssEditor::updateSpectrum (float elapsed)
     if (! received) responseFrame[9] *= std::exp (-elapsed/.12f);
 }
 
-void ShunDeEssEditor::paintResponseDisplay (juce::Graphics& g)
+void ShunDeEsserEditor::paintResponseDisplay (juce::Graphics& g)
 {
     const juce::Rectangle<float> plot (42.0f, 407.0f, 266.0f, 57.0f);
     const auto detectorFrequency = static_cast<float> (sliders[0].getValue());
@@ -743,7 +743,7 @@ void ShunDeEssEditor::paintResponseDisplay (juce::Graphics& g)
             for (int point = 0; point <= 160; ++point)
             {
                 const auto frequency = 2000.f*std::pow (8.f, point/160.f);
-                const auto shape = std::clamp (ShunDeEssProcessor::detailBandPower (responseFrame, band, frequency), 0.f, 1.f);
+                const auto shape = std::clamp (ShunDeEsserProcessor::detailBandPower (responseFrame, band, frequency), 0.f, 1.f);
                 detail.lineTo (plot.getX()+plot.getWidth()*point/160,
                                plot.getBottom()-plot.getHeight()*.85f*shape*std::sqrt (strength));
             }
@@ -815,7 +815,7 @@ void ShunDeEssEditor::paintResponseDisplay (juce::Graphics& g)
                 208, 480, 108, 12, juce::Justification::centredRight);
 }
 
-void ShunDeEssEditor::paintMeter (juce::Graphics& g)
+void ShunDeEsserEditor::paintMeter (juce::Graphics& g)
 {
     drawAnalogPanel (g, meterBounds.toFloat(), 10, theme.meterPanel, theme.grid);
     g.setColour (theme.secondary);
@@ -887,7 +887,7 @@ void ShunDeEssEditor::paintMeter (juce::Graphics& g)
     g.drawText (juce::String (displayedReduction, 1) + " dB", 356, 562, 156, 32, juce::Justification::centred);
 }
 
-void ShunDeEssEditor::resized()
+void ShunDeEsserEditor::resized()
 {
     const auto up = [] (int y) { return y - 80; };
     bypass.setBounds (450, 33, 74, 28);
@@ -924,7 +924,7 @@ void ShunDeEssEditor::resized()
     for (auto& label : labels) label.setTransform (scale);
 }
 
-void ShunDeEssEditor::timerCallback()
+void ShunDeEsserEditor::timerCallback()
 {
     const auto now = juce::Time::getMillisecondCounterHiRes() * 0.001;
     const auto elapsed = static_cast<float> (std::max (0.0, now - lastTick));
@@ -958,7 +958,7 @@ void ShunDeEssEditor::timerCallback()
                                         meterBounds.translated (0, -50)));
 }
 
-void ShunDeEssEditor::applyTheme()
+void ShunDeEsserEditor::applyTheme()
 {
     look.setTheme (theme);
     look.setColour (juce::TooltipWindow::backgroundColourId, theme.card);

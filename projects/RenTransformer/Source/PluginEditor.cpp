@@ -15,7 +15,7 @@ RenTransformerEditor::RenTransformerEditor (RenTransformerProcessor& p) : AudioP
     constexpr std::array<const char*, 4> names { "CORE DRIVE", "DC BIAS", "MIX", "OUTPUT" };
     constexpr std::array<const char*, 4> units { " dB", " %", " %", " dB" };
     constexpr std::array<const char*, 4> hints {
-        "Increases saturation in YinYang's oversampled transformer stage.",
+        "Increases saturation in Yinyang's oversampled transformer stage.",
         "Adds transformer asymmetry to increase even harmonics.",
         "Blends transformer coloration with the latency-aligned clean signal.",
         "Adjusts output gain before the transformer, also changing its input level." };

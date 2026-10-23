@@ -1,6 +1,6 @@
 # Ren Transformer validation
 
-The processor tests exercise the production plugin and the original YinYang
+The processor tests exercise the production plugin and the original Yinyang
 transformer independently. No compressor or sidechain is instantiated by Ren.
 
 | Feature | Verification |
@@ -23,7 +23,7 @@ those platforms.
 
 Linux Release VST3 and Standalone builds passed without compiler warnings.
 All 37 processor/DSP checks passed; the native editor run passed 67 checks
-including tooltip rendering and both scaling limits. YinYang's three existing
+including tooltip rendering and both scaling limits. Yinyang's three existing
 CTest suites also passed. Windows workflows were not changed or run.
 
 The compact editor measures 444 × 260 at 100% scale and places Core Drive,

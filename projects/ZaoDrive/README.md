@@ -2,7 +2,7 @@
 
 Zao Drive is the fourth J-SONIC plugin in this repository, with a common-emitter
 BJT overdrive, an op-amp feedback diode clipper, a diode shunt clipper, and
-series-diode crossover distortion. It shares YinYang, Shun,
+series-diode crossover distortion. It shares Yinyang, Shun,
 and Kuo's ebony panels, amber controls, flip switch, and 50%–120% scalable UI.
 
 ![Zao Drive](Previews/zao-drive.png)
@@ -79,7 +79,7 @@ closed while Auto is enabled, keeping audio and preview calibration identical. W
 160 ms at 30 animation frames per second; new targets continue from the current
 displayed shape rather than jumping.
 
-The optional **Transformer Stage** directly includes YinYang's
+The optional **Transformer Stage** directly includes Yinyang's
 [`OversampledTransformer`](../YinyangCompressor/Source/OversampledTransformer.h)
 class. Core Drive and DC Bias have the same behavior, including hysteresis,
 frequency response, and filtering of generated distortion. The transformer
@@ -195,7 +195,7 @@ The tests check circuit residuals through cutoff/saturation, diode shunt limitin
 series-diode dead-zone behavior, current conservation,
 op-amp rail limits and symmetry, harmonic differences, host state recall, latency,
 bypass/dry exactness, stereo isolation, and sample-for-sample transformer parity
-with YinYang. Editor checks cover the waveform display, host controls, hover hints,
+with Yinyang. Editor checks cover the waveform display, host controls, hover hints,
 and both resize limits.
 
 Generate the [circuit report](Tests/Reports/report.md) and standalone plots:

@@ -1,6 +1,6 @@
-# SHUN DE-ESS hover hints
+# Shun De-Esser hover hints
 
-![SHUN DE-ESS with the Detector mode hint visible](Previews/shun-tooltip.png)
+![Shun De-Esser with the Detector mode hint visible](Previews/shun-tooltip.png)
 
 | Control | Hover hint |
 | --- | --- |

@@ -69,11 +69,11 @@ private:
     juce::Colour knobTop { 0xff46515e }, knobBottom { 0xff1b242d };
 };
 
-class ShunDeEssEditor final : public juce::AudioProcessorEditor, private juce::Timer
+class ShunDeEsserEditor final : public juce::AudioProcessorEditor, private juce::Timer
 {
 public:
-    explicit ShunDeEssEditor (ShunDeEssProcessor&);
-    ~ShunDeEssEditor() override { stopTimer(); processor.setSpectrumVisible (false); setLookAndFeel (nullptr); }
+    explicit ShunDeEsserEditor (ShunDeEsserProcessor&);
+    ~ShunDeEsserEditor() override { stopTimer(); processor.setSpectrumVisible (false); setLookAndFeel (nullptr); }
     void paint (juce::Graphics&) override;
     void resized() override;
 private:
@@ -84,16 +84,16 @@ private:
     void applyTheme();
     void updateSpectrum (float elapsed);
     juce::dsp::FFT displayFft { 10 };
-    std::array<ShunDeEssProcessor::SpectrumSample, 1024> spectrumRing {}, spectrumRead {};
+    std::array<ShunDeEsserProcessor::SpectrumSample, 1024> spectrumRing {}, spectrumRead {};
     std::array<float, 2048> displayFftData {};
     std::array<float, 513> leftMagnitudes {};
     std::array<float, 64> spectrumLevels {};
-    ShunDeEssProcessor::ResponseFrame responseFrame {};
+    ShunDeEsserProcessor::ResponseFrame responseFrame {};
     uint32_t responseVersion = 0;
     int spectrumPosition = 0, spectrumCount = 0;
     float spectrumRate = 0;
     juce::Label responseHint;
-    ShunDeEssProcessor& processor;
+    ShunDeEsserProcessor& processor;
     CompressorLookAndFeel look;
     juce::TooltipWindow tooltipWindow { this };
     AnimatedSwitch bypass { "BYPASS", true, false, true };
@@ -112,5 +112,5 @@ private:
     double lastTick = 0;
     float displayedReduction = 0;
     CompressorTheme theme;
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ShunDeEssEditor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ShunDeEsserEditor)
 };

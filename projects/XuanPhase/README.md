@@ -183,7 +183,7 @@ macOS also provides `XuanPhase_AU`; `build-macos-all.sh` discovers this project
 automatically. Windows can build `XuanPhase_VST3` with Visual Studio 2022 using
 the same configure/build pattern and `--config Release`, or use the manual
 [All Plugins - Windows VST3 workflow](../../.github/workflows/all-plugins-windows.yml).
-For plugin-only builds set `-DXUAN_BUILD_TESTS=OFF`.
+For plugin-only builds set `-DXUAN_PHASE_BUILD_TESTS=OFF`.
 
 Generate measurements and a native preview on Linux:
 

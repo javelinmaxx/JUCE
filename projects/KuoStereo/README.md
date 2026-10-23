@@ -5,7 +5,7 @@ fade reaches silence, while its onset detector and input history stay live for
 Haas protection and reactivation. Bypass keeps both Haas search and Velvet hot.
 
 Kuo Stereo is J-SONIC's stereo widener plug-in. It is a separate JUCE project
-alongside YinYang Compressor and SHUN DE-ESS, with the same dark analog panel,
+alongside Yinyang Compressor and Shun De-Esser, with the same dark analog panel,
 rotary controls, and amber accents. The [editor preview](Previews/kuo-stereo.png)
 shows its three sections.
 The sound field displays are 182 px tall in the default 548 × 721 editor.
@@ -68,7 +68,7 @@ latency to the host; the delay and velvet paths share that latency.
 From the repository root, build and test with:
 
 ```bash
-cmake -S projects/KuoStereo -B build-kuo-stereo -DKUO_BUILD_TESTS=ON
+cmake -S projects/KuoStereo -B build-kuo-stereo -DKUO_STEREO_BUILD_TESTS=ON
 cmake --build build-kuo-stereo --target KuoStereo_VST3 KuoStereoTests --parallel 4
 ctest --test-dir build-kuo-stereo --output-on-failure
 ```

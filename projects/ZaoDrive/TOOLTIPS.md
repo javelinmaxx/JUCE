@@ -17,5 +17,5 @@
 | Mix | Adds the driver-minus-reference wet signal to the latency-aligned clean input. |
 | Core drive | Increases saturation in the enabled output transformer. |
 | DC bias | Adds transformer asymmetry to increase even harmonics. |
-| Transformer | Saves CPU when Off; adds YinYang's transformer coloration when On. |
+| Transformer | Saves CPU when Off; adds Yinyang's transformer coloration when On. |
 | Bypass | Bypasses the overdrive and transformer while preserving plugin latency. |

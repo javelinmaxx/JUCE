@@ -6,7 +6,7 @@
 
 This repository includes the JUCE framework and seven independent plug-in
 projects: [`projects/YinyangCompressor`](../projects/YinyangCompressor),
-[`projects/ShunDeEss`](../projects/ShunDeEss),
+[`projects/ShunDeEsser`](../projects/ShunDeEsser),
 [`projects/KuoStereo`](../projects/KuoStereo),
 [`projects/ZaoDrive`](../projects/ZaoDrive),
 [`projects/RenTransformer`](../projects/RenTransformer), [`projects/KuoVelvet`](../projects/KuoVelvet), and
@@ -14,21 +14,21 @@ projects: [`projects/YinyangCompressor`](../projects/YinyangCompressor),
 amplifier with adjustable bias, a Schottky op-amp feedback clipper, a diode shunt
 clipper, and series-diode crossover distortion with adjustable driver impedance,
 plus an expected-output display
-and YinYang's optional transformer stage.
-[`Ren Transformer`](../projects/RenTransformer/README.md) isolates YinYang's transformer
+and Yinyang's optional transformer stage.
+[`Ren Transformer`](../projects/RenTransformer/README.md) isolates Yinyang's transformer
 and output controls, and [`Kuo Velvet`](../projects/KuoVelvet/README.md) isolates
 Kuo Stereo's Velvet widening with spectral transient protection in a compact UI.
 All seven projects share an analog visual style while keeping independent processors and
 build targets. You do not need another JUCE download. All build commands below
 run from the repository root.
 
-Build SHUN DE-ESS, Kuo Stereo, and Zao Drive with CMake using their
-[SHUN](../projects/ShunDeEss/README.md), [Kuo](../projects/KuoStereo/README.md), and
+Build Shun De-Esser, Kuo Stereo, and Zao Drive with CMake using their
+[SHUN](../projects/ShunDeEsser/README.md), [Kuo](../projects/KuoStereo/README.md), and
 [Zao](../projects/ZaoDrive/README.md)
 instructions. The `build-macos-all.sh` script builds all seven projects as
-VST3 and AU; the individual platform scripts build YinYang Compressor. The Windows
+VST3 and AU; the individual platform scripts build Yinyang Compressor. The Windows
 GitHub workflows provide a manual build of all seven plugins and the existing
-automatic YinYang Compressor and SHUN DE-ESS builds.
+automatic Yinyang Compressor and Shun De-Esser builds.
 
 Download the main development branch with Git:
 
@@ -46,8 +46,8 @@ Build scripts are included at the repository root:
 
 | Script | Builds |
 | --- | --- |
-| [`build-windows-vst3.ps1`](../build-windows-vst3.ps1) | YinYang Windows x64 VST3 |
-| [`build-macos.sh`](../build-macos.sh) | YinYang macOS VST3, AU, or both; Apple Silicon, Intel, or universal |
+| [`build-windows-vst3.ps1`](../build-windows-vst3.ps1) | Yinyang Windows x64 VST3 |
+| [`build-macos.sh`](../build-macos.sh) | Yinyang macOS VST3, AU, or both; Apple Silicon, Intel, or universal |
 | [`build-macos-all.sh`](../build-macos-all.sh) | All plugin projects as macOS VST3 and AU; Apple Silicon, Intel, or universal |
 
 The scripts locate projects relative to their own location, stop if a build
@@ -76,7 +76,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build-windows-vst3.ps1
 The equivalent direct CMake commands are:
 
 ```powershell
-cmake -S projects/YinyangCompressor -B build-yinyang-win -G "Visual Studio 17 2022" -A x64 -DYINYANG_BUILD_TESTS=OFF '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded$<$<CONFIG:Debug>:Debug>'
+cmake -S projects/YinyangCompressor -B build-yinyang-win -G "Visual Studio 17 2022" -A x64 -DYINYANG_COMPRESSOR_BUILD_TESTS=OFF '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded$<$<CONFIG:Debug>:Debug>'
 
 cmake --build build-yinyang-win --config Release --target YinyangCompressor_VST3 --parallel 4
 ```
@@ -84,7 +84,7 @@ cmake --build build-yinyang-win --config Release --target YinyangCompressor_VST3
 The complete Windows x64 plug-in bundle is:
 
 ```text
-build-yinyang-win\YinyangCompressor_artefacts\Release\VST3\YinYang Compressor.vst3
+build-yinyang-win\YinyangCompressor_artefacts\Release\VST3\Yinyang Compressor.vst3
 ```
 
 Copy the entire `.vst3` folder, including its contents, into:
@@ -110,12 +110,12 @@ and the MSVC runtime linked statically. Under **Artifacts**, download the seven
 The existing two-plugin workflow also remains available:
 
 A Windows computer is not required to compile either plug-in. GitHub builds
-YinYang Compressor and SHUN DE-ESS in separate Windows jobs:
+Yinyang Compressor and Shun De-Esser in separate Windows jobs:
 
-1. Open [Windows VST3 builds](https://github.com/javelinmaxx/Multi-Compressor/actions/workflows/character-compressor-windows.yml).
+1. Open [Windows VST3 builds](https://github.com/javelinmaxx/Multi-Compressor/actions/workflows/yinyang-shun-windows.yml).
 2. Enable Actions if GitHub prompts you, then open a successful run for the branch.
-3. Under **Artifacts**, download **YinYang-Compressor-Windows-x64-VST3** and
-   **SHUN-DE-ESS-Windows-x64-VST3**.
+3. Under **Artifacts**, download **YinyangCompressor-Windows-x64-VST3** and
+   **ShunDeEsser-Windows-x64-VST3**.
 4. Extract each ZIP. Install both complete `.vst3` folders in the Windows
    plug-in location above.
 
@@ -148,13 +148,13 @@ discovers JUCE plugin declarations under `projects/*/CMakeLists.txt`, disables
 project test targets, and prints the finished bundles. Output is under
 `build/macos-all/<architecture>/<project>/<target>_artefacts/Release/`, in the
 `VST3` and `AU` subfolders. Bundle names come from the project, including
-`YinYang Compressor.vst3` and `YinYang Compressor.component`.
+`Yinyang Compressor.vst3` and `Yinyang Compressor.component`.
 
 Add `--install` to copy all successful builds into your user VST3 and Components
 folders. Use `--build-root PATH` for another output location or `--help` for all
 options. No plug-ins are installed by default.
 
-The following commands build **YinYang only**.
+The following commands build **Yinyang only**.
 
 For an **Apple Silicon Mac**, run from the repository root:
 
@@ -172,7 +172,7 @@ To build manually instead:
 cmake -S projects/YinyangCompressor -B build-yinyang-mac-arm64 -G Xcode \
   -DCMAKE_OSX_ARCHITECTURES=arm64 \
   -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
-  -DYINYANG_BUILD_TESTS=OFF
+  -DYINYANG_COMPRESSOR_BUILD_TESTS=OFF
 
 cmake --build build-yinyang-mac-arm64 --config Release \
   --target YinyangCompressor_VST3 --parallel 4
@@ -183,8 +183,8 @@ Install the complete bundle into your user plug-in folder:
 ```bash
 mkdir -p "$HOME/Library/Audio/Plug-Ins/VST3"
 ditto \
-  "build-yinyang-mac-arm64/YinyangCompressor_artefacts/Release/VST3/YinYang Compressor.vst3" \
-  "$HOME/Library/Audio/Plug-Ins/VST3/YinYang Compressor.vst3"
+  "build-yinyang-mac-arm64/YinyangCompressor_artefacts/Release/VST3/Yinyang Compressor.vst3" \
+  "$HOME/Library/Audio/Plug-Ins/VST3/Yinyang Compressor.vst3"
 ```
 
 Restart your VST3 host or rescan its plug-ins. For DawDreamer, provide the
@@ -223,7 +223,7 @@ To build the AU manually instead:
 cmake -S projects/YinyangCompressor -B build-yinyang-mac-arm64 -G Xcode \
   -DCMAKE_OSX_ARCHITECTURES=arm64 \
   -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
-  -DYINYANG_BUILD_TESTS=OFF
+  -DYINYANG_COMPRESSOR_BUILD_TESTS=OFF
 
 cmake --build build-yinyang-mac-arm64 --config Release \
   --target YinyangCompressor_AU --parallel 4
@@ -234,8 +234,8 @@ Install the complete `.component` bundle:
 ```bash
 mkdir -p "$HOME/Library/Audio/Plug-Ins/Components"
 ditto \
-  "build-yinyang-mac-arm64/YinyangCompressor_artefacts/Release/AU/YinYang Compressor.component" \
-  "$HOME/Library/Audio/Plug-Ins/Components/YinYang Compressor.component"
+  "build-yinyang-mac-arm64/YinyangCompressor_artefacts/Release/AU/Yinyang Compressor.component" \
+  "$HOME/Library/Audio/Plug-Ins/Components/Yinyang Compressor.component"
 ```
 
 The Intel and universal architecture substitutions from the macOS VST3 section
@@ -243,7 +243,7 @@ apply here as well. AU and VST3 can share a build directory when their
 architecture and deployment settings match.
 
 Restart Logic Pro and check **Plug-in Manager**. On an audio track, select
-**Audio FX → Audio Units → J-SONIC → YinYang Compressor**.
+**Audio FX → Audio Units → J-SONIC → Yinyang Compressor**.
 To run Apple's AU validator separately:
 
 ```bash
@@ -258,13 +258,13 @@ and test option below when following a single-project example:
 
 | Project directory | VST3 target | Test option |
 | --- | --- | --- |
-| `projects/YinyangCompressor` | `YinyangCompressor_VST3` | `YINYANG_BUILD_TESTS` |
-| `projects/ShunDeEss` | `ShunDeEss_VST3` | `SHUN_BUILD_TESTS` |
-| `projects/KuoStereo` | `KuoStereo_VST3` | `KUO_BUILD_TESTS` |
-| `projects/ZaoDrive` | `ZaoDrive_VST3` | `ZAO_BUILD_TESTS` |
-| `projects/RenTransformer` | `RenTransformer_VST3` | `REN_BUILD_TESTS` |
-| `projects/KuoVelvet` | `KuoVelvet_VST3` | `VELVET_BUILD_TESTS` |
-| `projects/XuanPhase` | `XuanPhase_VST3` | `XUAN_BUILD_TESTS` |
+| `projects/YinyangCompressor` | `YinyangCompressor_VST3` | `YINYANG_COMPRESSOR_BUILD_TESTS` |
+| `projects/ShunDeEsser` | `ShunDeEsser_VST3` | `SHUN_DE_ESSER_BUILD_TESTS` |
+| `projects/KuoStereo` | `KuoStereo_VST3` | `KUO_STEREO_BUILD_TESTS` |
+| `projects/ZaoDrive` | `ZaoDrive_VST3` | `ZAO_DRIVE_BUILD_TESTS` |
+| `projects/RenTransformer` | `RenTransformer_VST3` | `REN_TRANSFORMER_BUILD_TESTS` |
+| `projects/KuoVelvet` | `KuoVelvet_VST3` | `KUO_VELVET_BUILD_TESTS` |
+| `projects/XuanPhase` | `XuanPhase_VST3` | `XUAN_PHASE_BUILD_TESTS` |
 
 Replace `_VST3` with `_Standalone` for the standalone application, or `_AU`
 for an Audio Unit on macOS. AU targets are available only on macOS.
@@ -274,7 +274,7 @@ in [JUCE Linux dependencies](Linux%20Dependencies.md). The plugin projects disab
 JUCE's web browser and curl features. For example, build a native Linux VST3:
 
 ```bash
-cmake -S projects/ZaoDrive -B build/zao -DCMAKE_BUILD_TYPE=Release -DZAO_BUILD_TESTS=OFF
+cmake -S projects/ZaoDrive -B build/zao -DCMAKE_BUILD_TYPE=Release -DZAO_DRIVE_BUILD_TESTS=OFF
 cmake --build build/zao --config Release --target ZaoDrive_VST3 --parallel 4
 ```
 

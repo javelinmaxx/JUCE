@@ -179,5 +179,5 @@ voltages are bounded to ±12 V; the external diode driver instead uses a smooth
 DC reference checks and residual tests establish consistency with these equations,
 not bench calibration or full SPICE transient certification.
 
-The output transformer is YinYang's existing behavioral magnetic model, shared
+The output transformer is Yinyang's existing behavioral magnetic model, shared
 by direct source inclusion; its documented limits still apply.

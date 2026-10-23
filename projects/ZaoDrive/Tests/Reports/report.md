@@ -77,7 +77,7 @@ wet residual, which is then added to the aligned clean branch. The shape plots s
 at Drive 12 dB. A 9 kHz op-amp input at Drive 24 dB has **24.9 dB**
 less folded third harmonic with 4× circuit oversampling than at the host rate
 with the same grey-shaped excitation.
-YinYang's directly included transformer still matches the original class within
+Yinyang's directly included transformer still matches the original class within
 1e-6 FS when isolated with Mix 0%. Dry mix and bypass preserve reported latency.
 Mono/stereo, oversized blocks, parameter recall, and maximum-drive stability
 while Bias/Knee automation changes are also exercised.

@@ -10,7 +10,7 @@ constexpr std::array<const char*, 15> parameterIds { "mode", "frequency", "q", "
 constexpr float pi = 3.14159265358979323846f;
 }
 
-juce::AudioProcessorValueTreeState::ParameterLayout ShunDeEssProcessor::createParameterLayout()
+juce::AudioProcessorValueTreeState::ParameterLayout ShunDeEsserProcessor::createParameterLayout()
 {
     using Float = juce::AudioParameterFloat;
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
@@ -43,16 +43,16 @@ juce::AudioProcessorValueTreeState::ParameterLayout ShunDeEssProcessor::createPa
     return layout;
 }
 
-ShunDeEssProcessor::ShunDeEssProcessor()
+ShunDeEsserProcessor::ShunDeEsserProcessor()
     : AudioProcessor (BusesProperties().withInput ("Input", juce::AudioChannelSet::stereo(), true)
                                       .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
-      parameters (*this, nullptr, "ShunDeEssState", createParameterLayout())
+      parameters (*this, nullptr, "ShunDeEsserState", createParameterLayout())
 {
     for (size_t i = 0; i < raw.size(); ++i)
         raw[i] = parameters.getRawParameterValue (parameterIds[i]);
 }
 
-void ShunDeEssProcessor::prepareToPlay (double rate, int)
+void ShunDeEsserProcessor::prepareToPlay (double rate, int)
 {
     sampleRate = std::isfinite (rate) && rate >= 8000 ? static_cast<float> (rate) : 44100.0f;
     displaySampleRate.store (sampleRate, std::memory_order_relaxed);
@@ -69,7 +69,7 @@ void ShunDeEssProcessor::prepareToPlay (double rate, int)
     reduction.store (0, std::memory_order_relaxed);
 }
 
-void ShunDeEssProcessor::analyseSpectralDetail (float detectorFrequency, float detectorQ,
+void ShunDeEsserProcessor::analyseSpectralDetail (float detectorFrequency, float detectorQ,
                                                 float attenuationQ) noexcept
 {
     constexpr int fftSize = 1024;
@@ -156,7 +156,7 @@ void ShunDeEssProcessor::analyseSpectralDetail (float detectorFrequency, float d
     }
 }
 
-void ShunDeEssProcessor::releaseResources()
+void ShunDeEsserProcessor::releaseResources()
 {
     shelfRunning = bellRunning = detailRunning = false;
     detectorState = {};
@@ -165,14 +165,14 @@ void ShunDeEssProcessor::releaseResources()
     envelopes = {};
 }
 
-bool ShunDeEssProcessor::isBusesLayoutSupported (const BusesLayout& buses) const
+bool ShunDeEsserProcessor::isBusesLayoutSupported (const BusesLayout& buses) const
 {
     const auto input = buses.getMainInputChannelSet();
     return input == buses.getMainOutputChannelSet()
         && (input == juce::AudioChannelSet::mono() || input == juce::AudioChannelSet::stereo());
 }
 
-float ShunDeEssProcessor::filterSample (float input, BiquadState& state,
+float ShunDeEsserProcessor::filterSample (float input, BiquadState& state,
                                         const BiquadCoefficients& coefficients) noexcept
 {
     const auto output = coefficients.b0 * input + coefficients.b1 * state.x1 + coefficients.b2 * state.x2
@@ -184,7 +184,7 @@ float ShunDeEssProcessor::filterSample (float input, BiquadState& state,
     return state.y1;
 }
 
-void ShunDeEssProcessor::updateFilterCoefficients (float detectorFrequency, float detectorQ,
+void ShunDeEsserProcessor::updateFilterCoefficients (float detectorFrequency, float detectorQ,
                                                    float attenuationFrequency, float attenuationQ,
                                                    float maximumReduction) noexcept
 {
@@ -243,22 +243,22 @@ void ShunDeEssProcessor::updateFilterCoefficients (float detectorFrequency, floa
     lastDepth = maximumReduction;
 }
 
-void ShunDeEssProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
+void ShunDeEsserProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
     process (buffer, false);
 }
 
-void ShunDeEssProcessor::processBlockBypassed (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
+void ShunDeEsserProcessor::processBlockBypassed (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
     process (buffer, true);
 }
 
-juce::AudioProcessorParameter* ShunDeEssProcessor::getBypassParameter() const
+juce::AudioProcessorParameter* ShunDeEsserProcessor::getBypassParameter() const
 {
     return parameters.getParameter ("bypass");
 }
 
-int ShunDeEssProcessor::readSpectrumSamples (SpectrumSample* destination, int maximum) noexcept
+int ShunDeEsserProcessor::readSpectrumSamples (SpectrumSample* destination, int maximum) noexcept
 {
     int first = 0, n1 = 0, second = 0, n2 = 0;
     spectrumFifo.prepareToRead (maximum, first, n1, second, n2);
@@ -267,7 +267,7 @@ int ShunDeEssProcessor::readSpectrumSamples (SpectrumSample* destination, int ma
     spectrumFifo.finishedRead (n1+n2);
     return n1+n2;
 }
-float ShunDeEssProcessor::detailBandPower (const ResponseFrame& frame, size_t band, double frequency) noexcept
+float ShunDeEsserProcessor::detailBandPower (const ResponseFrame& frame, size_t band, double frequency) noexcept
 {
     const auto rate = static_cast<double> (frame[11]);
     if (band >= 4 || frequency <= 0 || frequency >= rate*.5) return 0;
@@ -284,7 +284,7 @@ float ShunDeEssProcessor::detailBandPower (const ResponseFrame& frame, size_t ba
     return denominator > 1e-20 ? static_cast<float> ((numeratorReal*numeratorReal+numeratorImaginary*numeratorImaginary)/denominator) : 0.f;
 }
 
-bool ShunDeEssProcessor::readResponseFrame (ResponseFrame& frame, uint32_t& version) const noexcept
+bool ShunDeEsserProcessor::readResponseFrame (ResponseFrame& frame, uint32_t& version) const noexcept
 {
     const auto before = responseVersion.load();
     if (before == version || (before&1u)) return false;
@@ -294,7 +294,7 @@ bool ShunDeEssProcessor::readResponseFrame (ResponseFrame& frame, uint32_t& vers
     frame = next; version = before; return true;
 }
 
-void ShunDeEssProcessor::process (juce::AudioBuffer<float>& buffer, bool hostBypassed)
+void ShunDeEsserProcessor::process (juce::AudioBuffer<float>& buffer, bool hostBypassed)
 {
     juce::ScopedNoDenormals noDenormals;
     const auto channels = std::min ({ getTotalNumInputChannels(), buffer.getNumChannels(), 2 });
@@ -454,25 +454,25 @@ void ShunDeEssProcessor::process (juce::AudioBuffer<float>& buffer, bool hostByp
     }
 }
 
-void ShunDeEssProcessor::getStateInformation (juce::MemoryBlock& data)
+void ShunDeEsserProcessor::getStateInformation (juce::MemoryBlock& data)
 {
     if (auto xml = parameters.copyState().createXml())
         copyXmlToBinary (*xml, data);
 }
 
-void ShunDeEssProcessor::setStateInformation (const void* data, int size)
+void ShunDeEsserProcessor::setStateInformation (const void* data, int size)
 {
     if (auto xml = getXmlFromBinary (data, size))
         if (xml->hasTagName (parameters.state.getType()))
             parameters.replaceState (juce::ValueTree::fromXml (*xml));
 }
 
-juce::AudioProcessorEditor* ShunDeEssProcessor::createEditor()
+juce::AudioProcessorEditor* ShunDeEsserProcessor::createEditor()
 {
-    return new ShunDeEssEditor (*this);
+    return new ShunDeEsserEditor (*this);
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
-    return new ShunDeEssProcessor();
+    return new ShunDeEsserProcessor();
 }

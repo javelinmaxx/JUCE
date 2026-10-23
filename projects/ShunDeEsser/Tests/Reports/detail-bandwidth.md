@@ -1,41 +1,4 @@
-#!/usr/bin/env python3
-"""Plot measured SHUN detail-filter bandwidth and document the quiet spectrum test."""
-from pathlib import Path
-import csv
-import os
-os.environ.setdefault('MPLCONFIGDIR', '/tmp/shun-matplotlib')
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-from matplotlib.ticker import NullFormatter
-import numpy as np
-
-root = Path(__file__).resolve().parent / 'Reports'
-curves = np.genfromtxt(root / 'detail-responses.csv', delimiter=',', names=True)
-with (root / 'detail-bandwidth.csv').open() as stream:
-    widths = list(csv.DictReader(stream))
-fig, axes = plt.subplots(1, 2, figsize=(12, 4), constrained_layout=True)
-for q in [.5, 1.2, 2.8, 4.]:
-    rows = curves[np.isclose(curves['q'], q)]
-    axes[0].semilogx(rows['frequency'], rows['digital_power'], label=f'Q {q:g}')
-rows = curves[np.isclose(curves['q'], 2.8)]
-axes[1].semilogx(rows['frequency'], rows['old_display_amplitude'], '--', label='Previous: analog amplitude approximation')
-axes[1].semilogx(rows['frequency'], rows['digital_power'], label='Now: actual digital filter power')
-axes[1].fill_between(rows['frequency'], rows['digital_power'], alpha=.18)
-for ax, title in zip(axes, ['Actual DSP detail-band power at 48 kHz', 'Why the old gold shading looked wider (Q 2.8)']):
-    ax.axhline(.5, color='grey', lw=.8, linestyle=':')
-    ax.set(xlabel='Frequency (Hz)', ylabel='Normalized profile height', xlim=(2000, 16000), ylim=(0, 1.05), title=title)
-    ax.set_xticks([2000, 4000, 6500, 8000, 12000, 16000], ['2k', '4k', '6.5k', '8k', '12k', '16k'])
-    ax.xaxis.set_minor_formatter(NullFormatter())
-    ax.grid(alpha=.25); ax.legend(fontsize=8)
-fig.savefig(root / 'detail-bandwidth.png', dpi=160)
-plt.close(fig)
-
-table = []
-for row in widths:
-    if float(row['sample_rate']) == 48000:
-        table.append(f"| {float(row['q']):g} | {float(row['low_hz']):,.1f} | {float(row['high_hz']):,.1f} | {float(row['width_hz']):,.1f} |")
-report = '''# SHUN detail bandwidth and low-level spectrum
+# SHUN detail bandwidth and low-level spectrum
 
 The detail filters are genuinely broad at low Q. The previous display made
 those bands look broader again: it used an analog amplitude approximation
@@ -52,7 +15,10 @@ is 6,515.6 Hz. Band edges are the half-power points (−3 dB).
 
 | Attenuator Q | Lower edge (Hz) | Upper edge (Hz) | Width (Hz) |
 | --- | ---: | ---: | ---: |
-''' + '\n'.join(table) + '''
+| 0.5 | 2,842.1 | 12,705.2 | 9,863.1 |
+| 1.2 | 4,493.5 | 9,139.8 | 4,646.2 |
+| 2.8 | 5,553.6 | 7,596.3 | 2,042.7 |
+| 4 | 5,827.8 | 7,262.1 | 1,434.2 |
 
 The default Attenuator Q is 1.2, so a roughly 4.65 kHz band is expected here.
 Q 4 narrows it to about 1.43 kHz. Both Detector Q and Attenuator Q already had
@@ -96,9 +62,7 @@ Data: [detail-bandwidth.csv](detail-bandwidth.csv),
 Reproduce:
 
 ```bash
-ShunDeEssTests --spectrum-previews /tmp/shun-previews
+ShunDeEsserTests --spectrum-previews /tmp/shun-previews
 # Copy the two measured CSV files to this Reports directory, then:
-python3 projects/ShunDeEss/Tests/generate_spectrum_report.py
+python3 projects/ShunDeEsser/Tests/generate_spectrum_report.py
 ```
-'''
-(root / 'detail-bandwidth.md').write_text(report)

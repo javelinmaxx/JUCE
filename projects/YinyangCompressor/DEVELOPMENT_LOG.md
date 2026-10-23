@@ -744,3 +744,15 @@ implementation, not a production-release claim.
   rebuilt and passed their processor tests. Both macOS build scripts passed
   mocked bundle/target checks; native macOS and Windows builds were not run.
   Generated host product/plugin IDs match the previous compressor build.
+
+### 2026-10-23 — consistent collection naming
+- Standardized the visible name as Yinyang Compressor, with YinyangCompressor
+  as its directory/build target prefix and YinyangCompressorState as its state root.
+- Changed the bundle ID to audio.jsonic.yinyangcompressor; the old identity is
+  not retained as an alias. The editor heading spells out YINYANG COMPRESSOR.
+- Renamed test binaries to YinyangCompressorTests, YinyangCompressorDSPTests,
+  and YinyangCompressorUpwardCompressionTests. Updated scripts and documentation.
+- Shun is now Shun De-Esser / ShunDeEsser across folder, targets, classes,
+  state root, bundle ID, documentation, and packaging references.
+- All processors obtain their host-visible name from CMake's JucePlugin_Name.
+- Earlier dated entries above retain their historical names and decisions.

@@ -63,7 +63,7 @@ YinyangCompressorProcessor::YinyangCompressorProcessor()
     : AudioProcessor (BusesProperties().withInput ("Input", juce::AudioChannelSet::stereo(), true)
                                       .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       // Keep the legacy state identifier so existing host sessions remain compatible.
-      parameters (*this, nullptr, "CharacterCompressorState", layout())
+      parameters (*this, nullptr, "YinyangCompressorState", layout())
 {
     for (size_t i = 0; i < raw.size(); ++i)
         raw[i] = parameters.getRawParameterValue (ids[i]);

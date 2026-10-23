@@ -4,7 +4,7 @@
 
 namespace ren
 {
-// YinYang's original transformer is used directly: no compressor, detector,
+// Yinyang's original transformer is used directly: no compressor, detector,
 // circuit approximation, or additional oversampling stage is inserted here.
 class TransformerStage
 {

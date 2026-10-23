@@ -81,29 +81,29 @@ if [[ $format == au || $format == all ]]; then targets+=(YinyangCompressor_AU); 
 cmake -S "$repo_root/projects/YinyangCompressor" -B "$build_dir" -G Xcode \
     "-DCMAKE_OSX_ARCHITECTURES=$cmake_arch" \
     "-DCMAKE_OSX_DEPLOYMENT_TARGET=$deployment" \
-    -DYINYANG_BUILD_TESTS=OFF
+    -DYINYANG_COMPRESSOR_BUILD_TESTS=OFF
 cmake --build "$build_dir" --config Release --target "${targets[@]}" --parallel "$parallel"
 
 artifacts="$build_dir/YinyangCompressor_artefacts/Release"
 if [[ $format == vst3 || $format == all ]]; then
-    bundle="$artifacts/VST3/YinYang Compressor.vst3"
+    bundle="$artifacts/VST3/Yinyang Compressor.vst3"
     [[ -d "$bundle" ]] || { printf 'Missing VST3 bundle: %s\n' "$bundle" >&2; exit 1; }
     printf 'Built: %s\n' "$bundle"
     if [[ $install_requested == true ]]; then
         destination="$HOME/Library/Audio/Plug-Ins/VST3"
         mkdir -p "$destination"
-        ditto "$bundle" "$destination/YinYang Compressor.vst3"
-        printf 'Installed: %s/YinYang Compressor.vst3\n' "$destination"
+        ditto "$bundle" "$destination/Yinyang Compressor.vst3"
+        printf 'Installed: %s/Yinyang Compressor.vst3\n' "$destination"
     fi
 fi
 if [[ $format == au || $format == all ]]; then
-    bundle="$artifacts/AU/YinYang Compressor.component"
+    bundle="$artifacts/AU/Yinyang Compressor.component"
     [[ -d "$bundle" ]] || { printf 'Missing AU bundle: %s\n' "$bundle" >&2; exit 1; }
     printf 'Built: %s\n' "$bundle"
     if [[ $install_requested == true ]]; then
         destination="$HOME/Library/Audio/Plug-Ins/Components"
         mkdir -p "$destination"
-        ditto "$bundle" "$destination/YinYang Compressor.component"
-        printf 'Installed: %s/YinYang Compressor.component\n' "$destination"
+        ditto "$bundle" "$destination/Yinyang Compressor.component"
+        printf 'Installed: %s/Yinyang Compressor.component\n' "$destination"
     fi
 fi

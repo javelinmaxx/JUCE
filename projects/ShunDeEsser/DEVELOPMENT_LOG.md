@@ -1,8 +1,8 @@
-# SHUN DE-ESS development log
+# Shun De-Esser development log
 
 ### 2026-10-20 — initial plug-in project
 - Created an independent JUCE plug-in target and parameter/state tree for SHUN
-  DE-ESS, using the YinYang Compressor's analog-metal panels, rotary controls,
+  DE-ESS, using the Yinyang Compressor's analog-metal panels, rotary controls,
   animated switches, and three-second GR display.
 - Implemented a band-pass sibilance detector, wideband and split-band attenuation,
   detector listen, stereo linking, wet/dry mix, output gain, and bypass.
@@ -20,13 +20,13 @@
 
 ### 2026-10-20 — separate detector and attenuator panels
 - Split the controls into independent Detector and Attenuator panels, aligned
-  to YinYang Compressor's two stacked lower-left sections, with a wider 24 px
+  to Yinyang Compressor's two stacked lower-left sections, with a wider 24 px
   gap to make the grouping unambiguous.
 - Rebalanced the panel heights and control rows to preserve readable headings,
   align Output with Attenuator, and keep the shared bottom edge.
 
 ### 2026-10-20 — suite-aligned vertical layout
-- Shifted the SHUN panels and meter to YinYang Compressor's 30 px content offset
+- Shifted the SHUN panels and meter to Yinyang Compressor's 30 px content offset
   and restored the 726 px editor height.
 - Matched the lower panel positions and 18 px bottom margin so the interface
   fits without clipping.
@@ -121,7 +121,7 @@
 ### 2026-10-20 — detector/attenuator mock-signal report
 - Tightened the three-position flip-switch lever travel so the handle sits
   closer to the centerline of its round mounting.
-- Added `ShunDeEssTests --analysis-report <path>` to exercise Wideband,
+- Added `ShunDeEsserTests --analysis-report <path>` to exercise Wideband,
   Split-band, and Smart with deterministic broadband noise, a low-frequency
   body tone, and a late high-frequency detail tone.
 - The generated report records gain reduction, body/detail retention, and

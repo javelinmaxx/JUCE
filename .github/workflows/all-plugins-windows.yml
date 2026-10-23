@@ -21,26 +21,26 @@ jobs:
       matrix:
         include:
           - project: YinyangCompressor
-            product: YinYang Compressor
-            test_option: YINYANG_BUILD_TESTS
-          - project: ShunDeEss
-            product: SHUN DE-ESS
-            test_option: SHUN_BUILD_TESTS
+            product: Yinyang Compressor
+            test_option: YINYANG_COMPRESSOR_BUILD_TESTS
+          - project: ShunDeEsser
+            product: Shun De-Esser
+            test_option: SHUN_DE_ESSER_BUILD_TESTS
           - project: KuoStereo
             product: Kuo Stereo
-            test_option: KUO_BUILD_TESTS
+            test_option: KUO_STEREO_BUILD_TESTS
           - project: ZaoDrive
             product: Zao Drive
-            test_option: ZAO_BUILD_TESTS
+            test_option: ZAO_DRIVE_BUILD_TESTS
           - project: RenTransformer
             product: Ren Transformer
-            test_option: REN_BUILD_TESTS
+            test_option: REN_TRANSFORMER_BUILD_TESTS
           - project: KuoVelvet
             product: Kuo Velvet
-            test_option: VELVET_BUILD_TESTS
+            test_option: KUO_VELVET_BUILD_TESTS
           - project: XuanPhase
             product: Xuan Phase
-            test_option: XUAN_BUILD_TESTS
+            test_option: XUAN_PHASE_BUILD_TESTS
     defaults:
       run:
         shell: pwsh

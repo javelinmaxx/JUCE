@@ -1,4 +1,4 @@
-# YinYang Compressor
+# Yinyang Compressor
 
 A first working compressor plug-in with selectable **feed-forward FET**,
 **feedback VCA**, **variable-mu**, and **optical** behavior, plus an optional
@@ -146,7 +146,7 @@ From the JUCE repository root:
 cmake -S projects/YinyangCompressor -B /workspace/juce-env/yinyang-build \
     -G Ninja -DCMAKE_BUILD_TYPE=Debug
 cmake --build /workspace/juce-env/yinyang-build \
-    --target YinyangCompressor_VST3 YinyangDSPTests YinyangProcessorTests YinyangUpwardCompressionTests --parallel 4
+    --target YinyangCompressor_VST3 YinyangCompressorDSPTests YinyangCompressorTests YinyangCompressorUpwardCompressionTests --parallel 4
 ctest --test-dir /workspace/juce-env/yinyang-build --output-on-failure
 ```
 
@@ -155,7 +155,7 @@ The optional native editor check needs a display. In this workspace:
 ```bash
 mkdir -p /workspace/juce-env/cache
 XDG_CACHE_HOME=/workspace/juce-env/cache xvfb-run -a \
-    /workspace/juce-env/yinyang-build/YinyangProcessorTests --editor
+    /workspace/juce-env/yinyang-build/YinyangCompressorTests --editor
 ```
 
 The editor check also exercises switch clicks, automation, and history expiry.
@@ -167,25 +167,25 @@ VariTransient controls. To regenerate them after activating the local build
 environment, run from the repository root:
 
 ```bash
-xvfb-run -a /workspace/juce-env/yinyang-build/YinyangProcessorTests \
+xvfb-run -a /workspace/juce-env/yinyang-build/YinyangCompressorTests \
     --preview-modes "$PWD/projects/YinyangCompressor/Previews"
 ```
 
 Linux artifact:
-`/workspace/juce-env/yinyang-build/YinyangCompressor_artefacts/Debug/VST3/YinYang Compressor.vst3`.
+`/workspace/juce-env/yinyang-build/YinyangCompressor_artefacts/Debug/VST3/Yinyang Compressor.vst3`.
 Linux VST3 binaries cannot load in Logic on macOS.
 
 ## Download a Windows VST3 using GitHub Actions
 
 You can build Windows x64 binaries from a Mac using GitHub's hosted runner.
-The workflow is [YinYang Compressor - Windows VST3](../../.github/workflows/character-compressor-windows.yml).
+The workflow is [Yinyang Compressor and Shun De-Esser - Windows VST3](../../.github/workflows/yinyang-shun-windows.yml).
 
 1. Open the repository's **Actions** tab. If GitHub has disabled workflows in
    this fork, enable Actions first.
-2. Open **YinYang Compressor - Windows VST3** and select the latest successful
+2. Open **Yinyang Compressor and Shun De-Esser - Windows VST3** and select the latest successful
    run for `feature/character-compressor` (or `master` after merging).
-3. Under **Artifacts**, download **YinYang-Compressor-Windows-x64-VST3**.
-4. Extract the ZIP and keep the complete `YinYang Compressor.vst3` folder.
+3. Under **Artifacts**, download **YinyangCompressor-Windows-x64-VST3**.
+4. Extract the ZIP and keep the complete `Yinyang Compressor.vst3` folder.
    On Windows, copy it to `C:\Program Files\Common Files\VST3\`, then rescan
    plug-ins in the Windows DAW. This binary is for Windows x64 hosts.
 
@@ -208,13 +208,13 @@ JUCE repository root, use a separate build directory from any Intel build:
 ```bash
 cmake -S projects/YinyangCompressor -B build-yinyang-arm64 -G Xcode \
     -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
-    -DYINYANG_BUILD_TESTS=OFF
+    -DYINYANG_COMPRESSOR_BUILD_TESTS=OFF
 cmake --build build-yinyang-arm64 --config Release \
     --target YinyangCompressor_VST3 YinyangCompressor_AU --parallel 4
 ```
 
 Bundles appear in `build-yinyang-arm64/YinyangCompressor_artefacts/Release/`
-under `VST3/YinYang Compressor.vst3` and `AU/YinYang Compressor.component`.
+under `VST3/Yinyang Compressor.vst3` and `AU/Yinyang Compressor.component`.
 Replace your installed copies with these complete bundles and restart the host.
 DawDreamer requires an absolute bundle path and matching Python/plug-in architecture.
 Logic loads the AU. These commands build without running tests.
@@ -237,28 +237,29 @@ cmake --build build-yinyang-mac --config Release \
 ```
 
 The AU is at:
-`build-yinyang-mac/YinyangCompressor_artefacts/Release/AU/YinYang Compressor.component`.
+`build-yinyang-mac/YinyangCompressor_artefacts/Release/AU/Yinyang Compressor.component`.
 To install a new development build in your user plug-in folder:
 
 ```bash
 mkdir -p "$HOME/Library/Audio/Plug-Ins/Components"
-ditto "build-yinyang-mac/YinyangCompressor_artefacts/Release/AU/YinYang Compressor.component" \
-    "$HOME/Library/Audio/Plug-Ins/Components/YinYang Compressor.component"
+ditto "build-yinyang-mac/YinyangCompressor_artefacts/Release/AU/Yinyang Compressor.component" \
+    "$HOME/Library/Audio/Plug-Ins/Components/Yinyang Compressor.component"
 auval -v aufx Chc1 Chra
 ```
 
 Restart Logic and check Plug-in Manager. Add **Audio FX → Audio Units →
-J-SONIC → YinYang Compressor** to a mono or stereo audio track.
+J-SONIC → Yinyang Compressor** to a mono or stereo audio track.
 Start with low monitor levels, transformer off, output at 0 dB, and adjust
 threshold while watching gain reduction. Confirm bypass, all four models,
 transformer, automation, session save/reopen, and mono/stereo playback.
 
 If building this folder separately, provide the JUCE checkout with
 `-DJUCE_SOURCE_DIR=/path/to/JUCE`. The project and build targets are named
-`YinyangCompressor`; the host-visible product remains **YinYang Compressor**.
-Manufacturer `Chra`, plug-in code `Chc1`, bundle ID `audio.character.compressor`,
-and the legacy `CharacterCompressorState` root are preserved so existing DAW
-sessions and automation remain compatible.
+`YinyangCompressor`; the host-visible product is **Yinyang Compressor**.
+Its bundle ID is `audio.jsonic.yinyangcompressor` and its state root is
+`YinyangCompressorState`. The old Character Compressor identity and state root
+are no longer used. Manufacturer `Chra` and plug-in code `Chc1` identify the
+AU type shown in the validation command above.
 
 ## Development records and licensing
 

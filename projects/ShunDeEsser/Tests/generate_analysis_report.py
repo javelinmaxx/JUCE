@@ -114,7 +114,7 @@ def render(source, png_path, pdf_path):
                             top=0.83, bottom=0.17, hspace=0.48, wspace=0.28)
     axes = np.array([[fig.add_subplot(grid[0, 0]), fig.add_subplot(grid[0, 1])],
                      [fig.add_subplot(grid[1, 0]), fig.add_subplot(grid[1, 1])]])
-    fig.suptitle("SHUN DE-ESS  |  DETECTOR & ATTENUATOR TEST", color="#f2f5f7",
+    fig.suptitle("Shun De-Esser  |  DETECTOR & ATTENUATOR TEST", color="#f2f5f7",
                  fontsize=19, fontweight="bold", x=0.08, y=0.955, ha="left")
     fig.text(0.08, 0.905,
              "Deterministic 48 kHz mocks: fixed detail for Q sweep; swept tone plus gated sibilance noise pulses",
@@ -272,7 +272,7 @@ def render(source, png_path, pdf_path):
     for path in (png_path, pdf_path):
         Path(path).parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(png_path, dpi=180, facecolor=fig.get_facecolor())
-    fig.savefig(pdf_path, facecolor=fig.get_facecolor(), metadata={"Title": "SHUN DE-ESS analysis report"})
+    fig.savefig(pdf_path, facecolor=fig.get_facecolor(), metadata={"Title": "Shun De-Esser analysis report"})
     plt.close(fig)
 
 
@@ -298,7 +298,7 @@ def render_wide_split_comparison(source):
     fig, axes = plt.subplots(len(all_modes), 4, figsize=(14, 3 * len(all_modes)),
                              facecolor="#182128", sharex=True, sharey=True)
     fig.subplots_adjust(left=0.07, right=0.91, top=0.84, bottom=0.11, wspace=0.16, hspace=0.34)
-    fig.suptitle("SHUN DE-ESS  |  TIME-VARYING SIBILANCE PULSES",
+    fig.suptitle("Shun De-Esser  |  TIME-VARYING SIBILANCE PULSES",
                  color="#f2f5f7", fontsize=16, fontweight="bold", x=0.07, y=0.96, ha="left")
     fig.text(0.07, 0.90, "Same seeded input across modes · quiet baseline releases to unity",
              color="#aebbc5", fontsize=10)
@@ -389,9 +389,9 @@ def render_smart_detector_q(source):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", default="projects/ShunDeEss/Tests/Reports/detector-attenuator-mock-report.md")
-    parser.add_argument("--png", default="projects/ShunDeEss/Tests/Reports/detector-attenuator-mock-report.png")
-    parser.add_argument("--pdf", default="projects/ShunDeEss/Tests/Reports/detector-attenuator-mock-report.pdf")
+    parser.add_argument("--input", default="projects/ShunDeEsser/Tests/Reports/detector-attenuator-mock-report.md")
+    parser.add_argument("--png", default="projects/ShunDeEsser/Tests/Reports/detector-attenuator-mock-report.png")
+    parser.add_argument("--pdf", default="projects/ShunDeEsser/Tests/Reports/detector-attenuator-mock-report.pdf")
     args = parser.parse_args()
     render(args.input, args.png, args.pdf)
     render_wide_split_comparison(args.input)

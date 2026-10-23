@@ -23,8 +23,8 @@ target_compile_definitions(KuoVelvet PUBLIC
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
 target_link_libraries(KuoVelvet PRIVATE juce::juce_audio_utils juce::juce_dsp
     PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
-option(VELVET_BUILD_TESTS "Build Kuo Velvet tests" ON)
-if(VELVET_BUILD_TESTS)
+option(KUO_VELVET_BUILD_TESTS "Build Kuo Velvet tests" ON)
+if(KUO_VELVET_BUILD_TESTS)
     enable_testing()
     add_executable(KuoVelvetTests Tests/ProcessorTests.cpp)
     target_include_directories(KuoVelvetTests PRIVATE "${JUCE_SOURCE_DIR}/modules")

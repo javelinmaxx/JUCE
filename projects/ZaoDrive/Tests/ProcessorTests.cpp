@@ -1082,7 +1082,7 @@ void processorTests()
     check (directAlias > 1.0e-4 && aliasReductionDb > 6.0,
            "4x circuit oversampling reduces the folded third harmonic of a 9 kHz overdrive input");
 
-    // Compare the reused stage against YinYang's original class sample for
+    // Compare the reused stage against Yinyang's original class sample for
     // sample, using Mix=0 to isolate the output transformer from either circuit.
     zao::DriveEngine engine; engine.prepare (48000, 128);
     character::OversampledTransformer original; original.prepare (48000);
@@ -1106,7 +1106,7 @@ void processorTests()
             if (offset > 4096) error = std::max (error, static_cast<double> (std::abs (expected - block.getSample (0, i))));
         }
     }
-    check (error < 1.0e-6, "Zao transformer matches YinYang's implementation sample for sample");
+    check (error < 1.0e-6, "Zao transformer matches Yinyang's implementation sample for sample");
 }
 
 void writeReport (const juce::File& directory)

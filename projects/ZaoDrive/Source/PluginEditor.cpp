@@ -169,7 +169,7 @@ ZaoDriveEditor::ZaoDriveEditor (ZaoDriveProcessor& p) : AudioProcessorEditor (&p
     autoCompensate.setTooltip ("Matches the preview RMS before applying the Output knob as a gain offset.");
     autoCompensateAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "autoCompensate", autoCompensate);
     bypass.setTooltip ("Bypasses the overdrive and transformer while preserving plugin latency.");
-    transformer.setTooltip ("Saves CPU when Off; adds YinYang's transformer coloration when On.");
+    transformer.setTooltip ("Saves CPU when Off; adds Yinyang's transformer coloration when On.");
     bypassAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "bypass", bypass);
     transformerAttachment = std::make_unique<State::ButtonAttachment> (p.parameters, "transformer", transformer);
     constexpr std::array<const char*, 7> ids { "input", "drive", "tone", "output", "mix", "coreDrive", "dcBias" };

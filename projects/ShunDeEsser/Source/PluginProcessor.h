@@ -2,11 +2,11 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_dsp/juce_dsp.h>
 
-class ShunDeEssProcessor final : public juce::AudioProcessor
+class ShunDeEsserProcessor final : public juce::AudioProcessor
 {
 public:
     static constexpr float maximumFilterQ = 4.0f;
-    ShunDeEssProcessor();
+    ShunDeEsserProcessor();
     void prepareToPlay (double sampleRate, int maximumExpectedSamplesPerBlock) override;
     void releaseResources() override;
     bool isBusesLayoutSupported (const BusesLayout&) const override;
@@ -17,7 +17,7 @@ public:
     juce::AudioProcessorParameter* getBypassParameter() const override;
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
-    const juce::String getName() const override { return "SHUN DE-ESS"; }
+    const juce::String getName() const override { return JucePlugin_Name; }
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
@@ -81,5 +81,5 @@ private:
     float sampleRate = 44100;
     float lastDetectorFrequency = -1, lastDetectorQ = -1;
     float lastAttenuationFrequency = -1, lastAttenuationQ = -1, lastDepth = -1;
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ShunDeEssProcessor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ShunDeEsserProcessor)
 };

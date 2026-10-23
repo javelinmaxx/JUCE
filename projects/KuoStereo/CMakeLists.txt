@@ -30,8 +30,8 @@ target_compile_definitions(KuoStereo PUBLIC
 target_link_libraries(KuoStereo PRIVATE juce::juce_audio_utils juce::juce_dsp
     PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
 
-option(KUO_BUILD_TESTS "Build Kuo Stereo tests" ON)
-if(KUO_BUILD_TESTS)
+option(KUO_STEREO_BUILD_TESTS "Build Kuo Stereo tests" ON)
+if(KUO_STEREO_BUILD_TESTS)
     enable_testing()
     add_executable(KuoStereoTests Tests/ProcessorTests.cpp)
     target_include_directories(KuoStereoTests PRIVATE "${JUCE_SOURCE_DIR}/modules")

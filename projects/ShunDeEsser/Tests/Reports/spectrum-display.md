@@ -46,6 +46,6 @@ height and response-curve height use the separately labeled scales.
 Reproduce from a configured JUCE build:
 
 ```bash
-ShunDeEssTests --spectrum-previews projects/ShunDeEss/Previews/ResponseExamples
-ShunDeEssTests --editor /tmp/shun-editor.png
+ShunDeEsserTests --spectrum-previews projects/ShunDeEsser/Previews/ResponseExamples
+ShunDeEsserTests --editor /tmp/shun-editor.png
 ```

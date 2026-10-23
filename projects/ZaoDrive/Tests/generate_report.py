@@ -128,7 +128,7 @@ for model in range(2):
     for enabled, color in ((0, "#777777"), (1, "#b77b45")):
         rows = signal(model, 12, enabled)
         axes[2, model].plot(t, rows["output"][-96:], color=color, label="Transformer On" if enabled else "Transformer Off")
-    axes[2, model].set(title="Shared YinYang transformer: Core 12 dB / Bias 30%", xlabel="Time (ms)", ylabel="Output (FS)")
+    axes[2, model].set(title="Shared Yinyang transformer: Core 12 dB / Bias 30%", xlabel="Time (ms)", ylabel="Output (FS)")
     axes[2, model].legend(fontsize=8)
     axes[2, model].grid(alpha=0.15)
 
@@ -277,7 +277,7 @@ wet residual, which is then added to the aligned clean branch. The shape plots s
 at Drive 12 dB. A 9 kHz op-amp input at Drive 24 dB has **{float(alias['reduction_db']):.1f} dB**
 less folded third harmonic with 4× circuit oversampling than at the host rate
 with the same grey-shaped excitation.
-YinYang's directly included transformer still matches the original class within
+Yinyang's directly included transformer still matches the original class within
 1e-6 FS when isolated with Mix 0%. Dry mix and bypass preserve reported latency.
 Mono/stereo, oversized blocks, parameter recall, and maximum-drive stability
 while Bias/Knee automation changes are also exercised.

@@ -13,19 +13,19 @@ the JUCE framework is included in this repository.
 
 ## Plugin collection
 
-| Plugin | Purpose | Main features |
-| --- | --- | --- |
-| [YinYang Compressor](projects/YinyangCompressor/README.md) | Dynamics | Four compressor models, Yin/Yang operation, sidechain shaping, transformer color |
-| [SHUN DE-ESS](projects/ShunDeEss/README.md) | Sibilance control | Four attenuation modes, relative detection, separate detector and attenuator tuning |
-| [Kuo Stereo](projects/KuoStereo/README.md) | Stereo widening | Adaptive Haas delay, Velvet convolution, spectral transient protection, three-band sound-field meters |
-| [Zao Drive](projects/ZaoDrive/README.md) | Overdrive | Four circuit models, Smart harmonic shaping, Clear contour, waveform preview, Auto compensation |
-| [Ren Transformer](projects/RenTransformer/README.md) | Transformer coloration | YinYang's transformer stage in a compact four-knob interface |
-| [Kuo Velvet](projects/KuoVelvet/README.md) | Convolution widening | Kuo's Velvet stage with Width, Transient, Attack, and Output controls |
-| [Xuan Phase](projects/XuanPhase/README.md) | Phase rotation | Independent low/high rotation, 25 ms lookahead, spectral transient alignment and Auto Depth |
+| Plugin | Project / build target | Purpose | Main features |
+| --- | --- | --- | --- |
+| [Yinyang Compressor](projects/YinyangCompressor/README.md) | `YinyangCompressor` | Dynamics | Four compressor models, Yin/Yang operation, sidechain shaping, transformer color |
+| [Shun De-Esser](projects/ShunDeEsser/README.md) | `ShunDeEsser` | Sibilance control | Four attenuation modes, relative detection, separate detector and attenuator tuning |
+| [Kuo Stereo](projects/KuoStereo/README.md) | `KuoStereo` | Stereo widening | Adaptive Haas delay, Velvet convolution, spectral transient protection, three-band sound-field meters |
+| [Zao Drive](projects/ZaoDrive/README.md) | `ZaoDrive` | Overdrive | Four circuit models, Smart harmonic shaping, Clear contour, waveform preview, Auto compensation |
+| [Ren Transformer](projects/RenTransformer/README.md) | `RenTransformer` | Transformer coloration | Yinyang's transformer stage in a compact four-knob interface |
+| [Kuo Velvet](projects/KuoVelvet/README.md) | `KuoVelvet` | Convolution widening | Kuo's Velvet stage with Width, Transient, Attack, and Output controls |
+| [Xuan Phase](projects/XuanPhase/README.md) | `XuanPhase` | Phase rotation | Independent low/high rotation, 25 ms lookahead, spectral transient alignment and Auto Depth |
 
-### YinYang Compressor
+### Yinyang Compressor
 
-![YinYang Compressor in FET mode, showing dynamics controls, gain-reduction history, sidechain, and transformer sections](projects/YinyangCompressor/Previews/fet.png)
+![Yinyang Compressor in FET mode, showing dynamics controls, gain-reduction history, sidechain, and transformer sections](projects/YinyangCompressor/Previews/fet.png)
 
 Choose **FET**, **VCA**, **Variable-mu**, or **Optical** behavior to shape attacks,
 sustain, and recovery. **Yang** reduces levels above threshold; **Yin** raises
@@ -41,9 +41,9 @@ quieter material toward it.
 [Controls and signal path](projects/YinyangCompressor/README.md) ·
 [Measurements](projects/YinyangCompressor/Measurements/README.md)
 
-### SHUN DE-ESS
+### Shun De-Esser
 
-![SHUN DE-ESS in Brilliant mode with live input spectrum, gold detail bands, and gain-reduction meter](projects/ShunDeEss/Previews/ResponseExamples/brilliant-spectrum.png)
+![Shun De-Esser in Brilliant mode with live input spectrum, gold detail bands, and gain-reduction meter](projects/ShunDeEsser/Previews/ResponseExamples/brilliant-spectrum.png)
 
 Control sibilance with separate tuning for what the plugin detects and what it
 attenuates. The response plot shows both curves over a live input spectrum beside the gain-reduction display.
@@ -56,8 +56,8 @@ attenuates. The response plot shows both curves over a live input spectrum besid
 - Select **Absolute** detection for a fixed threshold, **Listen** to audition
   the detector band, or **Relative** to compare its energy with the full signal.
 
-[Controls and modes](projects/ShunDeEss/README.md) ·
-[Detector and attenuator measurements](projects/ShunDeEss/Tests/Reports/detector-attenuator-mock-report.md)
+[Controls and modes](projects/ShunDeEsser/README.md) ·
+[Detector and attenuator measurements](projects/ShunDeEsser/Tests/Reports/detector-attenuator-mock-report.md)
 
 ### Kuo Stereo
 
@@ -94,7 +94,7 @@ Bias for BJT, Input for op-amp, and Knee for the two passive diode modes.
   separate driver-minus-reference wet residual.
 - **Expected Output** renders a 1 kHz triangle through the current processing.
   **Auto** derives fixed RMS compensation from that reference; Output adds or
-  subtracts gain from the matched level. An optional YinYang transformer adds
+  subtracts gain from the matched level. An optional Yinyang transformer adds
   another stage of coloration.
 
 [Circuit models](projects/ZaoDrive/CIRCUITS.md) ·
@@ -105,7 +105,7 @@ Bias for BJT, Input for op-amp, and Knee for the two passive diode modes.
 
 ![Ren Transformer's compact panel with Core Drive, DC Bias, Mix, and Output knobs and a hover hint](projects/RenTransformer/Previews/ren-transformer-tooltip.png)
 
-Use YinYang's transformer independently: **Core Drive** sets saturation,
+Use Yinyang's transformer independently: **Core Drive** sets saturation,
 **DC Bias** introduces asymmetry, **Mix** blends coloration, and **Output**
 sets the level entering the transformer. The shared stage uses 4× oversampling,
 magnetic hysteresis, and a frequency-dependent transformer response.
@@ -147,7 +147,7 @@ bands red, with white left-channel and gold right-channel traces for applied pha
 
 ### Four approaches to compression
 
-![Measured YinYang compression curves comparing FET, VCA, Variable-mu, and Optical models at the same settings](projects/YinyangCompressor/Measurements/plots/01_compression_curves.png)
+![Measured Yinyang compression curves comparing FET, VCA, Variable-mu, and Optical models at the same settings](projects/YinyangCompressor/Measurements/plots/01_compression_curves.png)
 
 At the same threshold, ratio, knee, and timing settings, the four models produce
 different transfer and gain-reduction curves. These measurements use 48 kHz,
@@ -192,7 +192,7 @@ installing by default. See `./build-macos-all.sh --help` for all options.
 
 **Windows — build VST3:** the manual
 [All Plugins - Windows VST3 workflow](https://github.com/javelinmaxx/Multi-Compressor/actions/workflows/all-plugins-windows.yml)
-packages all seven plugins, including Xuan Phase. For a local YinYang build, use
+packages all seven plugins, including Xuan Phase. For a local Yinyang build, use
 [`build-windows-vst3.ps1`](build-windows-vst3.ps1) with Visual Studio 2022's C++
 tools. The [build guide](docs/BUILDING.md#windows-vst3) covers local commands,
 workflow artifacts, and installation.
@@ -200,7 +200,7 @@ workflow artifacts, and installation.
 **One project — CMake:** for example, build Zao Drive's native VST3:
 
 ```bash
-cmake -S projects/ZaoDrive -B build/zao -DCMAKE_BUILD_TYPE=Release -DZAO_BUILD_TESTS=OFF
+cmake -S projects/ZaoDrive -B build/zao -DCMAKE_BUILD_TYPE=Release -DZAO_DRIVE_BUILD_TESTS=OFF
 cmake --build build/zao --config Release --target ZaoDrive_VST3 --parallel 4
 ```
 
