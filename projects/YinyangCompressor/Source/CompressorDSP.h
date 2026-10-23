@@ -90,7 +90,19 @@ public:
         p.evenHarmonics = safe (p.evenHarmonics, 0, 100, 0);
         p.highTiltDb = safe (p.highTiltDb, 0, 12, 0);
         p.variTransient = safe (p.variTransient, 0, 400, 0);
-        selected = std::clamp (static_cast<int> (p.model), 0, 3);
+        const auto nextModel = std::clamp (static_cast<int> (p.model), 0, 3);
+        if (! firstSet && nextModel != selected && weights[static_cast<size_t> (nextModel)] <= 0.0f)
+        {
+            // Wake from the dominant audible detector rather than stale or
+            // empty history. Subsequent samples follow the new model's law.
+            const auto dominant = static_cast<size_t> (std::max_element (weights.begin(), weights.end()) - weights.begin());
+            for (auto& channel : states)
+            {
+                channel[static_cast<size_t> (nextModel)] = channel[dominant];
+                channel[static_cast<size_t> (nextModel)].memory = channel[dominant].reduction;
+            }
+        }
+        selected = nextModel;
         targets = { gain (p.inputDb), p.thresholdDb, p.ratio, p.kneeDb,
                     gain (p.outputDb), p.mix, gain (p.driveDb),
                     p.transformer ? 1.0f : 0.0f, p.bypass ? 1.0f : 0.0f,
@@ -148,6 +160,16 @@ public:
             for (size_t m = 0; m < weights.size(); ++m)
                 weights[m] = (1 - smoothing) * (static_cast<int> (m) == selected ? 1.0f : 0.0f)
                            + smoothing * weights[m];
+            // The 20 ms one-pole otherwise never reaches zero. End its tail
+            // below -80 dB (about 185 ms) so outgoing detectors can sleep.
+            float outgoingWeight = 0;
+            for (size_t m = 0; m < weights.size(); ++m)
+                if (static_cast<int> (m) != selected) outgoingWeight += weights[m];
+            if (outgoingWeight < 0.0001f)
+            {
+                weights = {};
+                weights[static_cast<size_t> (selected)] = 1.0f;
+            }
 
             std::array<float, 2> dry {}, driven {}, sensedDetector {};
             std::array<float, 2> detector {};
@@ -184,13 +206,13 @@ public:
                 detector[static_cast<size_t> (ch)] = sensedDetector[static_cast<size_t> (ch)]
                     + values[stereoLink] * (linkedPeak - sensedDetector[static_cast<size_t> (ch)]);
 
-            // Run every model continuously and fade their gain contributions
-            // using the 20 ms model weights. Switching models won't start a cold
-            // detector or cause an abrupt change in the audio path.
+            // Only audible models advance their detectors. Outgoing models
+            // remain alive through the fade, then stop until selected again.
             std::array<float, 2> combinedGain {}, reduction {};
             for (int ch = 0; ch < channelCount; ++ch)
             for (size_t m = 0; m < states[0].size(); ++m)
             {
+                if (weights[m] <= 0.0f) continue;
                 const auto c = static_cast<size_t> (ch);
                 auto& s = states[c][m];
                 // Feedback senses the previous compressed sidechain sample, before
@@ -317,6 +339,7 @@ public:
     }
 
 private:
+    friend struct CompressorTestAccess;
     static constexpr float pi = 3.14159265358979323846f;
     // Indexes into the smoothed value/target arrays above.
     enum Control { input, threshold, ratio, knee, output, mix, drive, transformer, bypass, highTilt, upward, stereoLink, midSide, evenHarmonics, variTransient };

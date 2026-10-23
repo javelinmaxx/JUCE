@@ -63,7 +63,11 @@ four models through this branch; it does not EQ the audio output.
   switch enabled migrate to 6 dB, preserving its former +3 dB midpoint / +6 dB
   high-frequency shelf. The old host parameter remains for session compatibility.
 
-All models remain running while selected model weights crossfade. Continuous
+Only the selected compressor model runs at steady settings. Outgoing models
+run through the existing 20 ms exponential switching fade, then sleep when its
+remaining weight falls below -80 dB (about 185 ms). A newly selected model starts
+from the dominant audible detector's envelope rather than stale history. The
+transformer simulation also stops when Off. Continuous
 gain controls and toggle transitions are smoothed over approximately 20 ms.
 Mono and stereo layouts are supported, with no lookahead and a fixed
 64-sample latency (1.33 ms at 48 kHz), reported to the host for compensation.

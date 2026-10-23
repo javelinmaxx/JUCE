@@ -5,6 +5,19 @@
 #include <random>
 #include <vector>
 
+namespace character
+{
+struct CompressorTestAccess
+{
+    static std::array<float, 4> state (const Compressor& dsp, size_t channel, size_t mode)
+    {
+        const auto& s = dsp.states[channel][mode];
+        return { s.reduction, s.energy, s.feedback, s.memory };
+    }
+    static const auto& weights (const Compressor& dsp) { return dsp.weights; }
+};
+}
+
 namespace
 {
 int checks = 0;
@@ -73,8 +86,62 @@ float steadyUpwardOutput (character::Model model, float inputDb, float ratio,
 }
 }
 
+void inactiveModelTests()
+{
+    using namespace character;
+    for (double rate : { 44100., 48000., 96000., 192000. })
+        for (bool upward : { false, true })
+        {
+            Compressor dsp; dsp.prepare (rate);
+            Parameters p; p.upward = upward; p.ratio = upward ? 2.f : 8.f;
+            int position = 0;
+            const auto process = [&] (int count)
+            {
+                std::vector<float> a (static_cast<size_t> (count)), b (a.size());
+                for (int i = 0; i < count; ++i, ++position)
+                {
+                    a[static_cast<size_t> (i)] = .4f+.15f*std::sin (position*.017f);
+                    b[static_cast<size_t> (i)] = .1f+.03f*std::cos (position*.013f);
+                }
+                run (dsp, a, b, 37);
+                check (std::all_of (a.begin(), a.end(), [] (float x) { return std::isfinite (x); })
+                    && std::all_of (b.begin(), b.end(), [] (float x) { return std::isfinite (x); }),
+                    "sleeping-model switches remain finite in Yin and Yang");
+            };
+            for (int selected : { 0, 1, 2, 3, 0, 3, 2, 1 })
+            {
+                p.model = static_cast<Model> (selected); dsp.setParameters (p);
+                process (static_cast<int> (.2*rate));
+                const auto weights = CompressorTestAccess::weights (dsp);
+                std::array<std::array<std::array<float, 4>, 4>, 2> before {};
+                for (size_t ch = 0; ch < 2; ++ch)
+                    for (size_t m = 0; m < 4; ++m)
+                    {
+                        check (weights[m] == (m == static_cast<size_t> (selected) ? 1.f : 0.f),
+                               "model fade ends exactly at unity with inactive weights zero at every rate");
+                        before[ch][m] = CompressorTestAccess::state (dsp, ch, m);
+                    }
+                p.thresholdDb = p.thresholdDb == -18 ? -25.f : -18.f; dsp.setParameters (p);
+                process (1024);
+                for (size_t ch = 0; ch < 2; ++ch)
+                    for (size_t m = 0; m < 4; ++m)
+                        check ((before[ch][m] != CompressorTestAccess::state (dsp, ch, m))
+                                  == (m == static_cast<size_t> (selected)),
+                               "inactive compressor detectors stay frozen while the selected detector advances");
+            }
+            for (int selected : { 0, 2, 1, 3 })
+            {
+                p.model = static_cast<Model> (selected); dsp.setParameters (p); process (37);
+            }
+            process (static_cast<int> (.2*rate));
+            check (CompressorTestAccess::weights (dsp) == std::array<float, 4> { 0, 0, 0, 1 },
+                   "rapid model automation eventually suspends all outgoing models");
+        }
+}
+
 int main()
 {
+    inactiveModelTests();
     using namespace character;
     // Closed-loop VCA compensation should produce the same steady 4:1 slope
     // as feed-forward FET, despite using a different detector topology.
