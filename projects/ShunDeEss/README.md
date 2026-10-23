@@ -44,7 +44,7 @@ settings: [Wideband default](Previews/ResponseExamples/wideband-default.png),
 ## Spectrum and detail display
 
 The response plot overlays a live **2–16 kHz input spectrum** in grey behind
-its detector and attenuator curves. Spectrum height uses a separate **−84 to
+its detector and attenuator curves. Spectrum height uses a separate **−120 to
 0 dBFS** scale; the left-hand 0/−9/−18 dB labels still describe the response
 curves. Stereo channel powers combine after the FFT, so anti-phase channels
 remain visible. The editor performs two 1,024-point Hann-window FFTs at up to
@@ -56,7 +56,11 @@ In **Brilliant**, gold detail bands marked **DETAIL +** identify the peaks
 being restored after broad attenuation. **Smooth** uses the same selected
 bands, marked **DETAIL −**, for additional suppression. Their centres, widths,
 and strength come from the actual smart attenuator's selected frequencies,
-Attenuator Q, band weights, and effective attenuation amount. Shading is a band
+biquad coefficients, band weights, and effective attenuation amount. The
+shading now follows the digital filter's power response, avoiding the wide
+tails of the previous analog amplitude approximation. Both Q controls have a
+maximum of 4; near 6.5 kHz at 48 kHz, the detail filter's −3 dB bandwidth is
+about 4.65 kHz at the default Q 1.2, 2.04 kHz at Q 2.8, and 1.43 kHz at Q 4. Shading is a band
 activity indicator, rather than another dB response curve; it clears in bypass
 and Listen, and fades when processing stops. Wideband and Split-band retain
 the spectrum without smart detail shading.
@@ -64,9 +68,10 @@ the spectrum without smart detail shading.
 ![Brilliant with live input spectrum and gold detail bands](Previews/ResponseExamples/brilliant-spectrum.png)
 ![Smooth with live input spectrum and gold detail bands](Previews/ResponseExamples/smooth-spectrum.png)
 
-[Spectrum display test report](Tests/Reports/spectrum-display.md).
+[Spectrum display test report](Tests/Reports/spectrum-display.md) ·
+[Measured detail bandwidth and quiet-spectrum test](Tests/Reports/detail-bandwidth.md).
 
-Regenerate the four live previews and run their rendering checks with:
+Regenerate the live mode previews and quiet-signal example with:
 
 ```bash
 build-shun-deess/ShunDeEssTests --spectrum-previews projects/ShunDeEss/Previews/ResponseExamples

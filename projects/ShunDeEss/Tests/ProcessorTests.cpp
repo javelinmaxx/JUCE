@@ -1,6 +1,8 @@
 #include "../Source/PluginProcessor.h"
 #include <cmath>
 #include <cstring>
+#include <complex>
+#include <fstream>
 #include <iostream>
 #include <random>
 #include <stdexcept>
@@ -66,6 +68,10 @@ void spectrumTests()
     for (int mode = 0; mode < 4; ++mode)
     {
         ShunDeEssProcessor visible, hidden;
+        if (mode == 0)
+            for (const auto* id : {"q", "attenuationQ"})
+                check (std::abs (visible.parameters.getParameter (id)->convertFrom0to1 (1)-4.f) < 1e-6f,
+                       "Detector and Attenuator Q controls expose the requested maximum of 4");
         for (auto* processor : {&visible, &hidden})
         {
             set (*processor, "mode", static_cast<float> (mode%2));
@@ -112,6 +118,118 @@ void spectrumTests()
         set (visible, "bypass", 1); visible.processBlock (a, midi); visible.readResponseFrame (frame, version);
         check (frame[9] < 1e-7f, "bypass clears the displayed smart detail effect");
     }
+}
+
+void detailBandTests (const juce::File& directory)
+{
+    directory.createDirectory();
+    std::ofstream widths (directory.getChildFile ("detail-bandwidth.csv").getFullPathName().toStdString());
+    std::ofstream curves (directory.getChildFile ("detail-responses.csv").getFullPathName().toStdString());
+    widths << "sample_rate,q,centre_hz,low_hz,high_hz,width_hz,old_analog_width_hz\n";
+    curves << "q,frequency,digital_power,old_display_amplitude\n";
+    for (double rate : {8000., 44100., 48000., 96000.})
+    {
+        double previousWidth = rate;
+        for (float q : {.5f, 1.2f, 2.8f, 4.f})
+        {
+            ShunDeEssProcessor processor;
+            const auto frequency = static_cast<float> (std::min (6500., rate*.3));
+            set (processor, "smart", 1); set (processor, "threshold", -45);
+            set (processor, "frequency", frequency); set (processor, "attenuationQ", q);
+            processor.prepareToPlay (rate, 256); processor.setSpectrumVisible (true);
+            juce::AudioBuffer<float> audio (2, 256); juce::MidiBuffer midi;
+            std::mt19937 random (72); std::uniform_real_distribution<float> noise (-.03f,.03f);
+            ShunDeEssProcessor::ResponseFrame frame {}; uint32_t version = 0; int band = -1;
+            for (int block = 0; block < 32 && band < 0; ++block)
+            {
+                for (int i = 0; i < 256; ++i)
+                {
+                    const auto t = (block*256+i)/rate;
+                    const auto x = noise (random)+.25f*static_cast<float> (std::sin (2*3.141592653589793*frequency*t));
+                    audio.setSample (0,i,x); audio.setSample (1,i,x);
+                }
+                processor.processBlock (audio, midi);
+                if (processor.readResponseFrame (frame, version))
+                    for (int candidate = 0; candidate < 4; ++candidate)
+                        if (frame[static_cast<size_t> (candidate+4)] > .01f
+                            && std::abs (frame[static_cast<size_t> (candidate)]-frequency) < rate/512)
+                        { band = candidate; break; }
+            }
+            check (band >= 0, "bandwidth measurements use a detail filter actually selected by the processor");
+            const auto centre = static_cast<double> (frame[static_cast<size_t> (band)]);
+            const auto power = [&] (double hz) { return ShunDeEssProcessor::detailBandPower (frame, static_cast<size_t> (band), hz); };
+            // Independently render the actual published biquad's impulse, then
+            // measure its DFT to verify the display follows the audio filter.
+            for (double hz : {centre*.5, centre, std::min (rate*.49,centre*1.4)})
+            {
+                const auto at = static_cast<size_t> (12+5*band);
+                double y1 = 0, y2 = 0;
+                std::complex<double> measured {}, phasor (1,0);
+                const auto step = std::polar (1., -2*3.141592653589793*hz/rate);
+                for (int sample = 0; sample < 4096; ++sample)
+                {
+                    const auto input = sample < 3 ? static_cast<double> (frame[at+static_cast<size_t> (sample)]) : 0.;
+                    const auto y = input-frame[at+3]*y1-frame[at+4]*y2;
+                    y2 = y1; y1 = y; measured += y*phasor; phasor *= step;
+                }
+                check (std::abs (std::norm (measured)-power (hz)) < 2e-5,
+                       "gold power profile agrees with the impulse response of the exact DSP coefficients");
+            }
+            const auto halfPower = .5f*power (centre);
+            const auto edge = [&] (double left, double right, bool lower)
+            {
+                for (int i = 0; i < 48; ++i)
+                {
+                    const auto middle = .5*(left+right);
+                    if ((power (middle) >= halfPower) == lower) right = middle; else left = middle;
+                }
+                return .5*(left+right);
+            };
+            const auto low = edge (0,centre,true), high = edge (centre,rate*.5,false);
+            check (high-low < previousWidth, "higher Attenuator Q actually narrows the detail filter at every tested sample rate");
+            previousWidth = high-low;
+            check (power (rate*.5) < 1e-7f, "gold activity ends at Nyquist");
+            widths << rate << ',' << q << ',' << centre << ',' << low << ',' << high << ',' << high-low << ',' << centre/q << '\n';
+            if (std::abs (rate-48000) < 1)
+                for (double hz = 2000; hz <= 16000; hz += 20)
+                {
+                    const auto ratio = hz/centre;
+                    curves << q << ',' << hz << ',' << power (hz) << ','
+                           << 1/std::sqrt (1+std::pow (q*(ratio-1/ratio),2)) << '\n';
+                }
+        }
+    }
+}
+
+void quietSpectrumPreview (const juce::File& directory)
+{
+    ShunDeEssProcessor processor; processor.prepareToPlay (48000,256);
+    std::unique_ptr<juce::AudioProcessorEditor> editor (processor.createEditor());
+    editor->addToDesktop (0); editor->setVisible (true);
+    const auto tick = []
+    {
+        for (int i = 0; i < 4; ++i) { juce::Thread::sleep (15); juce::Timer::callPendingTimersSynchronously(); }
+    };
+    tick(); const auto empty = editor->createComponentSnapshot (editor->getLocalBounds());
+    juce::AudioBuffer<float> audio (2,256); juce::MidiBuffer midi;
+    for (int block = 0; block < 16; ++block)
+    {
+        for (int i = 0; i < 256; ++i)
+        {
+            const auto x = 1e-5f*static_cast<float> (std::sin (2*3.141592653589793*6500*(block*256+i)/48000));
+            audio.setSample (0,i,x); audio.setSample (1,i,-x);
+        }
+        processor.processBlock (audio,midi); juce::Thread::sleep (3); juce::Timer::callPendingTimersSynchronously();
+    }
+    tick(); const auto image = editor->createComponentSnapshot (editor->getLocalBounds());
+    int visiblePixels = 0;
+    for (int x = 184; x < 203; ++x)
+        for (int y = 404; y < 412; ++y) visiblePixels += empty.getPixelAt (x,y) != image.getPixelAt (x,y) ? 1 : 0;
+    check (visiblePixels > 20, "a -100 dBFS anti-phase tone remains visible above the new -120 dBFS spectrum floor");
+    juce::MemoryOutputStream png;
+    check (juce::PNGImageFormat().writeImageToStream (image,png)
+        && directory.getChildFile ("quiet-spectrum.png").replaceWithData (png.getData(),png.getDataSize()),
+        "quiet spectrum preview writes");
 }
 
 void generateSpectrumPreviews (const juce::File& directory)
@@ -735,10 +853,11 @@ int main (int argc, char** argv)
         }
         if (argc > 2 && juce::String (argv[1]) == "--spectrum-previews")
         {
-            spectrumTests(); generateSpectrumPreviews (juce::File (argv[2]));
+            spectrumTests(); detailBandTests (juce::File (argv[2]));
+            generateSpectrumPreviews (juce::File (argv[2])); quietSpectrumPreview (juce::File (argv[2]));
             std::cout << checks << " spectrum checks passed\n"; return 0;
         }
-        spectrumTests();
+        spectrumTests(); detailBandTests (juce::File ("/tmp/shun-detail-tests"));
         ShunDeEssProcessor processor;
         check (processor.getParameters().size() == 15, "all de-esser parameters are registered");
         check (processor.getName() == "SHUN DE-ESS", "plug-in identity is SHUN DE-ESS");

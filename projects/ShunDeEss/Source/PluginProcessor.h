@@ -5,6 +5,7 @@
 class ShunDeEssProcessor final : public juce::AudioProcessor
 {
 public:
+    static constexpr float maximumFilterQ = 4.0f;
     ShunDeEssProcessor();
     void prepareToPlay (double sampleRate, int maximumExpectedSamplesPerBlock) override;
     void releaseResources() override;
@@ -37,8 +38,10 @@ public:
     int readSpectrumSamples (SpectrumSample*, int maximum) noexcept;
     float spectrumSampleRate() const noexcept { return displaySampleRate.load (std::memory_order_relaxed); }
     // Four selected centre frequencies, four DSP weights, Q, effective amount,
-    // spectral mode (0/2/3), and sample rate. Published together, without locks.
-    using ResponseFrame = std::array<float, 12>;
+    // spectral mode (0/2/3), sample rate, then each band's actual five
+    // normalized biquad coefficients. Published together, without locks.
+    using ResponseFrame = std::array<float, 32>;
+    static float detailBandPower (const ResponseFrame&, size_t band, double frequency) noexcept;
     bool readResponseFrame (ResponseFrame&, uint32_t&) const noexcept;
 
 private:
@@ -69,7 +72,7 @@ private:
     std::array<SpectrumSample, spectrumCapacity> spectrumSamples {};
     std::atomic<bool> spectrumVisible { false };
     std::atomic<float> displaySampleRate { 44100 };
-    std::array<std::atomic<float>, 12> responseData {};
+    std::array<std::atomic<float>, 32> responseData {};
     std::atomic<uint32_t> responseVersion { 0 };
     float spectralFlatness = 0, spectralAttenuation = 0;
     bool spectralMode = false;

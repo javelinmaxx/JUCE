@@ -25,9 +25,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout ShunDeEssProcessor::createPa
             juce::AudioParameterFloatAttributes().withLabel (unit)));
     };
     addFloat ("frequency", "Detector frequency", 2000, 12000, 10, 6500, 6000, "Hz");
-    addFloat ("q", "Detector bandwidth", 0.5f, 4, 0.01f, 1.4f, 1.2f, "Q");
+    addFloat ("q", "Detector bandwidth", 0.5f, maximumFilterQ, 0.01f, 1.4f, 1.2f, "Q");
     addFloat ("attenuationFrequency", "Attenuation frequency", 2000, 16000, 10, 6500, 7000, "Hz");
-    addFloat ("attenuationQ", "Attenuation Q", 0.5f, 4, 0.01f, 1.2f, 1.2f, "Q");
+    addFloat ("attenuationQ", "Attenuation Q", 0.5f, maximumFilterQ, 0.01f, 1.2f, 1.2f, "Q");
     addFloat ("threshold", "Threshold", -60, 0, 0.1f, -28, -30, "dB");
     addFloat ("depth", "Maximum reduction", 0, 18, 0.1f, 8, 8, "dB");
     addFloat ("attack", "Attack", 0.1f, 20, 0.01f, 1, 2, "ms");
@@ -146,7 +146,7 @@ void ShunDeEssProcessor::analyseSpectralDetail (float detectorFrequency, float d
         const auto hz = static_cast<float> (bestBin) * sampleRate / fftSize;
         sparkleFrequencies[static_cast<size_t> (pick)] = hz;
         const auto omega = 2.0f * pi * hz / sampleRate;
-        const auto alpha = std::sin (omega) / (2.0f * std::clamp (attenuationQ, 0.5f, 4.0f));
+        const auto alpha = std::sin (omega) / (2.0f * std::clamp (attenuationQ, 0.5f, maximumFilterQ));
         auto& f = sparkleFilters[static_cast<size_t> (pick)];
         f = { alpha, 0.0f, -alpha, -2.0f * std::cos (omega), 1.0f - alpha };
         const auto inv = 1.0f / (1.0f + alpha);
@@ -189,8 +189,8 @@ void ShunDeEssProcessor::updateFilterCoefficients (float detectorFrequency, floa
     const auto nyquistLimit = sampleRate * 0.45f;
     detectorFrequency = std::clamp (detectorFrequency, 2000.0f, std::min (12000.0f, nyquistLimit));
     attenuationFrequency = std::clamp (attenuationFrequency, 2000.0f, std::min (16000.0f, nyquistLimit));
-    detectorQ = std::clamp (detectorQ, 0.5f, 4.0f);
-    attenuationQ = std::clamp (attenuationQ, 0.5f, 4.0f);
+    detectorQ = std::clamp (detectorQ, 0.5f, maximumFilterQ);
+    attenuationQ = std::clamp (attenuationQ, 0.5f, maximumFilterQ);
     maximumReduction = std::clamp (maximumReduction, 0.0f, 18.0f);
 
     const auto normalize = [] (BiquadCoefficients& c, float a0)
@@ -265,6 +265,23 @@ int ShunDeEssProcessor::readSpectrumSamples (SpectrumSample* destination, int ma
     spectrumFifo.finishedRead (n1+n2);
     return n1+n2;
 }
+float ShunDeEssProcessor::detailBandPower (const ResponseFrame& frame, size_t band, double frequency) noexcept
+{
+    const auto rate = static_cast<double> (frame[11]);
+    if (band >= 4 || frequency <= 0 || frequency >= rate*.5) return 0;
+    // Evaluate the exact normalized biquad used by the audio path, rather
+    // than an analog Q approximation (which grows inaccurate near Nyquist).
+    const auto omega = 2*juce::MathConstants<double>::pi*frequency/rate;
+    const auto cosine = std::cos (omega), sine = std::sin (omega);
+    const auto at = 12+5*band;
+    const auto numeratorReal = (frame[at]+frame[at+2])*cosine+frame[at+1];
+    const auto numeratorImaginary = (frame[at]-frame[at+2])*sine;
+    const auto denominatorReal = (1.0+frame[at+4])*cosine+frame[at+3];
+    const auto denominatorImaginary = (1.0-frame[at+4])*sine;
+    const auto denominator = denominatorReal*denominatorReal+denominatorImaginary*denominatorImaginary;
+    return denominator > 1e-20 ? static_cast<float> ((numeratorReal*numeratorReal+numeratorImaginary*numeratorImaginary)/denominator) : 0.f;
+}
+
 bool ShunDeEssProcessor::readResponseFrame (ResponseFrame& frame, uint32_t& version) const noexcept
 {
     const auto before = responseVersion.load();
@@ -405,6 +422,10 @@ void ShunDeEssProcessor::process (juce::AudioBuffer<float>& buffer, bool hostByp
         for (size_t band = 0; band < 4; ++band)
         {
             frame[band] = sparkleFrequencies[band]; frame[band+4] = sparkleWeights[band];
+            const auto& filter = sparkleFilters[band];
+            const auto at = 12+5*band;
+            frame[at] = filter.b0; frame[at+1] = filter.b1; frame[at+2] = filter.b2;
+            frame[at+3] = filter.a1; frame[at+4] = filter.a2;
         }
         frame[8] = attenuationQ;
         frame[9] = bypass || listen ? 0.f : displaySpectralAmount;

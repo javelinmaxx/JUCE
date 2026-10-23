@@ -566,7 +566,7 @@ ShunDeEssEditor::ShunDeEssEditor (ShunDeEssProcessor& p)
     applyTheme();
     lastTick = juce::Time::getMillisecondCounterHiRes() * 0.001;
     editorScaling::enable (*this, designWidth, designHeight);
-    responseHint.setTooltip ("Shows the stereo input spectrum from minus 84 to 0 dBFS behind the response curves, with active Brilliant restoration or Smooth suppression bands shaded in gold.");
+    responseHint.setTooltip ("Shows the stereo input spectrum from minus 120 to 0 dBFS behind the response curves, with active Brilliant restoration or Smooth suppression bands shaded in gold.");
     addAndMakeVisible (responseHint);
     startTimerHz (30);
 }
@@ -722,8 +722,8 @@ void ShunDeEssEditor::paintResponseDisplay (juce::Graphics& g)
     inputSpectrum.startNewSubPath (plot.getX(), plot.getBottom());
     for (size_t bin = 0; bin < spectrumLevels.size(); ++bin)
     {
-        const auto db = juce::Decibels::gainToDecibels (spectrumLevels[bin], -84.f);
-        const auto y = plot.getBottom()-plot.getHeight()*std::clamp ((db+84)/84, 0.f, 1.f);
+        const auto db = juce::Decibels::gainToDecibels (spectrumLevels[bin], -120.f);
+        const auto y = plot.getBottom()-plot.getHeight()*std::clamp ((db+120)/120, 0.f, 1.f);
         inputSpectrum.lineTo (plot.getX()+plot.getWidth()*static_cast<float> (bin)/63, y);
     }
     inputSpectrum.lineTo (plot.getRight(), plot.getBottom()); inputSpectrum.closeSubPath();
@@ -742,9 +742,8 @@ void ShunDeEssEditor::paintResponseDisplay (juce::Graphics& g)
             detail.startNewSubPath (plot.getX(), plot.getBottom());
             for (int point = 0; point <= 160; ++point)
             {
-                const auto ratio = 2000.f*std::pow (8.f, point/160.f)/centre;
-                const auto q = std::clamp (responseFrame[8], .5f, 4.f);
-                const auto shape = 1.f/std::sqrt (1+std::pow (q*(ratio-1.f/ratio), 2.f));
+                const auto frequency = 2000.f*std::pow (8.f, point/160.f);
+                const auto shape = std::clamp (ShunDeEssProcessor::detailBandPower (responseFrame, band, frequency), 0.f, 1.f);
                 detail.lineTo (plot.getX()+plot.getWidth()*point/160,
                                plot.getBottom()-plot.getHeight()*.85f*shape*std::sqrt (strength));
             }
@@ -754,7 +753,7 @@ void ShunDeEssEditor::paintResponseDisplay (juce::Graphics& g)
         }
     g.restoreState();
     g.setFont (juce::FontOptions (7.f)); g.setColour (theme.secondary);
-    g.drawText ("INPUT  -84..0 dBFS", 42, 392, 150, 11, juce::Justification::centredLeft);
+    g.drawText ("INPUT  -120..0 dBFS", 42, 392, 150, 11, juce::Justification::centredLeft);
     if (mode >= 2)
     {
         g.setColour (detailGold);

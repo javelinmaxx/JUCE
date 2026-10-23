@@ -1,12 +1,15 @@
 # SHUN spectrum and smart-detail display
 
+See [measured detail bandwidth and quiet-signal validation](detail-bandwidth.md)
+for the corrected digital-power shading and expanded −120 dBFS floor.
+
 The response display now overlays a live stereo input spectrum with gold
 activity bands from the actual smart attenuator. Rendering keeps the Ebony
 palette and existing response controls.
 
 | Mode | Spectrum | Gold detail activity |
 | --- | --- | --- |
-| Wideband | 2–16 kHz input, −84 to 0 dBFS | None |
+| Wideband | 2–16 kHz input, −120 to 0 dBFS | None |
 | Split-band | Same | None |
 | Brilliant | Same | Selected peaks restored, labeled DETAIL + |
 | Smooth | Same | Selected peaks suppressed, labeled DETAIL − |
@@ -18,8 +21,8 @@ palette and existing response controls.
 
 ## Validation
 
-The full processor/editor suite passes 257 checks; Linux VST3 and Standalone
-builds also pass. The dedicated `--spectrum-previews` run passes 96 checks, using seeded noise
+The full processor/editor suite passes 419 checks; Linux VST3 and Standalone
+builds also pass. The dedicated `--spectrum-previews` run passes 260 checks, using seeded noise
 and gated 6.5/10 kHz tones with the right channel opposite in polarity.
 
 - Visible/hidden processor comparisons in all four modes stay within 0.0000001
