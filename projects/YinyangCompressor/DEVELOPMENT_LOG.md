@@ -756,3 +756,23 @@ implementation, not a production-release claim.
   state root, bundle ID, documentation, and packaging references.
 - All processors obtain their host-visible name from CMake's JucePlugin_Name.
 - Earlier dated entries above retain their historical names and decisions.
+
+### 2026-10-24 — whole-path 4× oversampling
+- Moved sidechain processing, detector envelopes, compression, M/S, control
+  smoothing, mix, output gain, and transformer into one 4× path. The shared
+  257-tap polyphase converter retains 64 samples of host latency.
+- Split the converter and transformer equations into Oversampling4x and
+  TransformerCore; Ren and Zao retain the original standalone 4× wrapper.
+  Captured transformer output is bit-identical across the refactor at three rates.
+- Kept selected DSP hot during bypass, with an exact delayed host-rate reference.
+  Zero Mix is now the band-limited dry signal. Inactive models and Transformer
+  Off still stop their respective equations; conversion stays active.
+- Skipped identity exponent operations in unchanged VariTransient envelopes.
+- Added whole-path alias/rate/single-converter tests, a repeatable CPU benchmark,
+  and Tests/Reports/oversampling.md with raw measurements and a plot. The former
+  measurement collection is explicitly identified as an earlier DSP snapshot.
+- Validation: all four Yinyang CTest suites, 30 focused output-stage checks,
+  Ren's 40 checks, and Zao's 3,144 checks pass; Linux VST3/Standalone builds pass.
+  Stress-tone alias reductions range from 9 to 26 dB. Local optimized timings
+  show about 18–34% extra processing time with Transformer On and 6.7–8.0× with
+  it Off, where the previous implementation did not run the converter.

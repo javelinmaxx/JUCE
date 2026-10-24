@@ -4,6 +4,13 @@ A first working compressor plug-in with selectable **feed-forward FET**,
 **feedback VCA**, **variable-mu**, and **optical** behavior, plus an optional
 output transformer stage. Built with JUCE and C++17.
 
+The entire signal path runs at **4× the host sample rate**, including the
+sidechain, detector envelopes, control ramps, compression, M/S processing,
+wet/dry mix, output gain, and optional transformer. A single polyphase FIR
+converter surrounds this path; the transformer uses its core directly rather
+than adding another conversion stage. [Oversampling measurements](Tests/Reports/oversampling.md)
+compare folded harmonics with the same compressor equations running at 1×.
+
 These are behavioral models, not measured recreations of particular hardware.
 The transformer adds flux-dependent saturation. Its generated distortion is
 isolated as a nonlinear residual, filtered by a **500 Hz second-order Butterworth
@@ -14,15 +21,15 @@ transformer response: a 20 Hz second-order high-pass (Q 1.0) models
 low-frequency phase lead and droop, while a 19 kHz second-order low-pass
 (Q 1.2) models high-frequency phase lag and resonance from leakage inductance
 and winding capacitance. These are provisional design values. The transformer runs at fixed
-4× the host sample rate, with 257-tap FIR interpolation and decimation filters. This is
+4× the host sample rate inside the whole-path 257-tap FIR converter. This is
 intended to reduce aliasing; strong drive can still produce residual aliases. It
 is a prototype for listening and refinement, not a release claimed to match
 analog hardware.
 
 ## Controls and signal path
 
-Input → stereo-linked compressor → wet/dry mix → output gain → optional
-transformer → output. Bypass returns the original input delayed by the same 64 samples as the
+4× upsampling → input gain / stereo-linked compressor → wet/dry mix → output
+gain → optional transformer → downsampling → output. Bypass returns the original input delayed by the same 64 samples as the
 processing path, with a short transition to avoid switching clicks. The mix's dry branch is the original input before
 input gain. Output gain and transformer affect both branches of the mix.
 
@@ -72,8 +79,12 @@ gain controls and toggle transitions are smoothed over approximately 20 ms.
 Mono and stereo layouts are supported, with no lookahead and a fixed
 64-sample latency (1.33 ms at 48 kHz), reported to the host for compensation.
 The transformer, clean output, and bypass paths retain this latency even when
-the transformer is disabled. Both resampling filters have 257 taps; only the
-transformer stage runs at 4×, and its filter coefficients use that higher rate.
+the transformer is disabled. Both resampling filters have 257 taps. At zero Mix,
+the dry signal still passes through these linear-phase filters; host/plugin
+bypass returns an exact latency-aligned original input while keeping the full
+wet path hot. Attack, release and control smoothing retain their times in
+milliseconds at the higher internal rate. Inactive models and the disabled
+transformer core still stop processing, but the shared converter remains active.
 Host automation and session state recall cover all 20 parameters. Existing
 parameter IDs/order are retained; High Tilt, Upward, Stereo Link, Mid/Side,
 Even harmonics, VariTransient, and SC High Tilt are appended. AU version hints

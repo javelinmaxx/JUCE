@@ -37,6 +37,8 @@ quieter material toward it.
   linking and Mid/Side operation to control the stereo response.
 - Add optional oversampled transformer coloration with Core Drive and DC Bias,
   while monitoring the gain meter and scrolling history.
+- Process the complete signal path at 4× with one shared converter and a fixed
+  64-sample host latency.
 
 [Controls and signal path](projects/YinyangCompressor/README.md) ·
 [Measurements](projects/YinyangCompressor/Measurements/README.md)

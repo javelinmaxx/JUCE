@@ -238,8 +238,8 @@ int main()
 
         check (std::abs (steadyUpwardOutput (model, quietDb, 1) - Compressor::gain (quietDb)) < 1.0e-6f,
                "upward 1:1 remains unity for every model");
-        check (steadyUpwardOutput (model, quietDb, ratio, 48000, 0) == Compressor::gain (quietDb),
-               "zero wet mix preserves the exact latency-aligned dry signal");
+        check (std::abs (steadyUpwardOutput (model, quietDb, ratio, 48000, 0) - Compressor::gain (quietDb)) < 1.0e-6f,
+               "zero wet mix preserves DC level through the shared 4x filters");
         check (steadyUpwardOutput (model, quietDb, ratio, 48000, 1, true) == Compressor::gain (quietDb),
                "bypass preserves the exact latency-aligned input");
     }
@@ -351,7 +351,13 @@ int main()
     dry.setParameters (p);
     auto a = source, b = source;
     run (dry, a, b);
-    check (a == delayed (source) && b == delayed (source), "zero mix is exact latency-aligned dry signal");
+    Compressor flat;
+    flat.prepare (48000);
+    Parameters flatParameters; flatParameters.ratio = 1;
+    flat.setParameters (flatParameters);
+    auto filteredLeft = source, filteredRight = source;
+    run (flat, filteredLeft, filteredRight);
+    check (a == filteredLeft && b == filteredRight, "zero mix is the latency-aligned, band-limited dry signal");
 
     p.bypass = true; p.mix = 1; p.outputDb = 18; p.transformer = true;
     Compressor bypass;
@@ -371,8 +377,10 @@ int main()
     run (impulse, a, b, 17);
     check (std::distance (a.begin(), std::max_element (a.begin(), a.end())) == 64,
            "clean impulse arrives at the declared 64-sample latency");
-    check (a[64] == 1 && std::count (a.begin(), a.end(), 0.0f) == 255,
-           "disabled transformer introduces only an exact delay");
+    float asymmetry = 0;
+    for (size_t i = 0; i <= 64; ++i) asymmetry = std::max (asymmetry, std::abs (a[i]-a[128-i]));
+    check (a[64] > .85f && a[64] < 1.f && asymmetry < 1e-6f,
+           "Transformer Off retains the shared linear-phase anti-alias filters, centered at 64 samples");
 
     Compressor osA, osB;
     osA.prepare (48000); osB.prepare (48000);
@@ -382,7 +390,7 @@ int main()
     run (osA, osLeft, osRight, 256);
     run (osB, osOtherLeft, osOtherRight, 17);
     check (osLeft == osOtherLeft && osRight == osOtherRight,
-           "4x transformer processing is invariant to block partitioning");
+           "full 4x processing is invariant to block partitioning");
 
     // Automation should ramp rather than instantaneously jump to a new gain/model.
     Compressor automated;

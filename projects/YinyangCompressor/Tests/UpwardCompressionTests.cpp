@@ -92,8 +92,8 @@ void testModelCurves()
 
         check (std::abs (steadyOutput (model, quietDb, 1) - Compressor::gain (quietDb)) < 1.0e-6f,
                "1:1 ratio stays at unity in Upward mode");
-        check (steadyOutput (model, quietDb, ratio, 48000, true, 0) == Compressor::gain (quietDb),
-               "zero wet mix remains an exact latency-aligned dry signal");
+        check (std::abs (steadyOutput (model, quietDb, ratio, 48000, true, 0) - Compressor::gain (quietDb)) < 1.0e-6f,
+               "zero wet mix retains DC level through the shared 4x filters");
         check (steadyOutput (model, quietDb, ratio, 48000, true, 1, true) == Compressor::gain (quietDb),
                "bypass remains an exact latency-aligned input");
     }

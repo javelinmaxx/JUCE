@@ -6,7 +6,7 @@
 namespace character
 {
 // RBJ high shelf, S = 1; 1.5 kHz is its half-gain midpoint.
-// Run in the sidechain at host rate, before detector rectification.
+// Run at the caller's sidechain rate, before detector rectification.
 class HighTilt
 {
 public:

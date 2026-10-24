@@ -28,7 +28,8 @@ struct Parameters
 class Compressor
 {
 public:
-    static constexpr int latencySamples = OversampledTransformer::latencySamples;
+    static constexpr int oversamplingFactor = Oversampling4x::factor;
+    static constexpr int latencySamples = Oversampling4x::latencySamples;
 
     // Convert between the linear signal/envelope domain and the dB control
     // domain. The floor keeps silence and tiny numerical residues finite.
@@ -42,8 +43,10 @@ public:
     {
         // Ignore invalid host rates. Prepare filters once here so the audio
         // callback only runs fixed-coefficient, fixed-storage DSP.
-        sampleRate = std::isfinite (newSampleRate) && newSampleRate >= 8000
-                   ? newSampleRate : 44100;
+        const auto hostRate = std::isfinite (newSampleRate) && newSampleRate >= 8000
+                            ? newSampleRate : 44100;
+        sampleRate = hostRate * oversamplingFactor;
+        for (auto& converter : converters) converter.prepare();
         smoothing = coefficient (20);
         for (auto& t : transformers)
             t.prepare (sampleRate);
@@ -57,11 +60,12 @@ public:
         // Clear detector memories, coloration filters, and latency lines when
         // the host starts a new playback or explicitly resets the processor.
         states = {};
+        for (auto& converter : converters) converter.reset();
         for (auto& t : transformers)
             t.reset();
         for (auto& shelf : sidechainShelves)
             shelf.reset();
-        cleanDelay = bypassDelay = {};
+        bypassDelay = {};
         delayPosition = 0;
         hpInput = hpOutput = {};
         meterReduction = 0;
@@ -138,15 +142,44 @@ public:
 
     void process (float* const* channels, int channelCount, int frames) noexcept
     {
-        // Process in sample order so envelope and filter states remain
-        // continuous across host blocks of any size.
         channelCount = std::clamp (channelCount, 0, 2);
         if (channelCount == 0 || frames <= 0)
             return;
-
         for (auto& shelf : sidechainShelves)
             shelf.setGainDb (values[highTilt]);
         meterReduction = 0;
+        for (int sample = 0; sample < frames; ++sample)
+        {
+            std::array<Oversampling4x::Frame, 2> highRate {};
+            std::array<float, 2> input {};
+            for (int ch = 0; ch < channelCount; ++ch)
+            {
+                const auto c = static_cast<size_t> (ch);
+                input[c] = std::isfinite (channels[ch][sample]) ? channels[ch][sample] : 0.0f;
+                highRate[c] = converters[c].upsample (input[c]);
+            }
+            float* highChannels[] { highRate[0].data(), highRate[1].data() };
+            // Detection, control smoothing, compression, M/S, mix, output and
+            // transformer share this rate. There is no nested 16x converter.
+            processHighRate (highChannels, channelCount, oversamplingFactor);
+            for (int ch = 0; ch < channelCount; ++ch)
+            {
+                const auto c = static_cast<size_t> (ch);
+                const auto wet = converters[c].downsample (highRate[c]);
+                const auto dry = bypassDelay[c][delayPosition];
+                bypassDelay[c][delayPosition] = input[c];
+                // Keep the full wet engine hot in bypass. Only the original
+                // host-rate reference bypasses the anti-aliasing filters.
+                channels[ch][sample] = values[bypass] > 0.99999f ? dry
+                                    : wet + values[bypass] * (dry - wet);
+            }
+            delayPosition = (delayPosition + 1) % static_cast<size_t> (latencySamples);
+        }
+    }
+
+private:
+    void processHighRate (float* const* channels, int channelCount, int frames) noexcept
+    {
         for (int sample = 0; sample < frames; ++sample)
         {
             for (size_t i = 0; i < values.size(); ++i)
@@ -268,8 +301,11 @@ public:
                     const auto grWeight = kneePosition * kneePosition * (3.0f - 2.0f * kneePosition);
                     transientFactor += 3.0f * values[variTransient] * grWeight;
                 }
-                attack = std::pow (attack, 1.0f / transientFactor);
-                release = std::pow (release, transientFactor);
+                if (transientFactor > 1.0f)
+                {
+                    attack = std::pow (attack, 1.0f / transientFactor);
+                    release = std::pow (release, transientFactor);
+                }
                 // In upward mode the control state goes negative as gain rises,
                 // so attack/release must compare gain magnitude, not sign.
                 const auto a = std::abs (desired) > std::abs (s.reduction) ? attack : release;
@@ -279,8 +315,10 @@ public:
                 {
                     // Optical combines its main envelope with a slower memory:
                     // the latter recovers at six times the Release setting.
-                    const auto slowAttack = std::pow (attacks[m], 1.0f / transientFactor);
-                    const auto slowRecovery = std::pow (slowRelease, transientFactor);
+                    const auto slowAttack = transientFactor > 1.0f
+                        ? std::pow (attacks[m], 1.0f / transientFactor) : attacks[m];
+                    const auto slowRecovery = transientFactor > 1.0f
+                        ? std::pow (slowRelease, transientFactor) : slowRelease;
                     const auto slow = std::abs (desired) > std::abs (s.memory) ? slowAttack : slowRecovery;
                     s.memory = desired + slow * (s.memory - desired);
                     gr = 0.65f * gr + 0.35f * s.memory;
@@ -302,28 +340,17 @@ public:
                 // then apply output gain. Transformer coloration follows both.
                 const auto mixed = (dry[c] + values[mix] * (driven[c] * combinedGain[c] - dry[c]))
                                  * values[output];
-                // Skip the 4x oversampler, hysteresis, and transformer filters
-                // while its host parameter is off. The clean path keeps the
-                // existing fixed latency, and re-enabling warms the simulation
-                // while the wet control ramps back in.
+                // The transformer core already receives 4x samples. Off skips
+                // its nonlinear equations; the shared converter stays active.
                 const auto transformerEnabled = targets[transformer] > 0.5f;
                 const auto coloured = transformerEnabled
                     ? transformers[c].process (mixed, values[drive], values[evenHarmonics])
                     : 0.0f;
-                // Delay the clean branch to match the oversampler's 64 samples.
-                // Bypass has its own equally delayed original-input line.
-                const auto clean = cleanDelay[c][delayPosition];
-                const auto delayedDry = bypassDelay[c][delayPosition];
-                cleanDelay[c][delayPosition] = mixed;
-                bypassDelay[c][delayPosition] = dry[c];
                 // Blend transformer coloration independently, after the mix
                 // and output gain. High Tilt changes detector sensitivity only.
-                const auto wet = transformerEnabled
-                    ? clean + values[transformer] * (coloured - clean)
-                    : clean;
-                // Snap the last fraction to ensure settled bypass is sample exact.
-                channels[ch][sample] = values[bypass] > 0.99999f ? delayedDry
-                                    : wet + values[bypass] * (delayedDry - wet);
+                channels[ch][sample] = transformerEnabled
+                    ? mixed + values[transformer] * (coloured - mixed)
+                    : mixed;
             }
             if (channelCount == 2 && values[midSide] > 0)
             {
@@ -334,7 +361,6 @@ public:
                 channels[0][sample] = left * (1.0f - values[midSide]) + decodedLeft * values[midSide];
                 channels[1][sample] = right * (1.0f - values[midSide]) + decodedRight * values[midSide];
             }
-            delayPosition = (delayPosition + 1) % static_cast<size_t> (latencySamples);
         }
     }
 
@@ -378,9 +404,10 @@ private:
     std::array<float, 15> values {}, targets {};
     std::array<float, 4> weights {}, attacks {}, releases {};
     std::array<std::array<Detector, 4>, 2> states {};
-    std::array<OversampledTransformer, 2> transformers {};
+    std::array<Oversampling4x, 2> converters {};
+    std::array<TransformerCore, 2> transformers {};
     std::array<HighTilt, 2> sidechainShelves {};
-    std::array<std::array<float, latencySamples>, 2> cleanDelay {}, bypassDelay {};
+    std::array<std::array<float, latencySamples>, 2> bypassDelay {};
     size_t delayPosition = 0;
     std::array<float, 2> hpInput {}, hpOutput {};
 };
