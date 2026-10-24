@@ -1,4 +1,5 @@
 #pragma once
+#include "../../EditorTooltips.h"
 #include "PluginProcessor.h"
 #include "GainReductionHistory.h"
 
@@ -82,6 +83,7 @@ private:
     YinyangCompressorProcessor& processor;
     CompressorLookAndFeel look;
     juce::TooltipWindow tooltipWindow { this };
+    editorTooltips::TitleHint titleHint { JucePlugin_VersionString };
     juce::ComboBox model;
     AnimatedSwitch transformer { "OUTPUT TRANSFORMER" }, bypass { "BYPASS", true, false, true };
     AnimatedSwitch upward { "YIN/YANG MODE", true, false, true };

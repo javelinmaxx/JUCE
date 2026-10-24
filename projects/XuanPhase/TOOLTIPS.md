@@ -2,6 +2,7 @@
 
 | Control | Tooltip |
 | --- | --- |
+| Plugin title | Developer: J-Sonic Team; Year: 2026; Version: 0.5.0 |
 | Low Phase | Rotates frequencies below the crossover relative to the fixed 50 ms compensated reference, with total correction capped at plus or minus 150 degrees. |
 | Crossover | Sets the smooth transition between the low and high manual phase controls. |
 | High Phase | Rotates frequencies above the crossover relative to the fixed 50 ms compensated reference, with total correction capped at plus or minus 150 degrees. |

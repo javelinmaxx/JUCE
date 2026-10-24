@@ -4,6 +4,7 @@
 using namespace stageStyle;
 KuoVelvetEditor::KuoVelvetEditor (KuoVelvetProcessor& p) : AudioProcessorEditor (&p)
 {
+    addAndMakeVisible (titleHint);
     setOpaque (true); setLookAndFeel (&look);
     look.setColour (juce::TooltipWindow::backgroundColourId, panel);
     look.setColour (juce::TooltipWindow::textColourId, foreground);
@@ -41,6 +42,7 @@ KuoVelvetEditor::KuoVelvetEditor (KuoVelvetProcessor& p) : AudioProcessorEditor 
 }
 void KuoVelvetEditor::resized()
 {
+    titleHint.setBounds (16, 30, 310, 36);
     bypass.setBounds (346, 30, 82, 28);
     for (size_t i = 0; i < sliders.size(); ++i)
     {
@@ -49,6 +51,7 @@ void KuoVelvetEditor::resized()
         sliders[i].setBounds (x, 156, 96, 76);
     }
     const auto scale = editorScaling::transform (*this, designWidth, designHeight);
+    titleHint.setTransform (scale);
     bypass.setTransform (scale);
     for (auto& slider : sliders) slider.setTransform (scale);
     for (auto& label : labels) label.setTransform (scale);

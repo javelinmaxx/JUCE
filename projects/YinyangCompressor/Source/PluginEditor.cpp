@@ -6,6 +6,7 @@
 YinyangCompressorEditor::YinyangCompressorEditor (YinyangCompressorProcessor& p)
     : AudioProcessorEditor (&p), processor (p)
 {
+    addAndMakeVisible (titleHint);
     setOpaque (true);
     setLookAndFeel (&look);
     model.addItemList ({ "FET / Feed-forward", "VCA / Feedback", "Variable-mu", "Optical" }, 1);
@@ -626,6 +627,7 @@ void YinyangCompressorEditor::paintMeter (juce::Graphics& g)
 
 void YinyangCompressorEditor::resized()
 {
+    titleHint.setBounds (24, 30, 420, 38);
     const auto up = [] (int y) { return y - 30; };
     model.setBounds (24, up (98), 500, 32);
     bypass.setBounds (450, up (63), 74, 28);
@@ -678,6 +680,7 @@ void YinyangCompressorEditor::resized()
     transformer.setBounds (241, up (663), 58, 64);
 
     const auto scale = editorScaling::transform (*this, designWidth, designHeight);
+    titleHint.setTransform (scale);
     model.setTransform (scale);
     for (auto& slider : sliders) slider.setTransform (scale);
     for (auto& label : labels) label.setTransform (scale);

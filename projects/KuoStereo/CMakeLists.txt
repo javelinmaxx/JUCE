@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
-project(KuoStereo VERSION 0.1.0 LANGUAGES C CXX)
+include("${CMAKE_CURRENT_LIST_DIR}/../PluginVersion.cmake")
+project(KuoStereo VERSION ${J_SONIC_PLUGIN_VERSION} LANGUAGES C CXX)
 
 set(JUCE_SOURCE_DIR "${CMAKE_CURRENT_LIST_DIR}/../.." CACHE PATH "JUCE checkout")
 add_subdirectory("${JUCE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}/JUCE")

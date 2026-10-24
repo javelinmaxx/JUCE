@@ -1,4 +1,5 @@
 #pragma once
+#include "../../EditorTooltips.h"
 #include "PluginProcessor.h"
 #include "PreviewRenderer.h"
 
@@ -40,6 +41,7 @@ private:
     ZaoDriveProcessor& processor;
     ZaoLookAndFeel look;
     juce::TooltipWindow tooltipWindow { this };
+    editorTooltips::TitleHint titleHint { JucePlugin_VersionString };
     ZaoBypassButton bypass, smart { "SMART" }, clear { "CLEAR" }, autoCompensate { "AUTO" };
     ZaoTransformerSwitch transformer;
     juce::Slider model;

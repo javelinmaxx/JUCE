@@ -1,4 +1,5 @@
 #pragma once
+#include "../../EditorTooltips.h"
 #include "PluginProcessor.h"
 #include "../../StagePluginStyle.h"
 class KuoVelvetEditor final : public juce::AudioProcessorEditor
@@ -12,6 +13,7 @@ private:
     static constexpr int designWidth = 444, designHeight = 260;
     StageLookAndFeel look;
     juce::TooltipWindow tooltipWindow { this };
+    editorTooltips::TitleHint titleHint { JucePlugin_VersionString };
     StageBypassButton bypass;
     std::array<juce::Slider, 4> sliders;
     std::array<juce::Label, 4> labels;

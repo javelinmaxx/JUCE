@@ -1,4 +1,5 @@
 #pragma once
+#include "../../EditorTooltips.h"
 #include "PluginProcessor.h"
 #include "../../StagePluginStyle.h"
 #include "PhaseMeter.h"
@@ -22,6 +23,7 @@ private:
     static constexpr int designWidth = 840, designHeight = 490;
     StageLookAndFeel look;
     juce::TooltipWindow tooltipWindow { this };
+    editorTooltips::TitleHint titleHint { JucePlugin_VersionString };
     StageBypassButton bypass, automatic;
     std::array<juce::Slider, 6> sliders;
     std::array<juce::Label, 6> labels;

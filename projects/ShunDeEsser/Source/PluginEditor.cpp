@@ -453,6 +453,7 @@ ShunDeEsserEditor::ShunDeEsserEditor (ShunDeEsserProcessor& p)
     : AudioProcessorEditor (&p), processor (p),
       theme (ebonyTheme())
 {
+    addAndMakeVisible (titleHint);
     setOpaque (true);
     setLookAndFeel (&look);
     addAndMakeVisible (algorithm);
@@ -889,6 +890,7 @@ void ShunDeEsserEditor::paintMeter (juce::Graphics& g)
 
 void ShunDeEsserEditor::resized()
 {
+    titleHint.setBounds (24, 38, 410, 38);
     const auto up = [] (int y) { return y - 80; };
     bypass.setBounds (450, 33, 74, 28);
     const auto place = [this, &up] (size_t index, int x, int y, int width, int height)
@@ -914,6 +916,7 @@ void ShunDeEsserEditor::resized()
     algorithm.setBounds (205, up (702) + 19, 112, 65);
 
     const auto scale = editorScaling::transform (*this, designWidth, designHeight);
+    titleHint.setTransform (scale);
     responseHint.setBounds (24, 340, 300, 105);
     responseHint.setTransform (scale);
     bypass.setTransform (scale);

@@ -4,6 +4,7 @@
 
 | Control | Hover hint |
 | --- | --- |
+| Plugin title | Developer: J-Sonic Team; Year: 2026; Version: 0.5.0 |
 | Compressor model | Selects the compressor model used for detection and gain reduction. |
 | Output transformer | Saves CPU when Off; adds transformer color when On. |
 | Bypass | Bypasses compression and coloration for a direct comparison. |

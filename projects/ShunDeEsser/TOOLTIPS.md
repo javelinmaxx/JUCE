@@ -4,6 +4,7 @@
 
 | Control | Hover hint |
 | --- | --- |
+| Plugin title | Developer: J-Sonic Team; Year: 2026; Version: 0.5.0 |
 | Mode | Selects Wideband, Split, Brilliant, or Smooth de-essing. |
 | Bypass | Bypasses de-essing for a direct comparison. |
 | Detector mode | Selects Absolute level detection, Listen monitoring, or Relative band-to-full-signal detection. |

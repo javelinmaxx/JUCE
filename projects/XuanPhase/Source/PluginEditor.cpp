@@ -4,6 +4,7 @@
 using namespace stageStyle;
 XuanPhaseEditor::XuanPhaseEditor (XuanPhaseProcessor& p) : AudioProcessorEditor (&p), ComponentMovementWatcher (this), processor (p), meter (p)
 {
+    addAndMakeVisible (titleHint);
     setOpaque (true); setLookAndFeel (&look);
     look.setColour (juce::TooltipWindow::backgroundColourId, panel);
     look.setColour (juce::TooltipWindow::textColourId, foreground);
@@ -53,6 +54,7 @@ void XuanPhaseEditor::updateVisibility()
 }
 void XuanPhaseEditor::resized()
 {
+    titleHint.setBounds (24, 30, 370, 36);
     bypass.setBounds (450, 30, 74, 28); automatic.setBounds (440, 299, 72, 26);
     for (size_t i = 0; i < sliders.size(); ++i)
     {
@@ -61,6 +63,7 @@ void XuanPhaseEditor::resized()
         labels[i].setBounds (x, y-20, 110, 16); sliders[i].setBounds (x, y, 110, 98);
     }
     const auto scale = editorScaling::transform (*this, designWidth, designHeight);
+    titleHint.setTransform (scale);
     meter.setBounds (536, 88, 280, 386); meter.setTransform (scale);
     bypass.setTransform (scale); automatic.setTransform (scale);
     for (auto& s : sliders) s.setTransform (scale);

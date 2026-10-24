@@ -4,6 +4,7 @@
 
 | Control | Hover hint |
 | --- | --- |
+| Plugin title | Developer: J-Sonic Team; Year: 2026; Version: 0.5.0 |
 | Bypass | Bypasses the stereo widening for a direct comparison. |
 | Center Delay | Sets the center Haas delay, with positive values delaying right and negative values delaying left. |
 | Variability | Saves CPU when Off by fixing Haas timing at the center delay; otherwise, sets how far adaptive timing may move. |

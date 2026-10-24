@@ -136,6 +136,7 @@ void KuoBypassButton::paintButton (juce::Graphics& g, bool highlighted, bool dow
 KuoStereoEditor::KuoStereoEditor (KuoStereoProcessor& p)
     : AudioProcessorEditor (&p), processor (p)
 {
+    addAndMakeVisible (titleHint);
     setOpaque (true);
     setLookAndFeel (&look);
     look.setColour (juce::TooltipWindow::backgroundColourId, panel);
@@ -224,6 +225,7 @@ KuoStereoEditor::KuoStereoEditor (KuoStereoProcessor& p)
 
 void KuoStereoEditor::resized()
 {
+    titleHint.setBounds (24, 38, 410, 38);
     bypass.setBounds (450, 33, 74, 28);
     const std::array<juce::Rectangle<int>, 8> positions {
         juce::Rectangle<int> (38, 163, 104, 70),
@@ -245,6 +247,7 @@ void KuoStereoEditor::resized()
         bandSliders[i].setBounds (bandX[i], 504, 16, 131);
 
     const auto scale = editorScaling::transform (*this, designWidth, designHeight);
+    titleHint.setTransform (scale);
     bypass.setTransform (scale);
     for (auto& slider : sliders) slider.setTransform (scale);
     for (auto& label : labels) label.setTransform (scale);

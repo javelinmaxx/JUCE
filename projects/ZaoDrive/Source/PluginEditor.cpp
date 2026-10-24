@@ -156,6 +156,7 @@ void ZaoTransformerSwitch::paintButton (juce::Graphics& g, bool, bool)
 
 ZaoDriveEditor::ZaoDriveEditor (ZaoDriveProcessor& p) : AudioProcessorEditor (&p), processor (p)
 {
+    addAndMakeVisible (titleHint);
     setOpaque (true);
     setLookAndFeel (&look);
     look.setColour (juce::TooltipWindow::backgroundColourId, panel);
@@ -343,6 +344,7 @@ void ZaoDriveEditor::paint (juce::Graphics& g)
 
 void ZaoDriveEditor::resized()
 {
+    titleHint.setBounds (24, 39, 350, 30);
     smart.setBounds (205, 98, 64, 24);
     clear.setBounds (277, 98, 64, 24);
     autoCompensate.setBounds (450, 523, 60, 24);
@@ -364,6 +366,7 @@ void ZaoDriveEditor::resized()
     place (3, 350, 553, 80, 85);
     place (4, 438, 553, 80, 85);
     const auto scale = editorScaling::transform (*this, designWidth, designHeight);
+    titleHint.setTransform (scale);
     bypass.setTransform (scale); transformer.setTransform (scale); smart.setTransform (scale); clear.setTransform (scale); autoCompensate.setTransform (scale);
     model.setTransform (scale); modelLabel.setTransform (scale);
     for (auto& slider : sliders) slider.setTransform (scale);

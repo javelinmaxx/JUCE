@@ -1,4 +1,5 @@
 #pragma once
+#include "../../EditorTooltips.h"
 #include "PluginProcessor.h"
 
 class KuoLookAndFeel final : public juce::LookAndFeel_V4
@@ -33,6 +34,7 @@ private:
     KuoStereoProcessor& processor;
     KuoLookAndFeel look;
     juce::TooltipWindow tooltipWindow { this };
+    editorTooltips::TitleHint titleHint { JucePlugin_VersionString };
     KuoBypassButton bypass;
     std::array<juce::Slider, 8> sliders;
     std::array<juce::Label, 8> labels;

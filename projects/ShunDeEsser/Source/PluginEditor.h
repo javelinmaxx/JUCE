@@ -1,4 +1,5 @@
 #pragma once
+#include "../../EditorTooltips.h"
 #include "PluginProcessor.h"
 #include "GainReductionHistory.h"
 
@@ -96,6 +97,7 @@ private:
     ShunDeEsserProcessor& processor;
     CompressorLookAndFeel look;
     juce::TooltipWindow tooltipWindow { this };
+    editorTooltips::TitleHint titleHint { JucePlugin_VersionString };
     AnimatedSwitch bypass { "BYPASS", true, false, true };
     DetectorModeSwitch detectorMode;
     juce::Slider algorithm;

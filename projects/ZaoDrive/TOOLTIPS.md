@@ -4,6 +4,7 @@
 
 | Control | Hover hint |
 | --- | --- |
+| Plugin title | Developer: J-Sonic Team; Year: 2026; Version: 0.5.0 |
 | Smart | Saves CPU when Off; reduces generated harmonics that clash with the input spectrum. |
 | Clear | Saves CPU when Off; applies the octave-shifted equal-loudness contour without frequency boosts. |
 | Circuit | Selects BJT, op-amp feedback, diode shunt, or series-diode crossover distortion. |
